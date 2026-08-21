@@ -1,0 +1,44 @@
+@use '@/styles/mixins' as *;
+
+.headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.kpi {
+  @include kpi-value;
+  font-size: 40px;
+}
+
+.kpiLabel {
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+}
+
+.stats {
+  display: flex;
+  gap: var(--space-6);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+}
+
+.statSuccess svg {
+  color: var(--color-success);
+}
+
+.statWarning svg {
+  color: var(--color-warning);
+}
+
+.statCritical svg {
+  color: var(--color-critical);
+}

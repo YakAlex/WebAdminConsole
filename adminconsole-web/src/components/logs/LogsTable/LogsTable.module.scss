@@ -1,0 +1,75 @@
+@use '@/styles/mixins' as *;
+
+.card {
+  @include table-card;
+}
+
+.header {
+  @include table-card-header;
+}
+
+.eyebrow {
+  @include section-title;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  max-height: 640px;
+  @include thin-scrollbar;
+}
+
+.table {
+  @include data-table;
+  min-width: 680px;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg-card-top);
+}
+
+.timestamp {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.severity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.severityInfo {
+  color: var(--color-info);
+}
+
+.severitySuccess {
+  color: var(--color-success);
+}
+
+.severityWarning {
+  color: var(--color-warning);
+}
+
+.severityError {
+  color: var(--color-critical);
+}
+
+.source {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.message {
+  max-width: 480px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.empty {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-secondary);
+}

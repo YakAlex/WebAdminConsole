@@ -1,5 +1,5 @@
-# Logs
-logs
+# Logs (тільки в корені пакета — /logs, не src/pages/Logs чи src/components/logs)
+/logs
 *.log
 npm-debug.log*
 yarn-debug.log*

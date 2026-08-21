@@ -11,6 +11,7 @@ import type {
   ServerActionResult,
   ServerEntry,
   TelegramAllowedUserView,
+  TelegramPendingRequest,
   ZabbixProblemsPayload,
   ZabbixTestResult,
 } from './types'
@@ -100,6 +101,27 @@ export const clearTelegramCredentials = () => apiDelete('/api/credentials/telegr
 export const getTelegramUsers = () => apiGet<TelegramAllowedUserView[]>('/api/telegramusers')
 
 export const removeTelegramUser = (chatId: number) => apiDelete(`/api/telegramusers/${chatId}`)
+
+// ── Telegram access — claim code + pending requests (Аудит-фікс 2026-08-22, п.2) ──
+
+export interface ClaimCodeResponse {
+  code: string
+  expiresAt: string
+}
+
+/** Адмін і далі сам надсилає /claim_admin <код> в Telegram — тут лише генерація коду. */
+export const generateTelegramClaimCode = () => apiPost<ClaimCodeResponse>('/api/telegramusers/claim-code')
+
+export interface TelegramPendingStatus {
+  pending: TelegramPendingRequest[]
+  isPrimaryAdminClaimed: boolean
+}
+
+export const getTelegramPending = () => apiGet<TelegramPendingStatus>('/api/telegramusers/pending')
+
+export const approveTelegramRequest = (id: number) => apiPost(`/api/telegramusers/pending/${id}/approve`)
+
+export const denyTelegramRequest = (id: number) => apiPost(`/api/telegramusers/pending/${id}/deny`)
 
 // ── Settings: Monitoring toggles ────────────────────────────────────────────
 

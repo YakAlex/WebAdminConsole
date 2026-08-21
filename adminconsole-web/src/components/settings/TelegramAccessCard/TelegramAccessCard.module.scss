@@ -1,0 +1,223 @@
+@use '@/styles/mixins' as *;
+
+.card {
+  @include table-card;
+}
+
+.header {
+  @include table-card-header;
+}
+
+.eyebrow {
+  @include section-title;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.section {
+  padding: 0 var(--card-padding) var(--card-padding);
+}
+
+.divider {
+  height: 1px;
+  margin: 0 var(--card-padding);
+  background: var(--color-border);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+}
+
+.error {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-micro);
+  color: var(--color-critical);
+}
+
+// ── Claim code ───────────────────────────────────────────────────────────
+
+.claimPrompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.generateButton {
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-brand-cyan-border);
+  background: var(--color-brand-cyan-bg);
+  color: var(--color-brand-cyan);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  transition: filter var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.claimResult {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-app);
+}
+
+.claimCode {
+  font-family: 'Cascadia Code', Consolas, monospace;
+  font-size: 22px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-brand-cyan);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.claimMeta {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-secondary);
+}
+
+.inlineCode {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-bg-card-elevated);
+  color: var(--color-text-primary);
+  font-family: 'Cascadia Code', Consolas, monospace;
+  font-size: var(--font-size-micro);
+}
+
+// ── Pending requests ─────────────────────────────────────────────────────
+
+.subEyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--section-title-letter-spacing);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-secondary);
+}
+
+.pendingList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.pendingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-app);
+}
+
+.pendingInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pendingUser {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.pendingMeta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.pendingActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.approveButton,
+.denyButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background var(--transition-fast);
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.approveButton {
+  color: var(--color-success);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-success);
+    background: var(--color-success-bg);
+  }
+}
+
+.denyButton {
+  color: var(--color-critical);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-critical);
+    background: var(--color-critical-bg);
+  }
+}

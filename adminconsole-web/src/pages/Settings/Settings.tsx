@@ -4,6 +4,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Spinner } from '@/components/ui/Spinner'
 import { CredentialCard } from '@/components/settings/CredentialCard/CredentialCard'
 import { TelegramUsersTable } from '@/components/settings/TelegramUsersTable/TelegramUsersTable'
+import { TelegramAccessCard } from '@/components/settings/TelegramAccessCard/TelegramAccessCard'
 import { MonitoringTogglesCard } from '@/components/settings/MonitoringTogglesCard/MonitoringTogglesCard'
 import { useSettingsViewModel } from './useSettingsViewModel'
 import styles from './Settings.module.scss'
@@ -58,6 +59,8 @@ export function Settings() {
               onClear={vm.clearTelegram}
             />
           </div>
+
+          <TelegramAccessCard />
 
           <TelegramUsersTable users={vm.users} onRemove={vm.removeUser} />
         </>

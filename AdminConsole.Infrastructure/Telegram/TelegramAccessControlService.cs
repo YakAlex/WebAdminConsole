@@ -116,13 +116,13 @@ public sealed class TelegramAccessControlService(
     public long? PrimaryAdminChatId { get { lock (_stateLock) return _primaryAdminChatId; } }
 
     /// <summary>Генерує 6-значний код, дійсний 10 хв. Лише в пам'яті — не переживає перезапуск (навмисно, безпечніше).</summary>
-    public string GenerateClaimCode()
+    public (string Code, DateTimeOffset ExpiresAt) GenerateClaimCode()
     {
         lock (_claimLock)
         {
             _claimCode          = RandomNumberGenerator.GetInt32(100_000, 999_999).ToString();
             _claimCodeExpiresAt = DateTimeOffset.Now.AddMinutes(10);
-            return _claimCode;
+            return (_claimCode, _claimCodeExpiresAt);
         }
     }
 

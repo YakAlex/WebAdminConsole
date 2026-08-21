@@ -289,3 +289,29 @@ export interface TelegramAllowedUserView {
   chatId: number
   username: string
 }
+
+// ── Telegram access — claim code + pending requests (Аудит-фікс 2026-08-22, п.2) ──
+
+export interface TelegramPendingRequest {
+  id: number
+  chatId: number
+  username: string
+  requestedAt: string
+}
+
+export const TelegramAccessAction = {
+  Approved: 0,
+  Denied: 1,
+  Revoked: 2,
+} as const
+export type TelegramAccessAction = (typeof TelegramAccessAction)[keyof typeof TelegramAccessAction]
+
+export interface TelegramAccessRequestEvent {
+  request: TelegramPendingRequest
+}
+
+export interface TelegramAccessChangedEvent {
+  action: TelegramAccessAction
+  chatId: number
+  username: string | null
+}

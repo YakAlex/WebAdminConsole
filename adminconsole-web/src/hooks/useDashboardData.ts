@@ -8,6 +8,7 @@ import { useRdpSessions } from './dashboard/useRdpSessions'
 import { useZabbixProblems } from './dashboard/useZabbixProblems'
 import { useMaintenanceWindows } from './dashboard/useMaintenanceWindows'
 import { useAppLogEntries } from './dashboard/useAppLogEntries'
+import { useMonitoringToggles } from './dashboard/useMonitoringToggles'
 
 /**
  * T6.2: єдина точка входу для сторінок, яким потрібні дані дашборду —
@@ -31,10 +32,12 @@ export function useDashboardData() {
   const zabbixQuery = useZabbixProblems()
   const maintenanceWindows = useMaintenanceWindows()
   const logsQuery = useAppLogEntries(20)
+  const toggles = useMonitoringToggles()
   const { state: hubState } = useDashboardConnection()
 
   return {
     hubState,
+    toggles,
     servers: serversQuery.servers,
     serversLoading: serversQuery.loading,
     serversError: serversQuery.error,

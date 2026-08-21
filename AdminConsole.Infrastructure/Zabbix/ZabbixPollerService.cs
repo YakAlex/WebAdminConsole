@@ -369,6 +369,14 @@ public sealed class ZabbixPollerService(
     /// </summary>
     public async Task<ZabbixProblemsPayload> GetActiveProblemsNowAsync(CancellationToken ct)
     {
+        // Аудит-фікс п.4: раніше цей метод ІГНОРУВАВ ZabbixMonitoringEnabled
+        // повністю — навіть після вимкнення тумблера в Settings, кожен захід
+        // на Overview/Zabbix Alerts все одно бив живим запитом у реальний
+        // Zabbix API. Той самий Pull-патерн, що вже в RdpMonitorService.
+        // PollAllServersAsync — перевірка НАЙПЕРШИМ рядком.
+        if (!await EvaluateMonitoringToggleAsync(ct))
+            return new ZabbixProblemsPayload(null, "Zabbix моніторинг вимкнено в Settings.", DateTimeOffset.Now);
+
         if (string.IsNullOrWhiteSpace(_settings.ZabbixUrl))
             return new ZabbixProblemsPayload(null, "Monitoring:ZabbixUrl не налаштований.", DateTimeOffset.Now);
 

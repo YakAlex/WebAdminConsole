@@ -1,40 +1,26 @@
 import { useState } from 'react'
-import { Users, User, Plus, Trash2 } from 'lucide-react'
+import { Users, User, Trash2 } from 'lucide-react'
 import { ApiError } from '@/lib/api/http'
 import type { TelegramAllowedUserView } from '@/lib/api/types'
 import styles from './TelegramUsersTable.module.scss'
 
 export interface TelegramUsersTableProps {
   users: TelegramAllowedUserView[]
-  onAdd: (chatId: number, username: string) => Promise<void>
   onRemove: (chatId: number) => Promise<void>
 }
 
-/** §T6.2 п.3 (Settings → Telegram Users): таблиця дозволених користувачів + форма додавання/видалення. */
-export function TelegramUsersTable({ users, onAdd, onRemove }: TelegramUsersTableProps) {
-  const [chatId, setChatId] = useState('')
-  const [username, setUsername] = useState('')
-  const [adding, setAdding] = useState(false)
+/**
+ * §T6.2 п.3 (Settings → Telegram Users) + аудит-фікс п.5: раніше тут була
+ * ручна форма Chat ID/Username/"Add" — але реальна авторизація нових
+ * користувачів іде виключно через сам бот (/start → запит → Primary Admin
+ * підтверджує ✅/❌ прямо в Telegram, TelegramAccessControlService/
+ * TelegramBotService). Ручне додавання тут дублювало інший, не пов'язаний
+ * з тим флоу шлях і могло ввести в оману, що це "офіційний" спосіб додати
+ * когось. Лишається лише список уже підтверджених користувачів + видалення.
+ */
+export function TelegramUsersTable({ users, onRemove }: TelegramUsersTableProps) {
   const [removingChatId, setRemovingChatId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  const parsedChatId = Number(chatId)
-  const canAdd = chatId.trim().length > 0 && Number.isFinite(parsedChatId) && parsedChatId !== 0
-
-  const handleAdd = async () => {
-    if (!canAdd) return
-    setAdding(true)
-    setError(null)
-    try {
-      await onAdd(parsedChatId, username.trim())
-      setChatId('')
-      setUsername('')
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не вдалося додати користувача.')
-    } finally {
-      setAdding(false)
-    }
-  }
 
   const handleRemove = async (id: number) => {
     setRemovingChatId(id)
@@ -57,29 +43,10 @@ export function TelegramUsersTable({ users, onAdd, onRemove }: TelegramUsersTabl
         </span>
       </div>
 
-      <div className={styles.addForm}>
-        <input
-          className={`${styles.input} ${styles.chatIdInput}`}
-          type="text"
-          inputMode="numeric"
-          placeholder="Chat ID"
-          value={chatId}
-          onChange={(e) => setChatId(e.target.value)}
-          disabled={adding}
-        />
-        <input
-          className={`${styles.input} ${styles.usernameInput}`}
-          type="text"
-          placeholder="Username (optional)"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          disabled={adding}
-        />
-        <button type="button" className={styles.addButton} onClick={handleAdd} disabled={adding || !canAdd}>
-          <Plus size={14} strokeWidth={2} />
-          {adding ? 'Adding…' : 'Add'}
-        </button>
-      </div>
+      <p className={styles.hint}>
+        New users authorize themselves via the bot (/start) — the Primary Admin approves or denies the request directly in
+        Telegram.
+      </p>
 
       {error && <div className={styles.error}>{error}</div>}
 

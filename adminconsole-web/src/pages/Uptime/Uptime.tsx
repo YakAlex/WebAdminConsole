@@ -10,7 +10,9 @@ import styles from './Uptime.module.scss'
 
 /**
  * §26 брифу: Uptime НЕ копіює Overview — власний layout під свою функцію:
- * Page header → 99.98% global uptime → Device table (детальніша за Overview).
+ * Page header → SLA Report → 99.98% global uptime → Device table (детальніша
+ * за Overview). SLA-секція навмисно зверху (аудит-фікс п.3a) — генерація
+ * звіту не залежить від initialLoading нижчого блоку.
  * 401/403 обробляється глобально в App.tsx (AuthProvider), сюди не долітає.
  */
 export function Uptime() {
@@ -23,6 +25,8 @@ export function Uptime() {
       {vm.initialErrors.map(({ context, error }) => (
         <ErrorBanner key={context} context={context} error={error} />
       ))}
+
+      <SlaReportSection />
 
       {vm.initialLoading ? (
         <Spinner label="Loading uptime data…" />
@@ -51,7 +55,6 @@ export function Uptime() {
             hasActiveFilters={vm.hasActiveIncidentFilters}
             onClearFilters={vm.clearIncidentFilters}
           />
-          <SlaReportSection />
         </>
       )}
     </div>

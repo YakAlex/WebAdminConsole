@@ -22,6 +22,8 @@ export function Logs() {
           <LogsFilterBar
             search={vm.searchInput}
             onSearchChange={vm.setSearchInput}
+            onSearchSubmit={vm.submitSearch}
+            searching={vm.refreshing}
             from={vm.from}
             onFromChange={vm.setFrom}
             to={vm.to}

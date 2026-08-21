@@ -1,11 +1,6 @@
 import { useState } from 'react'
-import { FileText, Download } from 'lucide-react'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Spinner } from '@/components/ui/Spinner'
-import { getSlaReport, slaReportHtmlUrl, type SlaReportQuery } from '@/lib/api/endpoints'
-import { ApiError } from '@/lib/api/http'
-import { formatTimeSpan } from '@/lib/format'
-import type { SlaReport } from '@/lib/api/types'
+import { FileText } from 'lucide-react'
+import { slaReportHtmlUrl, type SlaReportQuery } from '@/lib/api/endpoints'
 import styles from './SlaReportSection.module.scss'
 
 function toIsoDayStart(dateStr: string): string {
@@ -28,19 +23,16 @@ function defaultTo(): string {
 }
 
 /**
- * Пріоритет 3, #3.2: бекенд (SlaController/SlaReportService) уже повністю
- * готовий — той самий рендер, що й у щотижневій Hangfire-джобі. Тут лише
- * форма + виклик готового ендпоінта, вбудовано прямо на сторінці Uptime
- * (рішення користувача — не модалка).
+ * Аудит-фікс п.3: більше ніякого inline-прев'ю таблиці прямо на сторінці
+ * Uptime — клік на "Generate SLA Report" одразу відкриває готовий HTML-звіт
+ * (GET /api/sla/html, той самий рендер що й у щотижневій Hangfire-джобі) у
+ * НОВІЙ вкладці браузера. Тут лишається лише форма параметрів.
  */
 export function SlaReportSection() {
   const [from, setFrom] = useState(defaultFrom())
   const [to, setTo] = useState(defaultTo())
   const [group, setGroup] = useState('')
   const [server, setServer] = useState('')
-  const [report, setReport] = useState<SlaReport | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<ApiError | null>(null)
 
   const buildQuery = (): SlaReportQuery => ({
     from: toIsoDayStart(from),
@@ -49,17 +41,8 @@ export function SlaReportSection() {
     server: server.trim() || undefined,
   })
 
-  const generate = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      setReport(await getSlaReport(buildQuery()))
-    } catch (err) {
-      setError(err instanceof ApiError ? err : new ApiError(0, 'Unknown error'))
-      setReport(null)
-    } finally {
-      setLoading(false)
-    }
+  const generate = () => {
+    window.open(slaReportHtmlUrl(buildQuery()), '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -100,70 +83,10 @@ export function SlaReportSection() {
             onChange={(e) => setServer(e.target.value)}
           />
         </label>
-        <button type="button" className={styles.generateButton} onClick={generate} disabled={loading}>
-          {loading ? 'Generating…' : 'Generate SLA Report'}
+        <button type="button" className={styles.generateButton} onClick={generate}>
+          Generate SLA Report
         </button>
       </div>
-
-      {error && <ErrorBanner context="SLA report" error={error} />}
-      {loading && <Spinner label="Generating report…" />}
-
-      {report && !loading && (
-        <>
-          <div className={styles.summary}>
-            <div className={styles.summaryStat}>
-              <span className={styles.summaryValue}>
-                {report.overallUptimePercent != null ? `${report.overallUptimePercent.toFixed(2)}%` : '—'}
-              </span>
-              <span className={styles.summaryLabel}>
-                Overall uptime · {new Date(report.from).toLocaleDateString()} – {new Date(report.to).toLocaleDateString()}
-              </span>
-            </div>
-            <a className={styles.downloadButton} href={slaReportHtmlUrl(buildQuery())}>
-              <Download size={14} strokeWidth={1.75} />
-              Download HTML
-            </a>
-          </div>
-
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Server</th>
-                  <th>Group</th>
-                  <th>Uptime</th>
-                  <th>Downtime</th>
-                  <th>Incidents</th>
-                  <th>MTTR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.servers.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className={styles.empty}>
-                      No servers matched this period/filter
-                    </td>
-                  </tr>
-                ) : (
-                  report.servers.map((s) => (
-                    <tr key={`${s.serverIp}-${s.serverName}`}>
-                      <td>
-                        {s.serverName}
-                        {s.isRemovedFromMonitoring && <span className={styles.removedTag}> (removed)</span>}
-                      </td>
-                      <td className={styles.muted}>{s.serverGroup}</td>
-                      <td className={styles.tabular}>{s.uptimePercent.toFixed(2)}%</td>
-                      <td className={styles.tabular}>{formatTimeSpan(s.downtimeInPeriod)}</td>
-                      <td className={styles.tabular}>{s.incidentCount}</td>
-                      <td className={styles.tabular}>{formatTimeSpan(s.mttr)}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
     </div>
   )
 }

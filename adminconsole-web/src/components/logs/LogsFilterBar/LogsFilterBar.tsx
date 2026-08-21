@@ -4,6 +4,8 @@ import styles from './LogsFilterBar.module.scss'
 export interface LogsFilterBarProps {
   search: string
   onSearchChange: (value: string) => void
+  onSearchSubmit: () => void
+  searching?: boolean
   from: string
   onFromChange: (value: string) => void
   to: string
@@ -12,10 +14,16 @@ export interface LogsFilterBarProps {
   onClear: () => void
 }
 
-/** Крок 6 (#10): пошук по Source/Message + діапазон дат для Logs. */
+/**
+ * Крок 6 (#10) + аудит-фікс п.2: пошук по Source/Message тепер тригериться
+ * ЛИШЕ по Enter/кнопці "Пошук" (не на кожне натискання клавіші) — набір
+ * тексту в полі більше не викликає рефетч і, відповідно, не втрачає курсор.
+ */
 export function LogsFilterBar({
   search,
   onSearchChange,
+  onSearchSubmit,
+  searching,
   from,
   onFromChange,
   to,
@@ -25,7 +33,13 @@ export function LogsFilterBar({
 }: LogsFilterBarProps) {
   return (
     <div className={styles.bar}>
-      <div className={styles.searchField}>
+      <form
+        className={styles.searchField}
+        onSubmit={(e) => {
+          e.preventDefault()
+          onSearchSubmit()
+        }}
+      >
         <Search size={14} strokeWidth={1.75} className={styles.searchIcon} />
         <input
           type="text"
@@ -34,7 +48,10 @@ export function LogsFilterBar({
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
         />
-      </div>
+        <button type="submit" className={styles.searchButton} disabled={searching}>
+          {searching ? 'Searching…' : 'Search'}
+        </button>
+      </form>
 
       <div className={styles.dateField}>
         <label className={styles.dateLabel}>

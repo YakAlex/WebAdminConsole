@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  addTelegramUser,
   clearTelegramCredentials,
   clearZabbixCredentials,
   getCredentials,
@@ -76,11 +75,6 @@ export function useSettingsViewModel() {
     await refetch()
   }
 
-  const addUser = async (chatId: number, username: string) => {
-    await addTelegramUser(chatId, username)
-    await refetch()
-  }
-
   const removeUser = async (chatId: number) => {
     await removeTelegramUser(chatId)
     await refetch()
@@ -115,7 +109,6 @@ export function useSettingsViewModel() {
     clearZabbix,
     saveTelegram,
     clearTelegram,
-    addUser,
     removeUser,
     toggleMonitoring,
   }

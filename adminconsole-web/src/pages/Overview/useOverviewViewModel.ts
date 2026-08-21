@@ -19,15 +19,23 @@ export function useOverviewViewModel() {
   const uptime = computeUptimeSeries(data.downtimeRecords, data.servers.length, { hours: 24, buckets: 12 })
   const uptimeAxisLabels = computeUptimeAxisLabels(24, 5)
 
-  const backupsSuccessful = data.backups.filter((b) => b.outcome === BackupOutcome.Ok).length
-  const backupsTotal = data.backups.length
+  // Аудит-фікс п.4: вимкнення сервісу в Settings мусить очищати ЙОГО дані
+  // всюди на Overview, а не лишати останній відомий знімок ("12 problems"
+  // від Zabbix, показаних уже ПІСЛЯ вимкнення). toggles === null — ще не
+  // завантажились (перший рендер) — свідомо НЕ гейтимо до першої відповіді.
+  const zabbixDisabled = data.toggles?.zabbixMonitoringEnabled === false
+  const rdpDisabled = data.toggles?.rdpMonitoringEnabled === false
+  const backupsDisabled = data.toggles?.backupMonitoringEnabled === false
 
-  const criticalAlerts = data.zabbixProblems.filter(
-    (p) => p.severity === ZabbixSeverity.High || p.severity === ZabbixSeverity.Disaster,
-  ).length
-  const warnings = data.zabbixProblems.filter(
-    (p) => p.severity === ZabbixSeverity.Average || p.severity === ZabbixSeverity.Warning,
-  ).length
+  const backupsSuccessful = backupsDisabled ? 0 : data.backups.filter((b) => b.outcome === BackupOutcome.Ok).length
+  const backupsTotal = backupsDisabled ? 0 : data.backups.length
+
+  const criticalAlerts = zabbixDisabled
+    ? 0
+    : data.zabbixProblems.filter((p) => p.severity === ZabbixSeverity.High || p.severity === ZabbixSeverity.Disaster).length
+  const warnings = zabbixDisabled
+    ? 0
+    : data.zabbixProblems.filter((p) => p.severity === ZabbixSeverity.Average || p.severity === ZabbixSeverity.Warning).length
 
   const deviceRows: DeviceRow[] = data.servers.map((server) => {
     const hostPing = pingResults.find((r) => r.ip === server.ip)
@@ -64,6 +72,7 @@ export function useOverviewViewModel() {
   return {
     initialLoading,
     initialErrors,
+    toggles: data.toggles,
     ping,
     uptime: {
       overallPercent: uptime.percent,
@@ -72,13 +81,13 @@ export function useOverviewViewModel() {
       monitoredDevices: data.servers.length,
     },
     attention: { criticalAlerts, warnings },
-    backups: data.backups,
+    backups: backupsDisabled ? [] : data.backups,
     backupsSummary: { successful: backupsSuccessful, total: backupsTotal },
     recentActivity: data.logEntries,
     // Крок 3 (#4): картка Overview рахує/показує тільки Active — data.rdpSessions
     // включає й Disconnected (той самий плаский список, що йде на повну сторінку
     // RDP Sessions), інакше "Active sessions" рахував і відключені сесії.
-    rdpSessions: data.rdpSessions.filter((s) => s.state === RdpSessionState.Active),
+    rdpSessions: rdpDisabled ? [] : data.rdpSessions.filter((s) => s.state === RdpSessionState.Active),
     maintenanceWindows: data.maintenanceWindows,
     resourceHistory: data.resourceHistory,
     deviceRows,

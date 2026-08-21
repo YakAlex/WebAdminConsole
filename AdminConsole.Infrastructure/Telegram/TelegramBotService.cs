@@ -618,12 +618,12 @@ public sealed class TelegramBotService(
 
     private async Task SendStatusAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
-        await client.SendMessage(chatId, BuildStatusText(),
+        await client.SendMessage(chatId, await BuildStatusTextAsync(ct),
             replyMarkup: BuildStatusKeyboard(), cancellationToken: ct);
     }
 
     private async Task EditWithStatusAsync(ITelegramBotClient client, long chatId, int messageId, CancellationToken ct)
-        => await client.EditMessageText(chatId, messageId, BuildStatusText(),
+        => await client.EditMessageText(chatId, messageId, await BuildStatusTextAsync(ct),
             replyMarkup: BuildStatusKeyboard(), cancellationToken: ct);
 
     // ── /ping — пряме опитування всіх серверів у реальному часі ──────────────
@@ -694,7 +694,7 @@ public sealed class TelegramBotService(
         }
     }
 
-    private string BuildStatusText()
+    private async Task<string> BuildStatusTextAsync(CancellationToken ct)
     {
         var pingSnapshot = pingMonitor.GetSnapshot();
         int offline = pingSnapshot.Values.Count(s => s == PingStatus.Offline);
@@ -702,8 +702,15 @@ public sealed class TelegramBotService(
 
         int openIncidents = uptimeTracker.GetSnapshot().Count(r => !r.IsResolved);
 
-        var rdpSnapshot = rdpMonitor.GetSnapshot();
-        int rdpSessions = rdpSnapshot.Values.Sum(list => list.Count(s => s.State == RdpSessionState.Active));
+        // Аудит-фікс п.4/п.5: раніше рахувалось напряму з rdpMonitor.GetSnapshot()
+        // без перевірки тумблера — /status показував останню відому (застарілу)
+        // кількість RDP-сесій навіть після вимкнення RDP-моніторингу в Settings.
+        // Той самий клас бага, що на Overview для Zabbix — тут же той самий
+        // патерн перевірки, що вже є в SendRdpPickerAsync/SendBackupsListAsync.
+        bool rdpEnabled = (await GetAppSettingsAsync(ct)).RdpMonitoringEnabled;
+        string rdpLine = rdpEnabled
+            ? $"🖥 RDP-сесій (активних): {rdpMonitor.GetSnapshot().Values.Sum(list => list.Count(s => s.State == RdpSessionState.Active))}"
+            : "🖥 RDP-сесій: моніторинг вимкнено в Settings";
 
         int activeMaintenance = maintenance.GetActiveWindows().Count;
 
@@ -711,7 +718,7 @@ public sealed class TelegramBotService(
                $"✅ Онлайн: {online}\n" +
                $"🔴 Офлайн: {offline}\n" +
                $"⏱ Відкритих інцидентів: {openIncidents}\n" +
-               $"🖥 RDP-сесій (активних): {rdpSessions}\n" +
+               $"{rdpLine}\n" +
                $"🔧 Активних вікон обслуговування: {activeMaintenance}";
     }
 

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using AdminConsole.Domain.Abstractions;
@@ -49,6 +50,12 @@ public sealed class RdpMonitorService(
 
     private const string LogSource = "RdpMonitor";
     private const int    TimeoutMs = 30_000;
+
+    // Крок 1 (аудит "HTTP 0"): REST-знімок (GetSnapshotNowAsync) викликається
+    // синхронно з браузера, що чекає на HTTP-відповідь — 30с/сервер (TimeoutMs)
+    // із фонового циклу тут занадто довго й ризикує вперлись у зовнішній
+    // таймаут проксі/браузера. Для REST-шляху ставимо явну, коротшу стелю.
+    private const int    SnapshotTimeoutMs = 15_000;
     private CancellationTokenSource? _wakeUpCts;
 
     // Кеш попереднього стану toggle (null = ще не перевіряли жодного разу).
@@ -571,7 +578,28 @@ public sealed class RdpMonitorService(
         string? LastLogoutUsername, string? LastLogoutServer, DateTimeOffset? LastLogoutAt)>
         GetSnapshotNowAsync(CancellationToken ct)
     {
-        await PollAllServersAsync(ct).ConfigureAwait(false);
+        var sw = Stopwatch.StartNew();
+        await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
+            $"RDP: REST-знімок запит отримано — опитуємо {_terminalServers.Count} сервер(ів) " +
+            $"(ліміт {SnapshotTimeoutMs / 1000}с)."), ct);
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(SnapshotTimeoutMs);
+
+        await PollAllServersAsync(timeoutCts.Token).ConfigureAwait(false);
+        sw.Stop();
+
+        if (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
+                $"RDP: REST-знімок перевищив ліміт {SnapshotTimeoutMs / 1000}с ({sw.ElapsedMilliseconds}мс) — " +
+                "частина серверів могла не встигнути відповісти, повертаємо останні відомі дані."), ct);
+        }
+        else
+        {
+            await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
+                $"RDP: REST-знімок завершено за {sw.ElapsedMilliseconds}мс."), ct);
+        }
 
         var sessions = _previousSessions.Values.SelectMany(d => d.Values).ToList();
         lock (_stateLock)

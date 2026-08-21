@@ -9,7 +9,6 @@ import type {
   RdpSnapshotPayload,
   ServerActionResult,
   ServerEntry,
-  SlaReport,
   TelegramAllowedUserView,
   ZabbixProblemsPayload,
   ZabbixTestResult,
@@ -51,8 +50,6 @@ function slaParams(query: SlaReportQuery): URLSearchParams {
   if (query.server) params.set('server', query.server)
   return params
 }
-
-export const getSlaReport = (query: SlaReportQuery) => apiGet<SlaReport>(`/api/sla?${slaParams(query).toString()}`)
 
 /** Той самий готовий HTML-рендер, що й у щотижневій Hangfire-джобі — просто на вимогу. */
 export const slaReportHtmlUrl = (query: SlaReportQuery) => `/api/sla/html?${slaParams(query).toString()}`
@@ -100,9 +97,6 @@ export const clearTelegramCredentials = () => apiDelete('/api/credentials/telegr
 // ── Settings: Telegram Users ────────────────────────────────────────────────
 
 export const getTelegramUsers = () => apiGet<TelegramAllowedUserView[]>('/api/telegramusers')
-
-export const addTelegramUser = (chatId: number, username: string) =>
-  apiPost('/api/telegramusers', { chatId, username: username || null })
 
 export const removeTelegramUser = (chatId: number) => apiDelete(`/api/telegramusers/${chatId}`)
 

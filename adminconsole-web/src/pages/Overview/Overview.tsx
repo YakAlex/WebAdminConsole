@@ -44,7 +44,11 @@ export function Overview() {
               criticalAlerts={vm.attention.criticalAlerts}
               warnings={vm.attention.warnings}
             />
-            <AttentionRequired criticalAlerts={vm.attention.criticalAlerts} warnings={vm.attention.warnings} />
+            <AttentionRequired
+              criticalAlerts={vm.attention.criticalAlerts}
+              warnings={vm.attention.warnings}
+              disabled={vm.toggles?.zabbixMonitoringEnabled === false}
+            />
           </div>
 
           <div className={styles.grid}>
@@ -69,10 +73,10 @@ export function Overview() {
               <RecentActivity entries={vm.recentActivity} />
             </div>
             <div className={styles.backups}>
-              <BackupsCard jobs={vm.backups} />
+              <BackupsCard jobs={vm.backups} disabled={vm.toggles?.backupMonitoringEnabled === false} />
             </div>
             <div className={styles.rdp}>
-              <RdpSessionsCard sessions={vm.rdpSessions} />
+              <RdpSessionsCard sessions={vm.rdpSessions} disabled={vm.toggles?.rdpMonitoringEnabled === false} />
             </div>
             <div className={styles.maintenance}>
               <MaintenanceCard windows={vm.maintenanceWindows} />

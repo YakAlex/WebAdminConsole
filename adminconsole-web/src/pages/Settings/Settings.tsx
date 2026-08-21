@@ -59,7 +59,7 @@ export function Settings() {
             />
           </div>
 
-          <TelegramUsersTable users={vm.users} onAdd={vm.addUser} onRemove={vm.removeUser} />
+          <TelegramUsersTable users={vm.users} onRemove={vm.removeUser} />
         </>
       )}
     </div>

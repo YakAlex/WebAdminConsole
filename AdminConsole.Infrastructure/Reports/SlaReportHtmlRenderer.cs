@@ -52,37 +52,49 @@ public static class SlaReportHtmlRenderer
         return rounded.ToString($"0.{new string('0', UptimePercentDecimals)}", CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// Палітра — не довільна: буквально ті самі значення, що
+    /// <c>adminconsole-web/src/styles/tokens.scss</c> визначає для живого
+    /// застосунку (аудит-фікс п.3d — раніше тут була окрема, ніде більше не
+    /// вжита "Material Dark" палітра, яка не мала нічого спільного з
+    /// реальним UI). Жодних зовнішніх шрифтів/CDN — той самий fallback-стек,
+    /// що й --font-family-base, аби звіт лишався самодостатнім і відкривався офлайн.
+    /// </summary>
     private static string Styles() => """
         <style>
             :root { color-scheme: dark; }
             body {
-                background: #1A2327; color: #ECEFF1;
-                font-family: Segoe UI, Arial, sans-serif;
+                background: #080d12; color: #f1f5f7;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
                 margin: 0; padding: 32px;
             }
-            .card { background: #263238; border-radius: 8px; padding: 20px 24px; margin-bottom: 20px; }
-            h1 { font-size: 20px; margin: 0 0 4px 0; color: #FFFFFF; }
-            h2 { font-size: 15px; color: #80CBC4; margin: 0 0 12px 0;
-                 text-transform: uppercase; letter-spacing: .04em; }
-            .meta { color: #90A4AE; font-size: 13px; }
-            .summary-row { display: flex; gap: 16px; flex-wrap: wrap; }
-            .summary-pill { background: rgba(255,255,255,.06); border-radius: 8px; padding: 14px 20px; min-width: 140px; }
-            .summary-pill .value { font-size: 24px; font-weight: 600; }
-            .summary-pill .label { font-size: 11px; color: #90A4AE; text-transform: uppercase; letter-spacing: .04em; }
+            .card {
+                background: linear-gradient(180deg, #111c25, #101923);
+                border: 1px solid #1e303a;
+                border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
+            }
+            h1 { font-size: 23px; font-weight: 600; margin: 0 0 4px 0; color: #f1f5f7; }
+            h2 { font-size: 12px; color: #36c8d5; margin: 0 0 12px 0; font-weight: 600;
+                 text-transform: uppercase; letter-spacing: .06em; }
+            .meta { color: #8799a4; font-size: 13px; }
+            .summary-row { display: flex; gap: 12px; flex-wrap: wrap; }
+            .summary-pill { background: #14202a; border: 1px solid #1e303a; border-radius: 8px; padding: 14px 20px; min-width: 140px; }
+            .summary-pill .value { font-size: 24px; font-weight: 600; color: #f1f5f7; }
+            .summary-pill .label { font-size: 11px; color: #8799a4; text-transform: uppercase; letter-spacing: .04em; }
             table { width: 100%; border-collapse: collapse; font-size: 13px; }
-            th { text-align: left; color: #80CBC4; font-size: 11px; text-transform: uppercase;
-                 letter-spacing: .03em; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.15); }
-            td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
+            th { text-align: left; color: #8799a4; font-size: 11px; font-weight: 600; text-transform: uppercase;
+                 letter-spacing: .03em; padding: 8px 12px; border-bottom: 1px solid #1e303a; }
+            td { padding: 10px 12px; border-bottom: 1px solid #1e303a; color: #f1f5f7; }
             tr:last-child td { border-bottom: none; }
-            .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-            .badge-removed { background: rgba(255,167,38,.15); color: #FFA726; margin-left: 8px; }
-            .badge-ongoing { background: rgba(239,83,80,.18); color: #EF5350; }
-            .badge-maintenance { background: rgba(128,203,196,.18); color: #80CBC4; }
-            .uptime-good { color: #66BB6A; font-weight: 600; }
-            .uptime-warn { color: #FFCA28; font-weight: 600; }
-            .uptime-bad  { color: #EF5350; font-weight: 600; }
-            .mono { font-family: Consolas, "Courier New", monospace; }
-            .footer { color: #607D8B; font-size: 11px; margin-top: 24px; line-height: 1.6; }
+            .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+            .badge-removed { background: rgba(243,200,75,.12); color: #f3c84b; margin-left: 8px; }
+            .badge-ongoing { background: rgba(255,92,97,.12); color: #ff5c61; }
+            .badge-maintenance { background: rgba(54,200,213,.1); color: #36c8d5; }
+            .uptime-good { color: #35d36a; font-weight: 600; }
+            .uptime-warn { color: #f3c84b; font-weight: 600; }
+            .uptime-bad  { color: #ff5c61; font-weight: 600; }
+            .mono { font-family: Consolas, "Courier New", monospace; color: #8799a4; }
+            .footer { color: #53656f; font-size: 11px; margin-top: 24px; line-height: 1.6; }
         </style>
         """;
 

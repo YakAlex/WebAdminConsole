@@ -19,7 +19,13 @@ const GROUPS = ['logs'] as const
  */
 export function useAppLogEntries(take = 20, query: LogQuery = {}) {
   const [entries, setEntries] = useState<AppLogEntry[]>([])
+  // `loading` — лише ПЕРШЕ завантаження сторінки (full-page Spinner-gate).
+  // `refreshing` — кожен наступний рефетч (зміна пошуку/дат). Розділено
+  // навмисно (аудит, п.2): раніше `loading` виставлявся в true на КОЖЕН
+  // рефетч, через що сторінка ховала (розмонтовувала) свій вміст, включно з
+  // полем пошуку — курсор/фокус втрачався щоразу, коли спрацьовував пошук.
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
   const { reportDenied } = useAuth()
   const isFiltered = Boolean(query.search || query.from || query.to)
@@ -28,7 +34,7 @@ export function useAppLogEntries(take = 20, query: LogQuery = {}) {
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    setRefreshing(true)
 
     getLogs(take, query)
       .then((data) => {
@@ -41,7 +47,9 @@ export function useAppLogEntries(take = 20, query: LogQuery = {}) {
         if (isAuthError(apiError)) reportDenied()
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (cancelled) return
+        setLoading(false)
+        setRefreshing(false)
       })
 
     return () => {
@@ -54,5 +62,5 @@ export function useAppLogEntries(take = 20, query: LogQuery = {}) {
     setEntries((prev) => [evt.entry, ...prev].slice(0, take))
   })
 
-  return { entries, loading, error }
+  return { entries, loading, refreshing, error }
 }

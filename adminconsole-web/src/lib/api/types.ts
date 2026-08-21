@@ -217,41 +217,6 @@ export interface RdpSessionsUpdatedEvent {
   payload: RdpSessionsPayload
 }
 
-// ── SLA Report (Пріоритет 3, #3.2) ──────────────────────────────────────────
-
-export interface IncidentDetail {
-  serverName: string
-  serverGroup: string
-  fellAt: string
-  recoveredAt: string | null
-  /** .NET TimeSpan, формат "c" — напр. "1.02:30:00" (1д 2г 30хв). */
-  effectiveDuration: string
-  isOngoing: boolean
-  closedByMaintenance: boolean
-}
-
-export interface ServerSlaEntry {
-  serverName: string
-  serverIp: string
-  serverGroup: string
-  isRemovedFromMonitoring: boolean
-  uptimePercent: number
-  downtimeInPeriod: string
-  maintenanceDowntimeInPeriod: string
-  incidentCount: number
-  mttr: string | null
-  incidents: IncidentDetail[]
-}
-
-export interface SlaReport {
-  generatedAt: string
-  from: string
-  to: string
-  overallUptimePercent: number | null
-  servers: ServerSlaEntry[]
-  maintenanceAppendix: IncidentDetail[]
-}
-
 /** POST /api/servers/{ip}/restart|shutdown — результат WMI-команди (Пріоритет 3, #3.1). */
 export interface ServerActionResult {
   success: boolean
@@ -317,6 +282,19 @@ export interface MonitoringToggles {
   rdpMonitoringEnabled: boolean
   zabbixMonitoringEnabled: boolean
   backupMonitoringEnabled: boolean
+}
+
+export const MonitoredService = {
+  Rdp: 0,
+  Zabbix: 1,
+  Backups: 2,
+} as const
+export type MonitoredService = (typeof MonitoredService)[keyof typeof MonitoredService]
+
+/** SignalR: MonitoringController публікує це на кожну зміну тумблера в Settings (аудит-фікс п.4). */
+export interface MonitoringToggledEvent {
+  service: MonitoredService
+  enabled: boolean
 }
 
 export interface TelegramAllowedUserView {

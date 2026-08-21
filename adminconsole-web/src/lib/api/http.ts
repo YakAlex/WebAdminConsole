@@ -42,7 +42,14 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(response.status, response.statusText)
   }
 
-  return (await response.json()) as T
+  try {
+    return (await response.json()) as T
+  } catch (cause) {
+    throw new ApiError(
+      response.status,
+      `Не вдалося розпарсити відповідь сервера: ${cause instanceof Error ? cause.message : 'invalid JSON'}`,
+    )
+  }
 }
 
 /**
@@ -83,7 +90,15 @@ async function apiSend<T>(path: string, method: 'POST' | 'PUT' | 'DELETE', body?
   }
 
   if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+
+  try {
+    return (await response.json()) as T
+  } catch (cause) {
+    throw new ApiError(
+      response.status,
+      `Не вдалося розпарсити відповідь сервера: ${cause instanceof Error ? cause.message : 'invalid JSON'}`,
+    )
+  }
 }
 
 export const apiPost = <T = void>(path: string, body?: unknown): Promise<T> => apiSend<T>(path, 'POST', body)

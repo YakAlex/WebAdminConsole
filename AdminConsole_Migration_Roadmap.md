@@ -218,17 +218,53 @@ Data Source=adminconsole.db;Cache=Shared
 - [ ] `sc create AdminConsoleService binPath= "...\AdminConsole.Api.exe" obj= "DOMAIN\gMSA$" start= auto`
 - [ ] xcopy-інсталяція на цільовий сервер, перший запуск під наглядом (перевірка double-hop і DPAPI-ризиків з 1.5/5)
 
-## Фаза 8 — Cutover
+## Фаза 8 — Cutover ✅ ЗАВЕРШЕНО (2026-08-21)
 
-- [ ] Запуск `AdminConsole.Migration` на продакшн-даних
-- [ ] Паралельна перевірка "новий дашборд показує ті самі цифри, що й старий WPF" протягом контрольного періоду (навіть у Big Bang — кілька днів звірки перед повним відключенням WPF)
-- [ ] Відключення WPF-клієнта, holdback JSON-файлів (не видаляти одразу)
+- [x] Запуск `AdminConsole.Migration` на продакшн-даних — 281 downtime, 0 maintenance, 4 backup-станів, settings=True, 2 telegram-користувачі. Число співпало з вихідними JSON точно.
+- [x] Звірка цифр (T8.2) — разова звірка живих даних v3 проти незалежних джерел (Zabbix, ручний ping/quser, файлова система бекапів), оскільки WPF v2 вже не використовувався паралельно на момент cutover.
+- [x] Відключення WPF-клієнта (T8.3) — WPF v2 вже не запускається на адмінських машинах, автозапуску не виявлено. `E:\AdminConsole_v2` лишається недоторканим read-only holdback (JSON-логи не видалялись).
 
 ## Фаза 9 — Тестування / hardening
+
+**Статус: відкладено** — пріоритет зміщено на Фазу 10 (UX/UI Polish & Bugfixing) за рішенням користувача 2026-08-21. Повернутися після закриття Фази 10.
 
 - [ ] Перевірка авторизації: юзер не з дозволеної групи → 403, юзер з групи → доступ
 - [ ] Базове навантажувальне "перевір, що нічого не падає" на 3 одночасні SignalR-з'єднання (тривіально при такому масштабі, але це 20 хвилин роботи, які знімають питання)
 - [ ] README/нотатки з архітектурних рішень цього документа — переносяться в репозиторій як `ARCHITECTURE.md`, щоб через півроку сам не загубився в контексті
+
+---
+
+## Фаза 10 — UX/UI Polish & Bugfixing (беклог від 2026-08-21)
+
+Живе тестування системи виявило перелік багів, недоробок і незручностей. Джерело правди по кожному пункту — старий `AdminConsole_v2` (read-only), але підхід/реалізація обирається під веб-архітектуру (React + ASP.NET Core), а не копіюється 1:1 з WPF.
+
+**Крок 1 — швидкі фронтенд-виправлення (без redeploy бекенду, live через Vite dev-server): ✅ ЗАВЕРШЕНО (2026-08-21)**
+- [x] #8 — Topbar: прибрано Search, "Updated just now"+refresh, avatar "AC". Заодно прибрано й нефункціональну кнопку "Logout" з футера Sidebar (той самий клас "мертвого UI", хоч технічно і не в Topbar — Windows Integrated Auth не має поняття logout)
+- [x] #2 — "View all" на бекап-віджеті (Overview) → `navigate('/backups')`. Заодно підключено й аналогічну неробочу "View all resources" на картці System Resources → `/resources`
+- [x] #1 — Dropdown-фільтри: новий переюзабельний `FilterSelect` (стилізований нативний `<select>`) підключений до "Uptime by Device" (Overview) і "Devices" (Uptime) — реальний фільтр за Group. "All Systems" на System Resources прибрано зовсім (чесно — per-server CPU/RAM телеметрії не існує, лишилась статична мітка "Local Host")
+- [x] #9 — Resources: `useResourcesPageViewModel` фільтрує тільки `ServerType.Windows` (як у WPF `ResourceMonitorViewModel`); додано `FilterSelect`-селектор конкретного сервера над таблицею
+
+**Крок 2 — Zabbix-інтеграція (критичний баг, мовчазний збій): ✅ ЗАВЕРШЕНО (2026-08-21)**
+- [x] #5 — Знайдено 3 конкретні прогалини в `ZabbixPollerService`: (1) wake-up після збереження токена НЕ логував "started" для API-token режиму (саме той режим, яким користується адмін) — виправлено; (2) успішний poll-цикл взагалі нічого не писав у AppLogEntries, тиша при "0 проблем" виглядала ідентично тиші при "інтеграція мертва" — додано Success-лог на переході в робочий стан; (3) відсутній ZabbixUrl логувався лише через ILogger (невидимо в UI) — тепер публікується і в AppLogEntries. Також підключено раніше ніде не викликаний `ZabbixApiClient.TestConnectionAsync`: збереження токена в Settings тепер одразу перевіряє з'єднання (apiinfo.version + user.checkAuthentication) і показує результат негайно — без очікування на 180с poll-цикл
+
+**Крок 3 — RDP Monitor (аудит логіки): ✅ ЗАВЕРШЕНО (2026-08-21)**
+- [x] #4 — Аудит підтвердив: серверний фільтр (`Group == "Terminal Servers"`), парсинг quser, `_globalDailyPeak`/`lastLogout` — точний, коректний порт WPF, без розбіжностей. Знайдено і виправлено реальний баг на фронтенді: "Active sessions"/"Unique users" рахували ВЕСЬ масив сесій (Active + Disconnected разом) — відключена сесія помилково збільшувала лічильник активних і на Overview (RdpSessionsCard), і на сторінці RDP Sessions. Виправлено фільтрацією на `RdpSessionState.Active` в обох в'юмоделях; таблиця сесій тепер сортує Active зверху / Disconnected знизу для чіткого розділення "хто зараз на зв'язку" від "хто відключився". Підключено й "View all" на Overview-картці (та сама прогалина, що й у #2). Бекенд: додано видиме AppLogEntries-попередження, якщо жоден сервер не має Group="Terminal Servers" (той самий клас "тихої смерті", що виправили для Zabbix у Кроці 2)
+
+**Крок 4 — Backups + Settings toggles: ✅ ЗАВЕРШЕНО (2026-08-21)**
+- [x] #6 — `BackupSample.SizeBytes` уже йшов по REST/типах — бракувало лише відображення. Додано колонку "Size" (форматування GB/MB — той самий поріг/округлення, що WPF `BackupRowViewModel.FormatSize`) поруч зі "Size trend"-спарклайном
+- [x] #7 — Новий `MonitoringController` (`GET/PUT /api/monitoring/toggles`) поверх уже готового `AppSettings.{Rdp,Zabbix,Backup}MonitoringEnabled` + `IAppSettingsRepository`. PUT зберігає ПЕРЕД публікацією `MonitoringToggledOccurred` (черговість важлива — поллери перечитують репозиторій Pull-ом одразу після пробудження). Settings-сторінка отримала нову картку "Monitoring Services" з трьома перемикачами (новий `ToggleSwitch` + `MonitoringTogglesCard`) — зміна діє миттєво, без рестарту служби
+
+**Крок 5 — Uptime: список інцидентів: ✅ ЗАВЕРШЕНО (2026-08-21)**
+- [x] #3 — Бекенд-фундамент (`IDowntimeRepository.DeleteAsync`/`DeleteAllResolvedAsync`) уже існував з Фази 2, лишалось підключити REST + UI. Додано `DELETE /api/downtime` (один запис, сервер додатково перевіряє, що інцидент закритий) і `DELETE /api/downtime/resolved` (масово) — обидва публікують `UptimeUpdatedOccurred` з повним знімком, тож ініціатор бачить зміну через уже підключений SignalR без ручного рефетчу. Новий `IncidentsTable` на вкладці Uptime (графік Overview не чіпали) — повний список `DowntimeRecord`, сортування: відкриті зверху (найновіші перші), закриті — від нових до старих; кнопка видалення на рядок (лише для закритих) + "Clear resolved" зверху
+
+**Крок 6 — Фільтрація за датою: ✅ ЗАВЕРШЕНО (2026-08-21)**
+- [x] #10 — Logs: розширено `IAppLogRepository.GetRecentAsync`/`GET /api/logs` параметрами `after`/`search` (`before` вже існував) — пошук по Source/Message транслюється в звичайний SQLite LIKE (на відміну від DateTimeOffset ORDER BY, тут провайдер жодних обмежень не має; перевірено емпірично на scratch-базі). Дебаунс пошуку (300мс) на фронтенді, live SignalR-потік не домішується в результати, поки активний фільтр. Uptime: той самий пошук+діапазон дат, але клієнтський (`useDowntimeData()` і так тримає повний знімок — сотні записів, окремий запит зайвий)
+
+---
+
+## Фаза 10 — ЗАВЕРШЕНО (2026-08-21)
+
+Усі 10 пунктів беклогу закрито (Кроки 1-6). Повний перелік реальних багів/прогалин, знайдених під час аудиту (не лише "з беклогу"): подвійна мовчазна "тиха смерть" поллерів (Zabbix ZabbixUrl, RDP Terminal Servers) без видимого AppLogEntries-попередження; лічильник "Active sessions" рахував і Disconnected сесії (Overview + RDP Sessions); 3 конкретні прогалини логування в ZabbixPollerService (wake-up для API-token режиму, тиша на успішних циклах, невидимий ILogger-only лог); мертвий код `ZabbixApiClient.TestConnectionAsync` (написаний, ніколи не викликався).
 
 ---
 

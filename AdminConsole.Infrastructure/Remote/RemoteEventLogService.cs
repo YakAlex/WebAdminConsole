@@ -11,8 +11,7 @@ namespace AdminConsole.Infrastructure.Remote;
 /// System.Diagnostics.EventLog(name, ".") — для remote-машин цей API
 /// ненадійний з чистими IP-адресами (вимагає NetBIOS-резолву, легко
 /// підвисає чи мовчки повертає 0 записів). Тому тут читання йде через
-/// WMI (Win32_NTLogEvent) — той самий ManagementScope/DCOM шлях,
-/// що вже стабільно працює у RemoteResourceService для CPU/RAM.
+/// WMI (Win32_NTLogEvent) — той самий ManagementScope/DCOM шлях.
 ///
 /// Захист від RPC-таймаутів: перед спробою читання WMI — швидкий
 /// ping-чек (макс. 1.5с). Якщо сервер не відповідає — одразу повертаємо

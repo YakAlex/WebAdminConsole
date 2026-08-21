@@ -11,14 +11,17 @@ namespace AdminConsole.Api.Realtime;
 /// IMessenger — кожна доменна подія автоматично летить у відповідну групу
 /// замість прямого виклику підписника.
 ///
-/// Обробляє ВСІ 14 подій, перенесених з Core/Messages. Чотири з них мають
+/// Обробляє події, перенесені з Core/Messages. Чотири з них мають
 /// прямий, однозначний UI-відповідник (ping/uptime/backups); решта — RDP,
-/// Zabbix, Resource Monitor, Event Log, credentials/monitoring-toggle,
-/// Telegram access — не мають власної сторінки в поточному обсязі Фази 6
+/// Zabbix, Event Log, credentials/monitoring-toggle, Telegram access —
+/// не мають власної сторінки в поточному обсязі Фази 6
 /// (Dashboard/Uptime/Backups/Logs/Maintenance/Settings), тож летять у
 /// "logs" як загальний потік адміністративної активності — той самий
 /// принцип, що й у старому WPF, де все зрештою потрапляло у вкладку Logs
 /// через AppLogEntryMessage.
+///
+/// (ResourceSnapshotUpdatedOccurred/ResourceMonitorService прибрано
+/// повністю 2026-08-22 разом із фронтенд-вкладкою Resources.)
 /// </summary>
 public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub) :
     INotificationHandler<AppLogEntryOccurred>,
@@ -28,7 +31,6 @@ public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub) :
     INotificationHandler<BackupTransitionOccurred>,
     INotificationHandler<UptimeUpdatedOccurred>,
     INotificationHandler<EventLogUpdatedOccurred>,
-    INotificationHandler<ResourceSnapshotUpdatedOccurred>,
     INotificationHandler<RdpSessionsUpdatedOccurred>,
     INotificationHandler<ZabbixProblemsUpdatedOccurred>,
     INotificationHandler<CredentialsChangedOccurred>,
@@ -58,8 +60,6 @@ public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub) :
     public Task Handle(UptimeUpdatedOccurred n, CancellationToken ct) => Send(Uptime, n, ct);
 
     public Task Handle(EventLogUpdatedOccurred n, CancellationToken ct) => Send(Logs, n, ct);
-
-    public Task Handle(ResourceSnapshotUpdatedOccurred n, CancellationToken ct) => Send(Logs, n, ct);
 
     public Task Handle(RdpSessionsUpdatedOccurred n, CancellationToken ct) => Send(Logs, n, ct);
 

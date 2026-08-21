@@ -179,18 +179,6 @@ export interface AppLogEntryEvent {
   entry: AppLogEntry
 }
 
-export interface ResourceSnapshot {
-  cpuPercent: number
-  ramUsedGb: number
-  ramTotalGb: number
-  ramPercent: number
-  timestamp: string
-}
-
-export interface ResourceSnapshotUpdatedEvent {
-  snapshot: ResourceSnapshot
-}
-
 export interface RdpSessionInfo {
   username: string
   sessionName: string

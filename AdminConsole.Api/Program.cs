@@ -147,12 +147,10 @@ builder.Services.AddSingleton<EventLogService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EventLogService>());
 builder.Services.AddSingleton<RemoteEventLogService>();
 
-// T4.9 — Resource/Remote-management: ResourceMonitorService єдиний реальний
-// BackgroundService (локальний опитувальний цикл); Remote* — on-demand,
-// без ExecuteAsync-циклу (навантаження WMI лише для вузла, що переглядається).
-builder.Services.AddSingleton<ResourceMonitorService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ResourceMonitorService>());
-builder.Services.AddSingleton<RemoteResourceService>();
+// T4.9 — Remote-management: on-demand, без ExecuteAsync-циклу (навантаження
+// WMI лише для вузла, що переглядається). ResourceMonitorService/
+// RemoteResourceService (System Resources) прибрано повністю 2026-08-22 —
+// фронтенд-вкладка Resources більше не існує.
 builder.Services.AddSingleton<RemoteManagementService>();
 
 // T5.1 — CredentialStore: секрети (Zabbix/Telegram) через Data Protection

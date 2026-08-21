@@ -4,7 +4,6 @@ import { AppLayout } from '@/components/layout/AppLayout/AppLayout'
 import { Overview } from '@/pages/Overview/Overview'
 import { Ping } from '@/pages/Ping/Ping'
 import { Uptime } from '@/pages/Uptime/Uptime'
-import { Resources } from '@/pages/Resources/Resources'
 import { RdpSessions } from '@/pages/RdpSessions/RdpSessions'
 import { ZabbixAlerts } from '@/pages/ZabbixAlerts/ZabbixAlerts'
 import { Backups } from '@/pages/Backups/Backups'
@@ -19,7 +18,6 @@ const PAGES: Record<string, ComponentType> = {
   '/': Overview,
   '/ping': Ping,
   '/uptime': Uptime,
-  '/resources': Resources,
   '/rdp-sessions': RdpSessions,
   '/zabbix-alerts': ZabbixAlerts,
   '/backups': Backups,

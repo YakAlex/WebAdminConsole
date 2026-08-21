@@ -8,8 +8,6 @@ import { RecentActivity } from '@/components/overview/RecentActivity/RecentActiv
 import { BackupsCard } from '@/components/overview/BackupsCard/BackupsCard'
 import { RdpSessionsCard } from '@/components/overview/RdpSessionsCard/RdpSessionsCard'
 import { MaintenanceCard } from '@/components/overview/MaintenanceCard/MaintenanceCard'
-import { UptimeByDeviceTable } from '@/components/overview/UptimeByDeviceTable/UptimeByDeviceTable'
-import { SystemResourcesCard } from '@/components/overview/SystemResourcesCard/SystemResourcesCard'
 import { useOverviewViewModel } from './useOverviewViewModel'
 import styles from './Overview.module.scss'
 
@@ -80,12 +78,6 @@ export function Overview() {
             </div>
             <div className={styles.maintenance}>
               <MaintenanceCard windows={vm.maintenanceWindows} />
-            </div>
-            <div className={styles.uptimeByDevice}>
-              <UptimeByDeviceTable rows={vm.deviceRows} />
-            </div>
-            <div className={styles.resources}>
-              <SystemResourcesCard history={vm.resourceHistory} />
             </div>
           </div>
         </>

@@ -1,9 +1,8 @@
 import { useDashboardData } from '@/hooks/useDashboardData'
 import { computeUptimeAxisLabels, computeUptimeSeries } from '@/hooks/dashboard/uptimeMath'
 import { computeGlobalPingStats } from '@/hooks/dashboard/pingMath'
-import { BackupOutcome, PingStatus, RdpSessionState, ZabbixSeverity } from '@/lib/api/types'
+import { BackupOutcome, RdpSessionState, ZabbixSeverity } from '@/lib/api/types'
 import type { ApiError } from '@/lib/api/http'
-import type { DeviceRow } from '@/components/overview/UptimeByDeviceTable/UptimeByDeviceTable'
 
 /**
  * T6.2 п.5: одна точка, де "сирі" дані з useDashboardData() перетворюються
@@ -36,22 +35,6 @@ export function useOverviewViewModel() {
   const warnings = zabbixDisabled
     ? 0
     : data.zabbixProblems.filter((p) => p.severity === ZabbixSeverity.Average || p.severity === ZabbixSeverity.Warning).length
-
-  const deviceRows: DeviceRow[] = data.servers.map((server) => {
-    const hostPing = pingResults.find((r) => r.ip === server.ip)
-    const series = computeUptimeSeries(data.downtimeRecords, 1, { hours: 24, buckets: 8, serverIp: server.ip })
-
-    return {
-      ip: server.ip,
-      name: server.name,
-      group: server.group,
-      status: hostPing?.status ?? PingStatus.Unknown,
-      uptimePercent: series.percent,
-      trend: series.buckets,
-      responseTimeMs: hostPing?.latencyMs ?? null,
-      lastCheck: hostPing?.lastChecked ?? null,
-    }
-  })
 
   // Крок 11.3 аудиту: Overview — головна сторінка входу — не мала жодного
   // loading-індикатора чи error-банера, попри те що useDashboardData() уже
@@ -89,7 +72,5 @@ export function useOverviewViewModel() {
     // RDP Sessions), інакше "Active sessions" рахував і відключені сесії.
     rdpSessions: rdpDisabled ? [] : data.rdpSessions.filter((s) => s.state === RdpSessionState.Active),
     maintenanceWindows: data.maintenanceWindows,
-    resourceHistory: data.resourceHistory,
-    deviceRows,
   }
 }

@@ -21,7 +21,6 @@ public sealed class MonitoringSettings
     public string ZabbixUrl                        { get; init; } = string.Empty;
     public int    ZabbixPollIntervalSeconds        { get; init; } = 60;
     public int    RdpPollIntervalSeconds           { get; init; } = 120;
-    public int    LocalResourcePollIntervalSeconds { get; init; } = 3;
 
     /// <summary>
     /// Мінімальна тривалість (у секундах) даунтайму, щоб він потрапив

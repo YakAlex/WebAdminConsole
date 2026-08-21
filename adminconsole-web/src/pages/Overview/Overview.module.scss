@@ -1,14 +1,18 @@
+// UX-фікс (2026-08-22): після видалення Uptime by Device/System Resources
+// звільнилось вертикальне місце — трохи більше "повітря" між блоками
+// (--space-4/--grid-gap → --space-5, 16px → 20px), навмисно скромно, щоб
+// не спровокувати скрол сторінки на типовому viewport.
 .root {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 
 // §7: Hero (~65-70%) + Attention Required (решта).
 .heroRow {
   display: grid;
   grid-template-columns: minmax(0, 2.15fr) minmax(280px, 1fr);
-  gap: var(--grid-gap);
+  gap: var(--space-5);
   align-items: stretch;
 }
 
@@ -16,7 +20,7 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--grid-gap);
+  gap: var(--space-5);
 }
 
 .ping {
@@ -49,16 +53,6 @@
   grid-row: 2;
 }
 
-.uptimeByDevice {
-  grid-column: 1 / span 8;
-  grid-row: 3;
-}
-
-.resources {
-  grid-column: 9 / span 4;
-  grid-row: 3;
-}
-
 // §24: 1280px — сітка стає компактнішою (три великі колонки замість 12).
 @media (max-width: 1280px) {
   .heroRow {
@@ -73,9 +67,7 @@
   .uptime,
   .backups,
   .rdp,
-  .maintenance,
-  .uptimeByDevice,
-  .resources {
+  .maintenance {
     grid-column: span 1;
     grid-row: auto;
   }
@@ -84,10 +76,6 @@
     grid-column: span 2;
     grid-row: auto;
   }
-
-  .uptimeByDevice {
-    grid-column: span 2;
-  }
 }
 
 @media (max-width: 720px) {
@@ -95,8 +83,7 @@
     grid-template-columns: 1fr;
   }
 
-  .activity,
-  .uptimeByDevice {
+  .activity {
     grid-column: span 1;
   }
 }

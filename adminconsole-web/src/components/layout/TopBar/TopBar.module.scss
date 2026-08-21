@@ -5,36 +5,31 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: var(--space-4);
   padding: 0 var(--space-6);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-app);
 }
 
-// ── Right cluster ────────────────────────────────────────────────────────
-
-.right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-}
-
 // Дата/час (перенесено з PageHeader §6) — компактний двострядковий блок,
-// що влазить у 64px topbar без роздування його висоти.
+// що влазить у 64px topbar без роздування його висоти. UX-фікс (2026-08-22):
+// лівий край замість правого — border-right/padding-right (розділювач із
+// сусіднім блоком статусу) більше не потрібні, обидва блоки тепер на
+// протилежних краях (justify-content: space-between).
 .dateTime {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 1px;
-  padding-right: var(--space-5);
-  border-right: 1px solid var(--color-border);
   line-height: var(--line-height-tight);
 }
 
+// UX-фікс (2026-08-22): раніше --color-text-muted (ледь помітний) —
+// піднято до --color-text-primary, щоб дата була так само помітна, як час.
 .date {
   font-size: var(--font-size-micro);
-  color: var(--color-text-muted);
+  color: var(--color-text-primary);
   white-space: nowrap;
 }
 
@@ -52,13 +47,4 @@
   font-size: var(--font-size-secondary);
   color: var(--color-text-secondary);
   white-space: nowrap;
-}
-
-.statusDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-success);
-  flex-shrink: 0;
-  box-shadow: 0 0 0 3px var(--color-success-glow);
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { FileText } from 'lucide-react'
+import clsx from 'clsx'
 import { slaReportHtmlUrl, type SlaReportQuery } from '@/lib/api/endpoints'
 import styles from './SlaReportSection.module.scss'
 
@@ -55,15 +56,15 @@ export function SlaReportSection() {
       </div>
 
       <div className={styles.form}>
-        <label className={styles.field}>
+        <label className={clsx(styles.field, styles.fieldDate)}>
           <span>From</span>
           <input type="date" className={styles.input} value={from} onChange={(e) => setFrom(e.target.value)} />
         </label>
-        <label className={styles.field}>
+        <label className={clsx(styles.field, styles.fieldDate)}>
           <span>To</span>
           <input type="date" className={styles.input} value={to} onChange={(e) => setTo(e.target.value)} />
         </label>
-        <label className={styles.field}>
+        <label className={clsx(styles.field, styles.fieldText)}>
           <span>Group</span>
           <input
             type="text"
@@ -73,7 +74,7 @@ export function SlaReportSection() {
             onChange={(e) => setGroup(e.target.value)}
           />
         </label>
-        <label className={styles.field}>
+        <label className={clsx(styles.field, styles.fieldText)}>
           <span>Server</span>
           <input
             type="text"

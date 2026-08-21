@@ -1,0 +1,150 @@
+@use '@/styles/mixins' as *;
+
+.card {
+  @include table-card;
+}
+
+.header {
+  @include table-card-header;
+}
+
+.eyebrow {
+  @include section-title;
+}
+
+.addForm {
+  display: flex;
+  gap: var(--space-2);
+  padding: 0 var(--card-padding) var(--card-padding);
+}
+
+.chatIdInput {
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.usernameInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.input {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  font-family: inherit;
+  width: 100%;
+  transition: border-color var(--transition-fast);
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.addButton {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-brand-cyan-border);
+  background: var(--color-brand-cyan-bg);
+  color: var(--color-brand-cyan);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  transition: filter var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.15);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.tableWrap {
+  overflow-x: auto;
+  @include thin-scrollbar;
+}
+
+.table {
+  @include data-table;
+  min-width: 420px;
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+}
+
+.userIcon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.chatId {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.removeCell {
+  width: 40px;
+}
+
+.removeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    color: var(--color-critical);
+    background: var(--color-critical-bg);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.empty {
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-secondary);
+}
+
+.error {
+  padding: 0 var(--card-padding) var(--space-3);
+  font-size: var(--font-size-micro);
+  color: var(--color-critical);
+}

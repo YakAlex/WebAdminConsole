@@ -1,0 +1,102 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+// §7: Hero (~65-70%) + Attention Required (решта).
+.heroRow {
+  display: grid;
+  grid-template-columns: minmax(0, 2.15fr) minmax(280px, 1fr);
+  gap: var(--grid-gap);
+  align-items: stretch;
+}
+
+// §9: асиметрична сітка на основі 12 колонок — НЕ шість однакових квадратів.
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.ping {
+  grid-column: 1 / span 3;
+  grid-row: 1;
+}
+
+.uptime {
+  grid-column: 4 / span 5;
+  grid-row: 1;
+}
+
+.activity {
+  grid-column: 9 / span 4;
+  grid-row: 1 / span 2;
+}
+
+.backups {
+  grid-column: 1 / span 3;
+  grid-row: 2;
+}
+
+.rdp {
+  grid-column: 4 / span 3;
+  grid-row: 2;
+}
+
+.maintenance {
+  grid-column: 7 / span 2;
+  grid-row: 2;
+}
+
+.uptimeByDevice {
+  grid-column: 1 / span 8;
+  grid-row: 3;
+}
+
+.resources {
+  grid-column: 9 / span 4;
+  grid-row: 3;
+}
+
+// §24: 1280px — сітка стає компактнішою (три великі колонки замість 12).
+@media (max-width: 1280px) {
+  .heroRow {
+    grid-template-columns: 1fr;
+  }
+
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ping,
+  .uptime,
+  .backups,
+  .rdp,
+  .maintenance,
+  .uptimeByDevice,
+  .resources {
+    grid-column: span 1;
+    grid-row: auto;
+  }
+
+  .activity {
+    grid-column: span 2;
+    grid-row: auto;
+  }
+
+  .uptimeByDevice {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .activity,
+  .uptimeByDevice {
+    grid-column: span 1;
+  }
+}

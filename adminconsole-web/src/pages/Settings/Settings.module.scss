@@ -1,0 +1,25 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.credentialsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--grid-gap);
+}
+
+.error {
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-critical-bg);
+  color: var(--color-critical);
+  font-size: var(--font-size-secondary);
+}
+
+@media (max-width: 900px) {
+  .credentialsRow {
+    grid-template-columns: 1fr;
+  }
+}

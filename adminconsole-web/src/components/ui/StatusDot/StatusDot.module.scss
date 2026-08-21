@@ -1,0 +1,46 @@
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.success {
+  background: var(--color-success);
+}
+
+.warning {
+  background: var(--color-warning);
+}
+
+.critical {
+  background: var(--color-critical);
+}
+
+.info {
+  background: var(--color-info);
+}
+
+.inactive {
+  background: var(--color-inactive);
+}
+
+// §8: "дуже слабкий glow" — тільки коли явно потрібно привернути увагу.
+.glow {
+  &.success {
+    box-shadow: 0 0 0 3px var(--color-success-glow);
+  }
+
+  &.warning {
+    box-shadow: 0 0 0 3px var(--color-warning-glow);
+  }
+
+  &.critical {
+    box-shadow: 0 0 0 3px var(--color-critical-glow);
+  }
+
+  &.info {
+    box-shadow: 0 0 0 3px var(--color-brand-cyan-bg);
+  }
+}

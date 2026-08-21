@@ -1,0 +1,114 @@
+// ============================================================================
+// Design tokens — Admin Console Design System
+//
+// Єдине джерело правди для кольорів/типографіки/spacing/radius/тіней/
+// переходів. Кожен компонент (Card, Sidebar, TopBar, майбутні Ping/Uptime/
+// Resources/RDP/Zabbix/Backups/Logs) читає ЛИШЕ ці змінні — ніхто не хардкодить
+// hex-кольори напряму. Це і є "Design System", а не просто набір сторінок.
+//
+// Значення взяті буквально з дизайн-брифу (розділи 3, 18, 19, 20, 23, 2).
+// ============================================================================
+
+:root {
+  // ── Backgrounds (брифа §3) ────────────────────────────────────────────────
+  --color-bg-app: #080d12; // dark graphite, НЕ чистий чорний
+  --color-bg-sidebar: #0d141c;
+
+  // Cards мають ледь помітний внутрішній градієнт (§19: top → світліше,
+  // bottom → темніше) — це і дає "premium depth" без важких тіней.
+  --color-bg-card-top: #111c25;
+  --color-bg-card-bottom: #101923;
+  --color-bg-card-elevated: #14202a; // hover / піднятий стан картки
+
+  // ── Borders ──────────────────────────────────────────────────────────────
+  --color-border: #1e303a;
+  --color-border-hover: #2a4049; // §23: border → slightly brighter on hover
+
+  // ── Text ─────────────────────────────────────────────────────────────────
+  --color-text-primary: #f1f5f7;
+  --color-text-secondary: #8799a4;
+  --color-text-muted: #53656f;
+
+  // ── Brand (§21: cyan — це НЕ semantic-колір, а брендовий/інформаційний) ──
+  --color-brand-cyan: #36c8d5;
+  --color-brand-cyan-bg: rgba(54, 200, 213, 0.1); // фон активного nav-пункту
+  --color-brand-cyan-border: rgba(54, 200, 213, 0.24);
+
+  // ── Semantic status colors (§3, §21) ─────────────────────────────────────
+  --color-success: #35d36a;
+  --color-success-bg: rgba(53, 211, 106, 0.12);
+  --color-success-glow: rgba(53, 211, 106, 0.18);
+
+  --color-warning: #f3c84b;
+  --color-warning-bg: rgba(243, 200, 75, 0.12);
+  --color-warning-glow: rgba(243, 200, 75, 0.18);
+
+  --color-critical: #ff5c61;
+  --color-critical-bg: rgba(255, 92, 97, 0.12);
+  --color-critical-glow: rgba(255, 92, 97, 0.2); // §8: "дуже слабкий red glow"
+
+  --color-info: var(--color-brand-cyan);
+  --color-info-bg: var(--color-brand-cyan-bg);
+
+  --color-inactive: var(--color-text-muted);
+
+  // ── Glass / overlay effect (§20 — "дуже обережно", НЕ blur(30px)) ───────
+  --color-glass-bg: rgba(16, 25, 35, 0.88);
+  --color-glass-border: rgba(100, 180, 200, 0.1);
+
+  // ── Typography (§18) ─────────────────────────────────────────────────────
+  --font-family-base:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  --font-size-page-title: 23px; // 22–24px / 600
+  --font-size-section-title: 12px; // 12–13px / 600 / uppercase
+  --font-size-kpi: 34px; // 30–40px / 600
+  --font-size-body: 14px; // normal text 13–14px
+  --font-size-secondary: 12px;
+  --font-size-micro: 11px; // 10–11px
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --section-title-letter-spacing: 0.06em; // 0.04–0.08em
+  --line-height-base: 1.5;
+  --line-height-tight: 1.25;
+
+  // ── Spacing scale (4px base) ──────────────────────────────────────────────
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  // ── Radius (§19: 10–12px; §25: НЕ 24px) ──────────────────────────────────
+  --radius-card: 12px;
+  --radius-control: 8px;
+  --radius-pill: 999px;
+
+  // ── Density (NOC dashboard: максимум інформації на екран без скролу) ────
+  // Окремі семантичні токени від базової spacing-шкали — щоб глобально
+  // підкрутити щільність картки/сітки в одному місці, не займаючи --space-*,
+  // які й далі використовуються під загальні (не card-специфічні) відступи.
+  --card-padding: 16px;
+  --card-gap: 10px;
+  --grid-gap: 16px;
+
+  // ── Elevation (§19/§25: без сильних тіней — лише border + слабкий градієнт) ──
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.36); // лише для dropdown/popover, НЕ для звичайних card
+
+  // ── Motion (§23: 150–200ms) ───────────────────────────────────────────────
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+
+  // ── Layout (§2) ───────────────────────────────────────────────────────────
+  --sidebar-width: 205px;
+  --sidebar-width-narrow: 64px; // §24, 1024px breakpoint — ікони без лейблів
+  --topbar-height: 64px;
+  --content-padding-x: 32px;
+}

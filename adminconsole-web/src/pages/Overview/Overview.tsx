@@ -1,0 +1,79 @@
+import { SystemHealthHero } from '@/components/overview/SystemHealthHero/SystemHealthHero'
+import { AttentionRequired } from '@/components/overview/AttentionRequired/AttentionRequired'
+import { PingCard } from '@/components/overview/PingCard/PingCard'
+import { UptimeCard } from '@/components/overview/UptimeCard/UptimeCard'
+import { RecentActivity } from '@/components/overview/RecentActivity/RecentActivity'
+import { BackupsCard } from '@/components/overview/BackupsCard/BackupsCard'
+import { RdpSessionsCard } from '@/components/overview/RdpSessionsCard/RdpSessionsCard'
+import { MaintenanceCard } from '@/components/overview/MaintenanceCard/MaintenanceCard'
+import { UptimeByDeviceTable } from '@/components/overview/UptimeByDeviceTable/UptimeByDeviceTable'
+import { SystemResourcesCard } from '@/components/overview/SystemResourcesCard/SystemResourcesCard'
+import { useOverviewViewModel } from './useOverviewViewModel'
+import styles from './Overview.module.scss'
+
+/**
+ * §6–17 брифу: reference implementation Design System. T6.2: дані тепер
+ * реальні — REST початковий знімок + SignalR DashboardHub, композиція в
+ * useOverviewViewModel(). 401/403 обробляється глобально в App.tsx
+ * (AuthProvider) — цей компонент монтується лише коли доступ уже підтверджено.
+ */
+export function Overview() {
+  const vm = useOverviewViewModel()
+
+  return (
+    <div className={styles.root}>
+      <div className={styles.heroRow}>
+        <SystemHealthHero
+          online={vm.ping.online}
+          total={vm.ping.total}
+          hasPingData={vm.ping.hasData}
+          pingSuccessRate={vm.ping.successRate}
+          uptimePercent={vm.uptime.overallPercent}
+          backupsSuccessful={vm.backupsSummary.successful}
+          backupsTotal={vm.backupsSummary.total}
+          criticalAlerts={vm.attention.criticalAlerts}
+          warnings={vm.attention.warnings}
+        />
+        <AttentionRequired criticalAlerts={vm.attention.criticalAlerts} warnings={vm.attention.warnings} />
+      </div>
+
+      <div className={styles.grid}>
+        <div className={styles.ping}>
+          <PingCard
+            online={vm.ping.online}
+            total={vm.ping.total}
+            successRate={vm.ping.successRate}
+            offline={vm.ping.offline}
+            hasData={vm.ping.hasData}
+          />
+        </div>
+        <div className={styles.uptime}>
+          <UptimeCard
+            overallPercent={vm.uptime.overallPercent}
+            monitoredDevices={vm.uptime.monitoredDevices}
+            trend={vm.uptime.trend}
+            axisLabels={vm.uptime.axisLabels}
+          />
+        </div>
+        <div className={styles.activity}>
+          <RecentActivity entries={vm.recentActivity} />
+        </div>
+        <div className={styles.backups}>
+          <BackupsCard jobs={vm.backups} />
+        </div>
+        <div className={styles.rdp}>
+          <RdpSessionsCard sessions={vm.rdpSessions} />
+        </div>
+        <div className={styles.maintenance}>
+          <MaintenanceCard windows={vm.maintenanceWindows} />
+        </div>
+        <div className={styles.uptimeByDevice}>
+          <UptimeByDeviceTable rows={vm.deviceRows} />
+        </div>
+        <div className={styles.resources}>
+          <SystemResourcesCard history={vm.resourceHistory} />
+        </div>
+      </div>
+    </div>
+  )
+}

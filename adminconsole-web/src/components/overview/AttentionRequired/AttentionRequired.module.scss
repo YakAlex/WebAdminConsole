@@ -1,0 +1,103 @@
+@use '@/styles/mixins' as *;
+
+.card {
+  @include card-surface;
+  padding: var(--card-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--color-text-secondary);
+  transition: color var(--transition-fast);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text-primary);
+
+    svg {
+      color: var(--color-brand-cyan);
+    }
+  }
+}
+
+.eyebrow {
+  @include section-title;
+}
+
+.chevron {
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  justify-content: center;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.iconBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+}
+
+.critical {
+  color: var(--color-critical);
+  background: var(--color-critical-bg);
+}
+
+.warning {
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+}
+
+.info {
+  color: var(--color-info);
+  background: var(--color-info-bg);
+}
+
+// Слабкий glow навколо badge, коли значення > 0 (§8: "very subtle red glow").
+.attention {
+  box-shadow: 0 0 12px -2px currentColor;
+}
+
+.count {
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  min-width: 16px;
+}
+
+.label {
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+}
+
+.clearLabel {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.clearCaption {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+}

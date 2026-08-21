@@ -1,0 +1,29 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  height: 100vh;
+  width: 100%;
+  background: var(--color-bg-app);
+}
+
+.spinner {
+  color: var(--color-brand-cyan);
+  animation: spin 900ms linear infinite;
+}
+
+.text {
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-muted);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

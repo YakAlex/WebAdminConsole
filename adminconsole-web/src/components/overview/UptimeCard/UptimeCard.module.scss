@@ -1,0 +1,75 @@
+@use '@/styles/mixins' as *;
+
+.card {
+  @include card-surface;
+  padding: var(--card-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--card-gap);
+  height: 100%;
+
+  &:hover {
+    @include card-surface-hover;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  @include section-title;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rangeTrigger {
+  @include dropdown-trigger;
+}
+
+.headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.kpi {
+  @include kpi-value;
+}
+
+.kpiLabel {
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: 42px;
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -4px;
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+}
+
+.footerIcon {
+  color: var(--color-text-muted);
+}

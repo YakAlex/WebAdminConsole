@@ -1,0 +1,23 @@
+.wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.track {
+  stroke: var(--color-border);
+}
+
+.progress {
+  transition: stroke-dashoffset var(--transition-base);
+}
+
+.center {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-success);
+}

@@ -1,0 +1,178 @@
+// ============================================================================
+// Reusable SCSS mixins — Admin Console Design System
+// ============================================================================
+
+// Базова поверхня картки (§19/§20): тонкий border + ледь помітний
+// top→bottom градієнт замість важкої тіні. Це ЄДИНЕ місце, де визначено,
+// як виглядає "card surface" — Card.tsx і будь-який майбутній компонент
+// (KPI-плашка, ряд таблиці) використовують цей мікшин, а не дублюють CSS.
+@mixin card-surface {
+  background: linear-gradient(
+    180deg,
+    var(--color-bg-card-top) 0%,
+    var(--color-bg-card-bottom) 100%
+  );
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color var(--transition-base),
+    background var(--transition-base);
+}
+
+@mixin card-surface-hover {
+  border-color: var(--color-border-hover);
+}
+
+// Секційний заголовок карток: "SYSTEM HEALTH", "RECENT ACTIVITY" (§18).
+@mixin section-title {
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--section-title-letter-spacing);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+// Клавіатурний фокус — доступність, той самий стиль скрізь.
+@mixin focus-ring {
+  outline: none;
+
+  &:focus-visible {
+    outline: 2px solid var(--color-brand-cyan);
+    outline-offset: 2px;
+    border-radius: var(--radius-control);
+  }
+}
+
+// Тонкий темний скролбар — деталь, яка відрізняє "премальний" застосунок
+// від дефолтного браузерного скролбара на темному фоні.
+@mixin thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
+    border-radius: var(--radius-pill);
+
+    &:hover {
+      background-color: var(--color-border-hover);
+    }
+  }
+}
+
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Великий KPI-показник (§18: "Large KPI 30–40px / 600") — Uptime %, health ring цифри тощо.
+@mixin kpi-value {
+  font-size: var(--font-size-kpi);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  line-height: 1;
+}
+
+// Малий текстовий лінк-дія у заголовку картки: "View all", "Schedule maintenance",
+// "View all activity" (§13/§14/§15/§16) — однаковий по всьому dashboard.
+@mixin link-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  transition: color var(--transition-fast);
+
+  &:hover {
+    color: var(--color-brand-cyan);
+  }
+}
+
+// Картка-обгортка для операційних таблиць (Uptime by Device, Ping Hosts,
+// Uptime Devices) — card-surface без padding (рядки йдуть до самого краю)
+// + стандартний header-рядок з eyebrow/filter-тригером.
+@mixin table-card {
+  @include card-surface;
+  display: flex;
+  flex-direction: column;
+
+  &:hover {
+    @include card-surface-hover;
+  }
+}
+
+@mixin table-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--card-padding);
+}
+
+// Сама <table>: uppercase-заголовки, тонкі роздільники між рядками, легкий
+// hover — один спільний вигляд для будь-якої операційної таблиці в системі.
+@mixin data-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  thead th {
+    padding: var(--space-2) var(--card-padding);
+    text-align: left;
+    font-size: 10px;
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--section-title-letter-spacing);
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 0 var(--card-padding);
+    height: 34px;
+    font-size: var(--font-size-secondary);
+    color: var(--color-text-primary);
+    white-space: nowrap;
+  }
+
+  tbody tr:not(:last-child) td {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  tbody tr {
+    transition: background var(--transition-fast);
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+  }
+}
+
+// Тригер псевдо-dropdown у заголовку картки: "24h ⌄", "All Systems ⌄" (§11/§16/§17).
+@mixin dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-micro);
+  font-weight: var(--font-weight-medium);
+  transition: border-color var(--transition-fast);
+
+  &:hover {
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+  }
+}

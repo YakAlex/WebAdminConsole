@@ -124,11 +124,15 @@ public sealed class MaintenanceService(
         await mediator.Publish(new MaintenanceChangedOccurred(MaintenanceAction.Started, window), ct);
     }
 
-    /// <summary>Дострокове завершення вручну (адмін відновив сервер раніше графіка).</summary>
-    public async Task EndMaintenanceEarlyAsync(string key, CancellationToken ct = default)
+    /// <summary>
+    /// Дострокове завершення вручну (адмін відновив сервер раніше графіка).
+    /// Повертає false, якщо вікна з таким Key вже нема (idempotent no-op) —
+    /// REST-контролер (аудит-фікс п.1) використовує це для 404 vs 204.
+    /// </summary>
+    public async Task<bool> EndMaintenanceEarlyAsync(string key, CancellationToken ct = default)
     {
         if (!_windows.TryRemove(key, out var window))
-            return;
+            return false;
 
         await WithRepositoryAsync(r => r.RemoveAsync(key, ct));
 
@@ -136,6 +140,7 @@ public sealed class MaintenanceService(
             $"Maintenance для {window.DisplayName} завершено вручну."), ct);
 
         await mediator.Publish(new MaintenanceChangedOccurred(MaintenanceAction.Ended, window), ct);
+        return true;
     }
 
     /// <summary>

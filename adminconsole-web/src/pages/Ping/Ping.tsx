@@ -32,7 +32,7 @@ export function Ping() {
             avgLatencyMs={vm.stats.avgLatencyMs}
             hasData={vm.stats.hasData}
           />
-          <PingHostsTable hosts={vm.hosts} />
+          <PingHostsTable hosts={vm.hosts} maintenanceWindows={vm.maintenanceWindows} />
         </>
       )}
     </div>

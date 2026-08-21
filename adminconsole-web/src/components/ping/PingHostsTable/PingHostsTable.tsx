@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { Server, RotateCw, Power, MonitorUp, Radar } from 'lucide-react'
+import { Server, RotateCw, Power, MonitorUp, Radar, Wrench } from 'lucide-react'
 import clsx from 'clsx'
 import { StatusDot, type StatusTone } from '@/components/ui/StatusDot'
 import { Modal } from '@/components/ui/Modal'
-import { PingStatus, ServerType } from '@/lib/api/types'
+import { PingStatus, ServerType, type MaintenanceWindow } from '@/lib/api/types'
 import { formatClockWithSeconds } from '@/lib/format'
 import { restartServer, shutdownServer, rdpFileUrl } from '@/lib/api/endpoints'
 import type { HostRow } from '@/hooks/dashboard/pingMath'
 import { ContinuousPingModal } from '@/components/ping/ContinuousPingModal/ContinuousPingModal'
+import { MaintenanceModal } from '@/components/ping/MaintenanceModal/MaintenanceModal'
 import styles from './PingHostsTable.module.scss'
 
 const STATUS_LABEL: Record<PingStatus, string> = {
@@ -56,18 +57,32 @@ const ACTION_COPY: Record<ActionKind, { verb: string; danger: boolean; warning: 
 
 export interface PingHostsTableProps {
   hosts: HostRow[]
+  /** Аудит-фікс (2026-08-22, п.1): активні вікна обслуговування — визначає стан кнопки 🔧 на кожному рядку. */
+  maintenanceWindows: MaintenanceWindow[]
+}
+
+/**
+ * Знаходить активне вікно для хоста — або пряме (за IP), або групове
+ * (targetGroup === host.group). Той самий пріоритет, що й у
+ * MaintenanceService.IsUnderMaintenance на бекенді.
+ */
+function findActiveWindow(host: HostRow, windows: MaintenanceWindow[]): MaintenanceWindow | null {
+  return windows.find((w) => w.serverIp === host.ip) ?? windows.find((w) => w.targetGroup === host.group) ?? null
 }
 
 /**
  * §26 брифу (Ping): "Hosts table" — усі сервери зі статусом, IP, response time.
  * Пріоритет 3, #3.1: колонка Actions — Restart/Shutdown/RDP (лише Windows,
  * той самий принцип, що й у WPF PingResultViewModel.IsWindows) + Continuous
- * Ping (усі типи пристроїв).
+ * Ping (усі типи пристроїв). Аудит-фікс (2026-08-22, п.1): +Maintenance
+ * toggle — теж для усіх типів пристроїв (це Ping/Backup-алертинг, не
+ * RDP-специфіка), той самий принцип, що й WPF ToggleMaintenanceCommand.
  */
-export function PingHostsTable({ hosts }: PingHostsTableProps) {
+export function PingHostsTable({ hosts, maintenanceWindows }: PingHostsTableProps) {
   const [pending, setPending] = useState<PendingAction | null>(null)
   const [phase, setPhase] = useState<ActionPhase>('confirm')
   const [continuousPingHost, setContinuousPingHost] = useState<HostRow | null>(null)
+  const [maintenanceHost, setMaintenanceHost] = useState<HostRow | null>(null)
 
   const openConfirm = (host: HostRow, kind: ActionKind) => {
     setPending({ host, kind })
@@ -118,7 +133,10 @@ export function PingHostsTable({ hosts }: PingHostsTableProps) {
               </tr>
             </thead>
             <tbody>
-              {hosts.map((host) => (
+              {hosts.map((host) => {
+                const activeMaintenance = findActiveWindow(host, maintenanceWindows)
+
+                return (
                 <tr key={host.ip}>
                   <td>
                     <span className={styles.host}>
@@ -145,6 +163,15 @@ export function PingHostsTable({ hosts }: PingHostsTableProps) {
                       aria-label={`Continuous ping ${host.name}`}
                     >
                       <Radar size={14} strokeWidth={1.75} />
+                    </button>
+                    <button
+                      type="button"
+                      className={clsx(styles.actionButton, activeMaintenance && styles.maintenanceActive)}
+                      onClick={() => setMaintenanceHost(host)}
+                      title={activeMaintenance ? 'Under maintenance — click to end' : 'Start maintenance'}
+                      aria-label={activeMaintenance ? `End maintenance for ${host.name}` : `Start maintenance for ${host.name}`}
+                    >
+                      <Wrench size={14} strokeWidth={1.75} />
                     </button>
                     {host.type === ServerType.Windows && (
                       <>
@@ -178,7 +205,8 @@ export function PingHostsTable({ hosts }: PingHostsTableProps) {
                     )}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -226,6 +254,14 @@ export function PingHostsTable({ hosts }: PingHostsTableProps) {
 
       {continuousPingHost && (
         <ContinuousPingModal host={continuousPingHost} onClose={() => setContinuousPingHost(null)} />
+      )}
+
+      {maintenanceHost && (
+        <MaintenanceModal
+          host={maintenanceHost}
+          activeWindow={findActiveWindow(maintenanceHost, maintenanceWindows)}
+          onClose={() => setMaintenanceHost(null)}
+        />
       )}
     </div>
   )

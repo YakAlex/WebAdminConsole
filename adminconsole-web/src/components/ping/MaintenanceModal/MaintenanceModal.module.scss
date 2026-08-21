@@ -1,0 +1,150 @@
+@use '@/styles/mixins' as *;
+
+.message {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-base);
+}
+
+.errorMessage {
+  margin: var(--space-3) 0 0;
+  color: var(--color-critical);
+  font-size: var(--font-size-secondary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+
+  & + & {
+    margin-top: var(--space-4);
+  }
+}
+
+.label {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--section-title-letter-spacing);
+}
+
+.radioRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-secondary);
+
+  input[type='radio'] {
+    accent-color: var(--color-brand-cyan);
+  }
+}
+
+.durationRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.durationOption {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+
+  &:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.durationOptionActive {
+  border-color: var(--color-brand-cyan-border);
+  background: var(--color-brand-cyan-bg);
+  color: var(--color-brand-cyan);
+}
+
+.input {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  font-family: inherit;
+  width: 100%;
+  transition: border-color var(--transition-fast);
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  &:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.cancelButton {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  transition: border-color var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-border-hover);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.confirmButton {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-brand-cyan-border);
+  background: var(--color-brand-cyan-bg);
+  color: var(--color-brand-cyan);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  transition: filter var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}

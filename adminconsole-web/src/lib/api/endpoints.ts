@@ -4,6 +4,7 @@ import type {
   BackupCheckState,
   CredentialsStatusResponse,
   DowntimeRecord,
+  MaintenanceWindow,
   MonitoringToggles,
   PingBatchPayload,
   RdpSnapshotPayload,
@@ -106,3 +107,22 @@ export const getMonitoringToggles = () => apiGet<MonitoringToggles>('/api/monito
 
 export const updateMonitoringToggles = (toggles: MonitoringToggles) =>
   apiPut<MonitoringToggles>('/api/monitoring/toggles', toggles)
+
+// ── Maintenance windows (Аудит-фікс 2026-08-22, п.1) ────────────────────────
+
+export const getMaintenanceWindows = () => apiGet<MaintenanceWindow[]>('/api/maintenance')
+
+export interface StartMaintenanceRequest {
+  /** Рівно одне з serverIp/targetGroup. */
+  serverIp?: string
+  targetGroup?: string
+  /** Відсутнє — без обмеження часу (до ручного завершення). */
+  durationMinutes?: number
+  reason?: string
+}
+
+export const startMaintenance = (request: StartMaintenanceRequest) =>
+  apiPost<MaintenanceWindow>('/api/maintenance', request)
+
+/** key — MaintenanceWindow.serverIp або "group:{targetGroup}". */
+export const endMaintenance = (key: string) => apiDelete(`/api/maintenance?key=${encodeURIComponent(key)}`)

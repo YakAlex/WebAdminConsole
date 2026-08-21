@@ -1,5 +1,6 @@
 import { useServers } from '@/hooks/dashboard/useServers'
 import { usePingStream } from '@/hooks/dashboard/usePingStream'
+import { useMaintenanceWindows } from '@/hooks/dashboard/useMaintenanceWindows'
 import { computeGlobalPingStats, mergeServersWithPingResults } from '@/hooks/dashboard/pingMath'
 import type { ApiError } from '@/lib/api/http'
 
@@ -10,6 +11,7 @@ import type { ApiError } from '@/lib/api/http'
 export function usePingPageViewModel() {
   const serversQuery = useServers()
   const pingQuery = usePingStream()
+  const maintenanceWindows = useMaintenanceWindows()
 
   const results = pingQuery.payload?.results ?? []
   const stats = computeGlobalPingStats(serversQuery.servers, results)
@@ -21,5 +23,5 @@ export function usePingPageViewModel() {
     pingQuery.error && { context: 'ping', error: pingQuery.error },
   ].filter((x): x is { context: string; error: ApiError } => x !== null)
 
-  return { stats, hosts, loading, errors }
+  return { stats, hosts, maintenanceWindows, loading, errors }
 }

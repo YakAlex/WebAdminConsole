@@ -1,0 +1,89 @@
+@use '@/styles/mixins' as *;
+
+.card {
+  @include card-surface;
+  padding: var(--card-padding);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+
+  &:hover {
+    @include card-surface-hover;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  @include section-title;
+}
+
+.hostLabel {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-secondary);
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+}
+
+.metricLine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.chart {
+  flex: 1;
+  height: 24px;
+}
+
+.value {
+  flex-shrink: 0;
+  width: 36px;
+  text-align: right;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.footerLink {
+  @include link-action;
+}

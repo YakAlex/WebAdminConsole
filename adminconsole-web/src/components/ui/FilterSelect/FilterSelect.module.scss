@@ -1,0 +1,26 @@
+@use '@/styles/mixins' as *;
+
+.trigger {
+  @include dropdown-trigger;
+  cursor: pointer;
+}
+
+.select {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+
+  option {
+    color: var(--color-text-primary);
+    background: var(--color-bg-card-elevated);
+  }
+}
+
+.chevron {
+  flex-shrink: 0;
+  pointer-events: none;
+}

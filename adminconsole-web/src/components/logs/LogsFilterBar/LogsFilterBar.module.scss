@@ -1,0 +1,103 @@
+@use '@/styles/mixins' as *;
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 220px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card-elevated);
+  color: var(--color-text-muted);
+
+  &:focus-within {
+    border-color: var(--color-border-hover);
+  }
+}
+
+.searchIcon {
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  font-family: inherit;
+  outline: none;
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.dateField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dateLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-micro);
+  white-space: nowrap;
+}
+
+.dateInput {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card-elevated);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-secondary);
+  font-family: inherit;
+  color-scheme: dark;
+
+  &:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.clearButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+  white-space: nowrap;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+
+  &:hover {
+    border-color: var(--color-border-hover);
+    color: var(--color-text-primary);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}

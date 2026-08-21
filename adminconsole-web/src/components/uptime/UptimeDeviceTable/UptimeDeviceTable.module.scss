@@ -1,0 +1,81 @@
+@use '@/styles/mixins' as *;
+
+.card {
+  @include table-card;
+}
+
+.header {
+  @include table-card-header;
+}
+
+.eyebrow {
+  @include section-title;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  @include thin-scrollbar;
+}
+
+.table {
+  @include data-table;
+  min-width: 760px;
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.deviceIcon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.statusSuccess {
+  color: var(--color-success);
+}
+
+.statusCritical {
+  color: var(--color-critical);
+}
+
+.statusInactive {
+  color: var(--color-text-muted);
+}
+
+.uptime,
+.group,
+.response,
+.lastCheck {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.uptime {
+  color: var(--color-text-primary);
+}
+
+.trendCell {
+  width: 70px;
+}
+
+.incidents {
+  font-variant-numeric: tabular-nums;
+}
+
+.incidentsNone {
+  color: var(--color-text-muted);
+}
+
+.incidentsSome {
+  color: var(--color-warning);
+  font-weight: var(--font-weight-semibold);
+}

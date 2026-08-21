@@ -1,0 +1,39 @@
+.description {
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-app);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-micro);
+}

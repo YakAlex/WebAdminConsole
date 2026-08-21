@@ -1,0 +1,64 @@
+@use '@/styles/mixins' as *;
+
+.topbar {
+  height: var(--topbar-height);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-app);
+}
+
+// ── Right cluster ────────────────────────────────────────────────────────
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+// Дата/час (перенесено з PageHeader §6) — компактний двострядковий блок,
+// що влазить у 64px topbar без роздування його висоти.
+.dateTime {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding-right: var(--space-5);
+  border-right: 1px solid var(--color-border);
+  line-height: var(--line-height-tight);
+}
+
+.date {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.time {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.statusDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px var(--color-success-glow);
+}

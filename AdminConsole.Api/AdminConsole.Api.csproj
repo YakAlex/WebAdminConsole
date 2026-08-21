@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AdminConsole.Domain\AdminConsole.Domain.csproj" />
+    <ProjectReference Include="..\AdminConsole.Infrastructure\AdminConsole.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.24" />
+    <PackageReference Include="Hangfire.Storage.SQLite" Version="0.4.3" />
+    <PackageReference Include="MediatR" Version="14.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.30" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <PackageReference Include="System.DirectoryServices.AccountManagement" Version="8.0.1" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- net8.0-windows, не net8.0: хост принципово Windows-only за дизайном
+         (UseWindowsService, DPAPI-NG, Negotiate/AD-групи) — узгоджено з
+         рештою застосунку, а не точковий SupportedOSPlatform на кожен файл. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- Фаза 7, T7.2: React-фронтенд збирається й вшивається у публікацію
+       автоматично — окремий build-скрипт (npm run build → копіювання в
+       wwwroot вручну) більше не потрібен. -->
+  <PropertyGroup>
+    <SpaRoot>$(MSBuildProjectDirectory)\..\adminconsole-web\</SpaRoot>
+  </PropertyGroup>
+
+  <!--
+    AfterTargets="ComputeFilesToPublish" (а не BeforeTargets="Publish") —
+    навмисно: список файлів, які Publish копіює в вихідну теку
+    (ResolvedFileToPublish), обчислюється ОДИН раз під час ComputeFilesToPublish
+    з-перед фактичного копіювання. Якщо зібрати фронтенд у
+    BeforeTargets="Publish", wwwroot на диску вже буде заповнений, але
+    MSBuild про це "не дізнається" — Content-glob для wwwroot\** вже
+    зафіксований на момент evaluation проєкту, ще до старту будь-якого
+    таргету. Тому дописуємо файли напряму в ResolvedFileToPublish — той
+    самий підхід, що в офіційних SPA-шаблонах Microsoft
+    (Microsoft.AspNetCore.SpaServices.Extensions).
+  -->
+  <Target Name="PublishFrontend" AfterTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release'">
+    <Message Importance="high" Text="Building React frontend (adminconsole-web) for publish..." />
+
+    <Exec Command="npm install" WorkingDirectory="$(SpaRoot)" />
+    <Exec Command="npm run build" WorkingDirectory="$(SpaRoot)" />
+
+    <ItemGroup>
+      <SpaDistFiles Include="$(SpaRoot)dist\**" />
+      <ResolvedFileToPublish Include="@(SpaDistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>wwwroot\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>

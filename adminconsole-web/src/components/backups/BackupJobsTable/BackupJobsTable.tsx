@@ -59,6 +59,7 @@ export function BackupJobsTable({ jobs }: BackupJobsTableProps) {
                 <th>Status</th>
                 <th>Size</th>
                 <th>Size trend</th>
+                <th>Samples</th>
                 <th>Last run</th>
                 <th>Last error</th>
               </tr>
@@ -94,6 +95,7 @@ export function BackupJobsTable({ jobs }: BackupJobsTableProps) {
                       '—'
                     )}
                   </td>
+                  <td className={styles.samples}>{job.history.length}</td>
                   <td className={styles.lastRun}>{formatClock(job.lastConfirmedAt)}</td>
                   <td className={styles.error}>{job.lastError ?? '—'}</td>
                 </tr>

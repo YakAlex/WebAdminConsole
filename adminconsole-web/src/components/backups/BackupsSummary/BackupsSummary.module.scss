@@ -16,6 +16,19 @@
   color: var(--color-text-secondary);
 }
 
+// Аудит-фікс (2026-08-22, п.3): раніше загальний розмір бекапів по системі
+// ніде не показувався — WPF Overview мав його, веб — ні. Пришпилено праворуч
+// у тому ж рядку, що й KPI, а не окремою плиткою — не варте власної секції.
+.totalSize {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .stats {
   display: flex;
   gap: var(--space-6);

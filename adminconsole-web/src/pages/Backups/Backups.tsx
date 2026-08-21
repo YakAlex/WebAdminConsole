@@ -26,7 +26,13 @@ export function Backups() {
             <Spinner label="Loading backups…" />
           ) : (
             <>
-              <BackupsSummary successRate={vm.successRate} successful={vm.successful} warnings={vm.warnings} failed={vm.failed} />
+              <BackupsSummary
+                successRate={vm.successRate}
+                successful={vm.successful}
+                warnings={vm.warnings}
+                failed={vm.failed}
+                totalSizeBytes={vm.totalSizeBytes}
+              />
               <BackupJobsTable jobs={vm.jobs} />
             </>
           )}

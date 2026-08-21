@@ -16,5 +16,11 @@ export function useBackupsPageViewModel() {
   ).length
   const successRate = states.length > 0 ? Math.round((successful / states.length) * 100) : 0
 
-  return { jobs: states, successRate, successful, warnings, failed, loading, error }
+  // Аудит-фікс (2026-08-22, п.3): найновіший відомий розмір кожного job,
+  // просумований по всій системі — той самий "total backup size", що був
+  // на Overview у WPF. history.at(-1) — останній підтверджений семпл;
+  // job без жодного успішного циклу ще (порожня history) не додає нічого.
+  const totalSizeBytes = states.reduce((sum, job) => sum + (job.history.at(-1)?.sizeBytes ?? 0), 0)
+
+  return { jobs: states, successRate, successful, warnings, failed, totalSizeBytes, loading, error }
 }

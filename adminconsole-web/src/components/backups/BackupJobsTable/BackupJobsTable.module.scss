@@ -19,7 +19,7 @@
 
 .table {
   @include data-table;
-  min-width: 790px;
+  min-width: 860px;
 }
 
 .job {
@@ -64,7 +64,8 @@
 
 .host,
 .lastRun,
-.size {
+.size,
+.samples {
   color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }

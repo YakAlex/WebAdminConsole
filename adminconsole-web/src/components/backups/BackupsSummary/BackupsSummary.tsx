@@ -1,5 +1,6 @@
-import { Database, CircleCheck, TriangleAlert, CircleX } from 'lucide-react'
+import { Database, CircleCheck, TriangleAlert, CircleX, HardDrive } from 'lucide-react'
 import { Card, CardHeader } from '@/components/ui/Card'
+import { formatBytes } from '@/lib/format'
 import styles from './BackupsSummary.module.scss'
 
 export interface BackupsSummaryProps {
@@ -7,10 +8,12 @@ export interface BackupsSummaryProps {
   successful: number
   warnings: number
   failed: number
+  /** Аудит-фікс (2026-08-22, п.3): сума останнього відомого розміру кожного job — раніше ніде не показувалась. */
+  totalSizeBytes: number
 }
 
 /** §26 брифу (Backups): "Backup health" + "Success rate" — великий KPI на всю ширину. */
-export function BackupsSummary({ successRate, successful, warnings, failed }: BackupsSummaryProps) {
+export function BackupsSummary({ successRate, successful, warnings, failed, totalSizeBytes }: BackupsSummaryProps) {
   return (
     <Card>
       <CardHeader eyebrow="Backup Health" icon={<Database size={14} strokeWidth={1.75} />} />
@@ -18,6 +21,10 @@ export function BackupsSummary({ successRate, successful, warnings, failed }: Ba
       <div className={styles.headline}>
         <span className={styles.kpi}>{successRate}%</span>
         <span className={styles.kpiLabel}>Success rate</span>
+        <span className={styles.totalSize}>
+          <HardDrive size={14} strokeWidth={1.75} />
+          {formatBytes(totalSizeBytes)} total
+        </span>
       </div>
 
       <div className={styles.stats}>

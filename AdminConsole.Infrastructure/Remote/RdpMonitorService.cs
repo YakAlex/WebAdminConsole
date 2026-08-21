@@ -6,6 +6,7 @@ using AdminConsole.Domain.Abstractions;
 using AdminConsole.Domain.Events;
 using AdminConsole.Domain.Models;
 using AdminConsole.Infrastructure.Configuration;
+using AdminConsole.Infrastructure.Monitoring;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -57,6 +58,14 @@ public sealed class RdpMonitorService(
     // таймаут проксі/браузера. Для REST-шляху ставимо явну, коротшу стелю.
     private const int    SnapshotTimeoutMs = 15_000;
     private CancellationTokenSource? _wakeUpCts;
+
+    // Аудит-фікс (2026-08-22): троттлінг on-demand REST-знімку — вікно те
+    // саме, що й фоновий цикл (RdpPollIntervalSeconds). Без цього кожен
+    // захід на сторінку RDP Sessions незалежно запускав quser.exe проти
+    // термінального сервера, незалежно від налаштованого інтервалу.
+    private readonly OnDemandSnapshotThrottle<(IReadOnlyList<RdpSessionInfo> Sessions, int GlobalDailyPeak,
+        string? LastLogoutUsername, string? LastLogoutServer, DateTimeOffset? LastLogoutAt)> _onDemandThrottle
+        = new(TimeSpan.FromSeconds(settings.Value.RdpPollIntervalSeconds));
 
     // Кеш попереднього стану toggle (null = ще не перевіряли жодного разу).
     // Дозволяє логувати і слати MonitoringToggledOccurred лише на РЕАЛЬНІЙ
@@ -573,10 +582,20 @@ public sealed class RdpMonitorService(
     /// виклик PollAllServersAsync, що й фоновий цикл — публікує ті самі
     /// RdpSessionsUpdatedOccurred-події (клієнт, що ініціював запит, побачить
     /// дані і з відповіді, і з SignalR), і так само поважає RdpMonitoringEnabled.
+    ///
+    /// Аудит-фікс (2026-08-22): _onDemandThrottle обмежує ЧАСТОТУ викликів
+    /// до RdpPollIntervalSeconds — повторний запит у межах вікна (F5,
+    /// декілька відкритих вкладок) повертає щойно отриманий знімок замість
+    /// нового quser.exe проти сервера.
     /// </summary>
-    public async Task<(IReadOnlyList<RdpSessionInfo> Sessions, int GlobalDailyPeak,
+    public Task<(IReadOnlyList<RdpSessionInfo> Sessions, int GlobalDailyPeak,
         string? LastLogoutUsername, string? LastLogoutServer, DateTimeOffset? LastLogoutAt)>
-        GetSnapshotNowAsync(CancellationToken ct)
+        GetSnapshotNowAsync(CancellationToken ct) =>
+        _onDemandThrottle.GetOrRunAsync(GetSnapshotNowInternalAsync, ct);
+
+    private async Task<(IReadOnlyList<RdpSessionInfo> Sessions, int GlobalDailyPeak,
+        string? LastLogoutUsername, string? LastLogoutServer, DateTimeOffset? LastLogoutAt)>
+        GetSnapshotNowInternalAsync(CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,

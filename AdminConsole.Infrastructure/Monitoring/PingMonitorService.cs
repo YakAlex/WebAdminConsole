@@ -60,6 +60,11 @@ public sealed class PingMonitorService(
     private SemaphoreSlim GetServerLock(string ip) =>
         _perServerLocks.GetOrAdd(ip, _ => new SemaphoreSlim(1, 1));
 
+    // Аудит-фікс (2026-08-22): троттлінг on-demand /ping (REST + Telegram
+    // /ping) — вікно те саме, що й основний цикл (PingIntervalSeconds).
+    private readonly OnDemandSnapshotThrottle<IReadOnlyList<PingResult>> _onDemandThrottle =
+        new(TimeSpan.FromSeconds(settings.Value.PingIntervalSeconds));
+
     // ── Константи ────────────────────────────────────────────────────────────
 
     private const int    PingTimeoutMs        = 2000;
@@ -383,16 +388,24 @@ public sealed class PingMonitorService(
         => _previousStatus.ToDictionary(kv => kv.Key, kv => kv.Value);
 
     /// <summary>
-    /// Пінгує ВСІ сервери прямо зараз, поза звичайним циклом
-    /// (для команди /ping бота — "живий" запит на вимогу).
-    /// Перевикористовує ту саму PingSingleServerAsync — тобто:
+    /// Пінгує ВСІ сервери прямо зараз, поза звичайним циклом (REST GET
+    /// /api/ping при заході на Overview/Ping + команда /ping бота — "живий"
+    /// запит на вимогу). Перевикористовує ту саму PingSingleServerAsync —
+    /// тобто:
     ///  - оновлює _previousStatus (той самий стан, що бачить UI);
     ///  - шле ті самі Warning/Error/Success логи при зміні статусу;
     ///  - шле PingBatchResultOccurred — UI Ping Dashboard оновиться теж.
     /// Ділить throttle з основним циклом (_mainThrottle) — жодного
     /// окремого "паралельного" навантаження на мережу понад заплановане.
+    /// Заразом (аудит-фікс 2026-08-22): _onDemandThrottle обмежує ЧАСТОТУ
+    /// самих викликів до PingIntervalSeconds — повторний REST/Telegram-запит
+    /// у межах вікна повертає щойно отриманий результат замість нового
+    /// реального ping-опитування.
     /// </summary>
-    public async Task<IReadOnlyList<PingResult>> PingAllNowAsync(CancellationToken ct)
+    public Task<IReadOnlyList<PingResult>> PingAllNowAsync(CancellationToken ct) =>
+        _onDemandThrottle.GetOrRunAsync(PingAllNowInternalAsync, ct);
+
+    private async Task<IReadOnlyList<PingResult>> PingAllNowInternalAsync(CancellationToken ct)
     {
         var bag = new ConcurrentBag<PingResult>();
 

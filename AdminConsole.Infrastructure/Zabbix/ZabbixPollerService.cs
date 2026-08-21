@@ -1,6 +1,7 @@
 using AdminConsole.Domain.Abstractions;
 using AdminConsole.Domain.Events;
 using AdminConsole.Infrastructure.Configuration;
+using AdminConsole.Infrastructure.Monitoring;
 using AdminConsole.Infrastructure.Security;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +42,11 @@ public sealed class ZabbixPollerService(
 
     // Кеш попереднього стану toggle (null = ще не перевіряли жодного разу).
     private bool? _monitoringWasEnabled;
+
+    // Аудит-фікс (2026-08-22): троттлінг on-demand REST-знімку — вікно те
+    // саме, що й фоновий цикл (ZabbixPollIntervalSeconds).
+    private readonly OnDemandSnapshotThrottle<ZabbixProblemsPayload> _onDemandThrottle =
+        new(TimeSpan.FromSeconds(settings.Value.ZabbixPollIntervalSeconds));
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -366,8 +372,15 @@ public sealed class ZabbixPollerService(
     /// PingMonitorService.PingAllNowAsync. Навмисно НЕ чіпає
     /// _consecutiveAuthFailures/_lastPollSucceeded — це бухгалтерія фонового
     /// циклу опитування, окремий REST-запит не повинен впливати на її стан.
+    ///
+    /// Аудит-фікс (2026-08-22): _onDemandThrottle обмежує ЧАСТОТУ викликів
+    /// до ZabbixPollIntervalSeconds — повторний запит у межах вікна повертає
+    /// щойно отриманий знімок замість нового живого запиту в Zabbix API.
     /// </summary>
-    public async Task<ZabbixProblemsPayload> GetActiveProblemsNowAsync(CancellationToken ct)
+    public Task<ZabbixProblemsPayload> GetActiveProblemsNowAsync(CancellationToken ct) =>
+        _onDemandThrottle.GetOrRunAsync(GetActiveProblemsNowInternalAsync, ct);
+
+    private async Task<ZabbixProblemsPayload> GetActiveProblemsNowInternalAsync(CancellationToken ct)
     {
         // Аудит-фікс п.4: раніше цей метод ІГНОРУВАВ ZabbixMonitoringEnabled
         // повністю — навіть після вимкнення тумблера в Settings, кожен захід

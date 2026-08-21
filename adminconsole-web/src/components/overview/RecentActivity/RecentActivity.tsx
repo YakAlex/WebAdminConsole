@@ -1,4 +1,5 @@
 import { Info, CircleCheck, TriangleAlert, CircleX, ChevronRight, type LucideIcon } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { LogSeverity, type AppLogEntry } from '@/lib/api/types'
 import { formatClock, truncate } from '@/lib/format'
@@ -19,6 +20,8 @@ export interface RecentActivityProps {
 
 /** §12 брифу: вертикальний event feed із тонкими роздільниками. Дані — з useAppLogEntries(). */
 export function RecentActivity({ entries }: RecentActivityProps) {
+  const navigate = useNavigate()
+
   return (
     <div className={styles.card}>
       <span className={styles.eyebrow}>Recent Activity</span>
@@ -46,7 +49,7 @@ export function RecentActivity({ entries }: RecentActivityProps) {
       )}
 
       <div className={styles.footer}>
-        <button type="button" className={styles.footerLink}>
+        <button type="button" className={styles.footerLink} onClick={() => navigate('/logs')}>
           View all activity
           <ChevronRight size={13} strokeWidth={2} />
         </button>

@@ -358,6 +358,46 @@ public sealed class ZabbixPollerService(
         }
     }
 
+    // ── On-demand (REST) ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Живий опит Zabbix ЗАРАЗ, для початкового REST-знімка сторінки Zabbix
+    /// Alerts (T6.2/Крок 11.1) — той самий принцип, що вже є в
+    /// PingMonitorService.PingAllNowAsync. Навмисно НЕ чіпає
+    /// _consecutiveAuthFailures/_lastPollSucceeded — це бухгалтерія фонового
+    /// циклу опитування, окремий REST-запит не повинен впливати на її стан.
+    /// </summary>
+    public async Task<ZabbixProblemsPayload> GetActiveProblemsNowAsync(CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(_settings.ZabbixUrl))
+            return new ZabbixProblemsPayload(null, "Monitoring:ZabbixUrl не налаштований.", DateTimeOffset.Now);
+
+        if (!credentials.HasZabbixCredentials)
+            return new ZabbixProblemsPayload(null, "Credentials не збережені (Settings → Zabbix Token).", DateTimeOffset.Now);
+
+        bool useApiToken = credentials.ZabbixUsesApiToken;
+        var (username, secret) = credentials.GetZabbix();
+        string auth = useApiToken ? secret : _sessionToken ?? string.Empty;
+
+        if (!useApiToken && string.IsNullOrEmpty(auth))
+        {
+            auth = await client.LoginAsync(_settings.ZabbixUrl, username, secret, ct).ConfigureAwait(false) ?? string.Empty;
+            if (string.IsNullOrEmpty(auth))
+                return new ZabbixProblemsPayload(null, "Не вдалося авторизуватись у Zabbix.", DateTimeOffset.Now);
+        }
+
+        try
+        {
+            var problems = await client.GetActiveProblemsAsync(
+                _settings.ZabbixUrl, auth, useApiToken, WatchedSeverities, ct).ConfigureAwait(false);
+            return new ZabbixProblemsPayload(problems, null, DateTimeOffset.Now);
+        }
+        catch (Exception ex)
+        {
+            return new ZabbixProblemsPayload(null, $"Помилка зв'язку: {ex.Message}", DateTimeOffset.Now);
+        }
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private async Task LogStartedAsync(CancellationToken ct)

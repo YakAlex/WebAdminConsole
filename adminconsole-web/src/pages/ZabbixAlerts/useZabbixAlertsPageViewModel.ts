@@ -2,8 +2,8 @@ import { useZabbixProblems } from '@/hooks/dashboard/useZabbixProblems'
 import { ZabbixSeverity } from '@/lib/api/types'
 
 export function useZabbixAlertsPageViewModel() {
-  const payload = useZabbixProblems()
-  const problems = payload?.problems ?? []
+  const zabbixQuery = useZabbixProblems()
+  const problems = zabbixQuery.payload?.problems ?? []
 
   const critical = problems.filter((p) => p.severity === ZabbixSeverity.High || p.severity === ZabbixSeverity.Disaster).length
   const warning = problems.filter((p) => p.severity === ZabbixSeverity.Average || p.severity === ZabbixSeverity.Warning).length
@@ -16,6 +16,8 @@ export function useZabbixAlertsPageViewModel() {
     critical,
     warning,
     info,
-    errorMessage: payload?.errorMessage ?? null,
+    errorMessage: zabbixQuery.payload?.errorMessage ?? null,
+    loading: zabbixQuery.loading,
+    fetchError: zabbixQuery.error,
   }
 }

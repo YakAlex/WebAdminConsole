@@ -3,11 +3,3 @@
   flex-direction: column;
   gap: var(--space-4);
 }
-
-.error {
-  padding: var(--space-3);
-  border-radius: var(--radius-control);
-  background: var(--color-critical-bg);
-  color: var(--color-critical);
-  font-size: var(--font-size-secondary);
-}

@@ -1,4 +1,4 @@
-import { Clock, ChevronDown, MonitorCheck } from 'lucide-react'
+import { Clock, MonitorCheck } from 'lucide-react'
 import { Sparkline } from '@/components/ui/Sparkline'
 import styles from './UptimeCard.module.scss'
 
@@ -18,10 +18,7 @@ export function UptimeCard({ overallPercent, monitoredDevices, trend, axisLabels
           <Clock size={14} strokeWidth={1.75} />
           Uptime
         </span>
-        <button type="button" className={styles.rangeTrigger}>
-          24h
-          <ChevronDown size={12} strokeWidth={2} />
-        </button>
+        <span className={styles.rangeLabel}>24h</span>
       </div>
 
       <div className={styles.headline}>

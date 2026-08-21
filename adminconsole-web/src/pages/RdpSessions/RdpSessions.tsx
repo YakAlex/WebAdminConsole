@@ -1,4 +1,6 @@
 import { PageHeader } from '@/components/ui/PageHeader'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Spinner } from '@/components/ui/Spinner'
 import { RdpSessionsSummary } from '@/components/rdp/RdpSessionsSummary/RdpSessionsSummary'
 import { RdpSessionsTable } from '@/components/rdp/RdpSessionsTable/RdpSessionsTable'
 import { useRdpSessionsPageViewModel } from './useRdpSessionsPageViewModel'
@@ -11,13 +13,20 @@ export function RdpSessions() {
   return (
     <div className={styles.root}>
       <PageHeader title="RDP Sessions" subtitle="Active and recent remote desktop sessions across monitored hosts." />
-      <RdpSessionsSummary
-        activeCount={vm.activeCount}
-        uniqueUsers={vm.uniqueUsers}
-        dailyPeak={vm.dailyPeak}
-        lastLogout={vm.lastLogout}
-      />
-      <RdpSessionsTable sessions={vm.sessions} />
+      {vm.fetchError && <ErrorBanner context="rdp sessions" error={vm.fetchError} />}
+      {vm.loading ? (
+        <Spinner label="Loading RDP sessions…" />
+      ) : (
+        <>
+          <RdpSessionsSummary
+            activeCount={vm.activeCount}
+            uniqueUsers={vm.uniqueUsers}
+            dailyPeak={vm.dailyPeak}
+            lastLogout={vm.lastLogout}
+          />
+          <RdpSessionsTable sessions={vm.sessions} />
+        </>
+      )}
     </div>
   )
 }

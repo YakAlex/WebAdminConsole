@@ -1,4 +1,6 @@
 import { PageHeader } from '@/components/ui/PageHeader'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Spinner } from '@/components/ui/Spinner'
 import { GlobalPingHealth } from '@/components/ping/GlobalPingHealth/GlobalPingHealth'
 import { PingHostsTable } from '@/components/ping/PingHostsTable/PingHostsTable'
 import { usePingPageViewModel } from './usePingPageViewModel'
@@ -15,15 +17,24 @@ export function Ping() {
   return (
     <div className={styles.root}>
       <PageHeader title="Ping" subtitle="Real-time reachability and latency across all monitored hosts." />
-      <GlobalPingHealth
-        online={vm.stats.online}
-        total={vm.stats.total}
-        offline={vm.stats.offline}
-        successRate={vm.stats.successRate}
-        avgLatencyMs={vm.stats.avgLatencyMs}
-        hasData={vm.stats.hasData}
-      />
-      <PingHostsTable hosts={vm.hosts} />
+      {vm.errors.map(({ context, error }) => (
+        <ErrorBanner key={context} context={context} error={error} />
+      ))}
+      {vm.loading ? (
+        <Spinner label="Loading ping data…" />
+      ) : (
+        <>
+          <GlobalPingHealth
+            online={vm.stats.online}
+            total={vm.stats.total}
+            offline={vm.stats.offline}
+            successRate={vm.stats.successRate}
+            avgLatencyMs={vm.stats.avgLatencyMs}
+            hasData={vm.stats.hasData}
+          />
+          <PingHostsTable hosts={vm.hosts} />
+        </>
+      )}
     </div>
   )
 }

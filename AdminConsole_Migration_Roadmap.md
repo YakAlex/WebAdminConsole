@@ -279,3 +279,16 @@ Data Source=adminconsole.db;Cache=Shared
 ## Наступний крок
 
 Готовий почати з **Фази 0 + Фази 1.1** — тобто конкретні `dotnet new`-команди для solution-структури і перший реальний diff: винесення `Core/Models`/`Core/Messages` у `AdminConsole.Domain` без змін логіки. Скажи, коли готовий стартувати — почнемо покроково, по одному сервісу за раз, з тестуванням на кожному кроці.
+
+---
+
+## Фаза 11 — Frontend Audit: усунення (2026-08-22)
+
+Детальний план — окремий файл [AdminConsole_Frontend_Audit_Plan.md](AdminConsole_Frontend_Audit_Plan.md).
+Джерело: повний статичний аудит `adminconsole-web` (мертві кнопки, мок-дані,
+обірвані API-звʼязки, відсутні loading/error, орфанні файли) + 2 втрачені
+WPF-фічі (дії на Ping, SLA-звіт).
+
+- [x] Пріоритет 1 — сліпі зони (REST-снепшоти Zabbix/RDP, loading/error UI на 7 сторінках)
+- [x] Пріоритет 2 — мертві елементи (навігація/видалення)
+- [x] Пріоритет 3 — втрачені фічі з WPF (Restart/Shutdown/RDP-файл/Continuous Ping, SLA-звіт)

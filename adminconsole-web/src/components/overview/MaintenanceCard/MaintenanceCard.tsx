@@ -1,4 +1,4 @@
-import { Wrench, CalendarCheck, ChevronRight } from 'lucide-react'
+import { Wrench, CalendarCheck } from 'lucide-react'
 import type { MaintenanceWindow } from '@/lib/api/types'
 import { formatMaintenanceSchedule } from '@/lib/format'
 import styles from './MaintenanceCard.module.scss'
@@ -39,11 +39,6 @@ export function MaintenanceCard({ windows }: MaintenanceCardProps) {
           ))}
         </div>
       )}
-
-      <button type="button" className={styles.action}>
-        Schedule maintenance
-        <ChevronRight size={13} strokeWidth={2} />
-      </button>
     </div>
   )
 }

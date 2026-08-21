@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { getRdpSessions } from '@/lib/api/endpoints'
+import { ApiError, isAuthError } from '@/lib/api/http'
+import { useAuth } from '@/lib/auth/AuthContext'
 import { useHubGroups } from '@/lib/signalr/useHubGroups'
 import { useHubEvent } from '@/lib/signalr/useHubEvent'
-import type { RdpSessionInfo, RdpSessionsPayload, RdpSessionsUpdatedEvent } from '@/lib/api/types'
+import type { RdpSessionInfo, RdpSessionsPayload, RdpSessionsUpdatedEvent, RdpSnapshotPayload } from '@/lib/api/types'
 
 const GROUPS = ['logs'] as const
 
@@ -13,29 +16,75 @@ export interface LastLogout {
 
 export interface RdpSessionsData {
   sessions: RdpSessionInfo[]
-  /** Пік одночасних сесій за сьогодні — поле вже глобальне на бекенді (RdpSessionsPayload.globalDailyPeak), беремо максимум з отриманих подій. */
   dailyPeak: number
-  /** Останній логаут по всій інфраструктурі — найсвіжіший LastLogoutAt серед подій. */
   lastLogout: LastLogout | null
+  loading: boolean
+  error: ApiError | null
 }
 
 /**
  * RdpSessionsUpdatedOccurred несе ПОВНИЙ список сесій ОДНОГО сервера за
- * раз (не глобальний знімок) — тому клієнт тримає мапу serverIp → payload
- * і на кожній події замінює лише слайс цього сервера, віддаючи назовні
- * плаский список усіх активних сесій по всій інфраструктурі + похідну
- * агрегатну статистику (пік/останній logout — реальні поля з бекенду).
+ * раз (не глобальний знімок) — клієнт тримає мапу serverIp → payload і на
+ * кожній події замінює лише слайс цього сервера.
+ *
+ * Крок 11.2 аудиту: раніше тут не було жодного REST-запиту — сторінка
+ * показувала "0 сесій" до першого SignalR-тіка після заходу/F5, невідрізнимо
+ * від "сесій справді нема". GET /api/rdp-sessions тепер дає живий знімок
+ * одразу; поки не прийшла хоч одна SignalR-подія (byServer порожній),
+ * показуємо REST-знімок як seed — щойно прилетить перша подія, переходимо
+ * на live per-server модель (вона точніша на довгій дистанції).
  */
 export function useRdpSessions(): RdpSessionsData {
   const [byServer, setByServer] = useState<Record<string, RdpSessionsPayload>>({})
+  const [restSeed, setRestSeed] = useState<RdpSnapshotPayload | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<ApiError | null>(null)
+  const { reportDenied } = useAuth()
 
   useHubGroups(GROUPS)
+
+  useEffect(() => {
+    let cancelled = false
+
+    getRdpSessions()
+      .then((data) => {
+        if (!cancelled) setRestSeed(data)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        const apiError = err instanceof ApiError ? err : new ApiError(0, 'Unknown error')
+        setError(apiError)
+        if (isAuthError(apiError)) reportDenied()
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [reportDenied])
+
   useHubEvent<RdpSessionsUpdatedEvent>('RdpSessionsUpdatedOccurred', (evt) => {
     setByServer((prev) => ({ ...prev, [evt.payload.serverIp]: evt.payload }))
   })
 
   return useMemo(() => {
     const payloads = Object.values(byServer)
+
+    if (payloads.length === 0) {
+      return {
+        sessions: restSeed?.sessions ?? [],
+        dailyPeak: restSeed?.globalDailyPeak ?? 0,
+        lastLogout:
+          restSeed?.lastLogoutAt && restSeed.lastLogoutUsername && restSeed.lastLogoutServer
+            ? { username: restSeed.lastLogoutUsername, serverName: restSeed.lastLogoutServer, at: restSeed.lastLogoutAt }
+            : null,
+        loading,
+        error,
+      }
+    }
+
     const sessions = payloads.flatMap((payload) => payload.sessions)
     const dailyPeak = payloads.reduce((max, p) => Math.max(max, p.globalDailyPeak), 0)
 
@@ -49,6 +98,6 @@ export function useRdpSessions(): RdpSessionsData {
         return latest
       }, null)
 
-    return { sessions, dailyPeak, lastLogout }
-  }, [byServer])
+    return { sessions, dailyPeak, lastLogout, loading, error }
+  }, [byServer, restSeed, loading, error])
 }

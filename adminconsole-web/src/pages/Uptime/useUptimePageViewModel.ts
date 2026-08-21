@@ -55,6 +55,16 @@ export function useUptimePageViewModel() {
   const [incidentFrom, setIncidentFrom] = useState('')
   const [incidentTo, setIncidentTo] = useState('')
 
+  // Крок 11.3 аудиту: початкове завантаження (servers/downtime/ping) раніше
+  // не мало ні loading-індикатора, ні відображення помилки — сторінка просто
+  // мовчки показувала нулі, невідрізнимо від "даних справді нема".
+  const initialLoading = serversQuery.loading || downtimeQuery.loading || pingQuery.loading
+  const initialErrors = [
+    serversQuery.error && { context: 'servers', error: serversQuery.error },
+    downtimeQuery.error && { context: 'uptime history', error: downtimeQuery.error },
+    pingQuery.error && { context: 'ping', error: pingQuery.error },
+  ].filter((x): x is { context: string; error: ApiError } => x !== null)
+
   const pingResults = pingQuery.payload?.results ?? []
   const overall = computeUptimeSeries(downtimeQuery.records, serversQuery.servers.length, { hours: 24, buckets: 24 })
   const axisLabels = computeUptimeAxisLabels(24, 5)
@@ -103,6 +113,8 @@ export function useUptimePageViewModel() {
   }
 
   return {
+    initialLoading,
+    initialErrors,
     overallPercent: overall.percent,
     trend: overall.buckets,
     axisLabels,

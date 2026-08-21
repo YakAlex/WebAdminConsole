@@ -1,4 +1,5 @@
 import { ShieldAlert, TriangleAlert, ChevronRight, CircleCheck } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import styles from './AttentionRequired.module.scss'
 
@@ -16,14 +17,15 @@ export interface AttentionRequiredProps {
  * → critical, Average/Warning → warnings.
  */
 export function AttentionRequired({ criticalAlerts, warnings }: AttentionRequiredProps) {
+  const navigate = useNavigate()
   const isClear = criticalAlerts === 0 && warnings === 0
 
   return (
     <div className={styles.card}>
-      <div className={styles.header}>
+      <button type="button" className={styles.header} onClick={() => navigate('/zabbix-alerts')}>
         <span className={styles.eyebrow}>Attention Required</span>
         <ChevronRight size={16} strokeWidth={1.75} className={styles.chevron} />
-      </div>
+      </button>
 
       <div className={styles.list}>
         <div className={styles.row}>

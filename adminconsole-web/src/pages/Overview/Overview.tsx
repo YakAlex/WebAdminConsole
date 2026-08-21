@@ -1,3 +1,5 @@
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Spinner } from '@/components/ui/Spinner'
 import { SystemHealthHero } from '@/components/overview/SystemHealthHero/SystemHealthHero'
 import { AttentionRequired } from '@/components/overview/AttentionRequired/AttentionRequired'
 import { PingCard } from '@/components/overview/PingCard/PingCard'
@@ -22,58 +24,68 @@ export function Overview() {
 
   return (
     <div className={styles.root}>
-      <div className={styles.heroRow}>
-        <SystemHealthHero
-          online={vm.ping.online}
-          total={vm.ping.total}
-          hasPingData={vm.ping.hasData}
-          pingSuccessRate={vm.ping.successRate}
-          uptimePercent={vm.uptime.overallPercent}
-          backupsSuccessful={vm.backupsSummary.successful}
-          backupsTotal={vm.backupsSummary.total}
-          criticalAlerts={vm.attention.criticalAlerts}
-          warnings={vm.attention.warnings}
-        />
-        <AttentionRequired criticalAlerts={vm.attention.criticalAlerts} warnings={vm.attention.warnings} />
-      </div>
+      {vm.initialErrors.map(({ context, error }) => (
+        <ErrorBanner key={context} context={context} error={error} />
+      ))}
 
-      <div className={styles.grid}>
-        <div className={styles.ping}>
-          <PingCard
-            online={vm.ping.online}
-            total={vm.ping.total}
-            successRate={vm.ping.successRate}
-            offline={vm.ping.offline}
-            hasData={vm.ping.hasData}
-          />
-        </div>
-        <div className={styles.uptime}>
-          <UptimeCard
-            overallPercent={vm.uptime.overallPercent}
-            monitoredDevices={vm.uptime.monitoredDevices}
-            trend={vm.uptime.trend}
-            axisLabels={vm.uptime.axisLabels}
-          />
-        </div>
-        <div className={styles.activity}>
-          <RecentActivity entries={vm.recentActivity} />
-        </div>
-        <div className={styles.backups}>
-          <BackupsCard jobs={vm.backups} />
-        </div>
-        <div className={styles.rdp}>
-          <RdpSessionsCard sessions={vm.rdpSessions} />
-        </div>
-        <div className={styles.maintenance}>
-          <MaintenanceCard windows={vm.maintenanceWindows} />
-        </div>
-        <div className={styles.uptimeByDevice}>
-          <UptimeByDeviceTable rows={vm.deviceRows} />
-        </div>
-        <div className={styles.resources}>
-          <SystemResourcesCard history={vm.resourceHistory} />
-        </div>
-      </div>
+      {vm.initialLoading ? (
+        <Spinner label="Loading dashboard…" />
+      ) : (
+        <>
+          <div className={styles.heroRow}>
+            <SystemHealthHero
+              online={vm.ping.online}
+              total={vm.ping.total}
+              hasPingData={vm.ping.hasData}
+              pingSuccessRate={vm.ping.successRate}
+              uptimePercent={vm.uptime.overallPercent}
+              backupsSuccessful={vm.backupsSummary.successful}
+              backupsTotal={vm.backupsSummary.total}
+              criticalAlerts={vm.attention.criticalAlerts}
+              warnings={vm.attention.warnings}
+            />
+            <AttentionRequired criticalAlerts={vm.attention.criticalAlerts} warnings={vm.attention.warnings} />
+          </div>
+
+          <div className={styles.grid}>
+            <div className={styles.ping}>
+              <PingCard
+                online={vm.ping.online}
+                total={vm.ping.total}
+                successRate={vm.ping.successRate}
+                offline={vm.ping.offline}
+                hasData={vm.ping.hasData}
+              />
+            </div>
+            <div className={styles.uptime}>
+              <UptimeCard
+                overallPercent={vm.uptime.overallPercent}
+                monitoredDevices={vm.uptime.monitoredDevices}
+                trend={vm.uptime.trend}
+                axisLabels={vm.uptime.axisLabels}
+              />
+            </div>
+            <div className={styles.activity}>
+              <RecentActivity entries={vm.recentActivity} />
+            </div>
+            <div className={styles.backups}>
+              <BackupsCard jobs={vm.backups} />
+            </div>
+            <div className={styles.rdp}>
+              <RdpSessionsCard sessions={vm.rdpSessions} />
+            </div>
+            <div className={styles.maintenance}>
+              <MaintenanceCard windows={vm.maintenanceWindows} />
+            </div>
+            <div className={styles.uptimeByDevice}>
+              <UptimeByDeviceTable rows={vm.deviceRows} />
+            </div>
+            <div className={styles.resources}>
+              <SystemResourcesCard history={vm.resourceHistory} />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

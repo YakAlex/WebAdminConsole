@@ -18,5 +18,7 @@ export function useRdpSessionsPageViewModel() {
     uniqueUsers,
     dailyPeak: data.dailyPeak,
     lastLogout: data.lastLogout,
+    loading: data.loading,
+    fetchError: data.error,
   }
 }

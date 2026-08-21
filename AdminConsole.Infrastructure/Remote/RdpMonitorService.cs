@@ -560,6 +560,27 @@ public sealed class RdpMonitorService(
             kv => (IReadOnlyList<RdpSessionInfo>)kv.Value.Values.ToList());
 
     /// <summary>
+    /// Живий опит усіх terminal-серверів (quser) ЗАРАЗ + агрегований знімок —
+    /// для початкового REST-завантаження сторінки RDP Sessions (Фаза 10,
+    /// Крок 11.2 аудиту — раніше сторінка мала лише SignalR-потік). Той самий
+    /// виклик PollAllServersAsync, що й фоновий цикл — публікує ті самі
+    /// RdpSessionsUpdatedOccurred-події (клієнт, що ініціював запит, побачить
+    /// дані і з відповіді, і з SignalR), і так само поважає RdpMonitoringEnabled.
+    /// </summary>
+    public async Task<(IReadOnlyList<RdpSessionInfo> Sessions, int GlobalDailyPeak,
+        string? LastLogoutUsername, string? LastLogoutServer, DateTimeOffset? LastLogoutAt)>
+        GetSnapshotNowAsync(CancellationToken ct)
+    {
+        await PollAllServersAsync(ct).ConfigureAwait(false);
+
+        var sessions = _previousSessions.Values.SelectMany(d => d.Values).ToList();
+        lock (_stateLock)
+        {
+            return (sessions, _globalDailyPeak, _lastLogoutUsername, _lastLogoutServer, _lastLogoutAt);
+        }
+    }
+
+    /// <summary>
     /// Розраховує глобальний пік і формує Payload.
     /// Це гарантує, що клієнт отримає консистентні історичні дані.
     /// </summary>

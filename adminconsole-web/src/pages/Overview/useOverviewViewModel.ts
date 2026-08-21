@@ -2,6 +2,7 @@ import { useDashboardData } from '@/hooks/useDashboardData'
 import { computeUptimeAxisLabels, computeUptimeSeries } from '@/hooks/dashboard/uptimeMath'
 import { computeGlobalPingStats } from '@/hooks/dashboard/pingMath'
 import { BackupOutcome, PingStatus, RdpSessionState, ZabbixSeverity } from '@/lib/api/types'
+import type { ApiError } from '@/lib/api/http'
 import type { DeviceRow } from '@/components/overview/UptimeByDeviceTable/UptimeByDeviceTable'
 
 /**
@@ -44,7 +45,25 @@ export function useOverviewViewModel() {
     }
   })
 
+  // Крок 11.3 аудиту: Overview — головна сторінка входу — не мала жодного
+  // loading-індикатора чи error-банера, попри те що useDashboardData() уже
+  // повертав *Loading/*Error для кожного джерела. Збій будь-якого REST-запиту
+  // виглядав ідентично "усе тихо і спокійно".
+  const initialLoading =
+    data.serversLoading || data.pingLoading || data.downtimeLoading || data.backupsLoading ||
+    data.zabbixLoading || data.rdpLoading
+  const initialErrors = [
+    data.serversError && { context: 'servers', error: data.serversError },
+    data.pingError && { context: 'ping', error: data.pingError },
+    data.downtimeError && { context: 'uptime history', error: data.downtimeError },
+    data.backupsError && { context: 'backups', error: data.backupsError },
+    data.zabbixError && { context: 'zabbix', error: data.zabbixError },
+    data.rdpError && { context: 'rdp sessions', error: data.rdpError },
+  ].filter((x): x is { context: string; error: ApiError } => x !== null)
+
   return {
+    initialLoading,
+    initialErrors,
     ping,
     uptime: {
       overallPercent: uptime.percent,

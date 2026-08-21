@@ -13,6 +13,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
   color: var(--color-text-secondary);
   transition: color var(--transition-fast);
   cursor: pointer;
@@ -23,6 +29,10 @@
     svg {
       color: var(--color-brand-cyan);
     }
+  }
+
+  &:focus-visible {
+    @include focus-ring;
   }
 }
 

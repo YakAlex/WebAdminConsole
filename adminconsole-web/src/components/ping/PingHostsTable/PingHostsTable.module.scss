@@ -19,7 +19,7 @@
 
 .table {
   @include data-table;
-  min-width: 560px;
+  min-width: 680px;
 }
 
 .host {
@@ -64,4 +64,112 @@
   text-align: center;
   color: var(--color-text-muted);
   font-size: var(--font-size-secondary);
+}
+
+// ── Дії (Пріоритет 3, #3.1) ─────────────────────────────────────────────
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
+
+  &:hover {
+    color: var(--color-brand-cyan);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  &.danger:hover {
+    color: var(--color-critical);
+  }
+}
+
+// ── Confirm/result-модалка ───────────────────────────────────────────────
+
+.modalMessage {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+}
+
+.modalMessage.errorMessage {
+  color: var(--color-critical);
+}
+
+.modalWarning {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: var(--font-size-secondary);
+}
+
+.cancelButton {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  transition: border-color var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-border-hover);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.confirmButton {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-brand-cyan-border);
+  background: var(--color-brand-cyan-bg);
+  color: var(--color-brand-cyan);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  transition: filter var(--transition-fast);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+  }
+
+  &.danger {
+    border-color: var(--color-critical);
+    background: var(--color-critical-bg);
+    color: var(--color-critical);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
 }

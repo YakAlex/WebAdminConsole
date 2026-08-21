@@ -6,8 +6,12 @@ import type {
   DowntimeRecord,
   MonitoringToggles,
   PingBatchPayload,
+  RdpSnapshotPayload,
+  ServerActionResult,
   ServerEntry,
+  SlaReport,
   TelegramAllowedUserView,
+  ZabbixProblemsPayload,
   ZabbixTestResult,
 } from './types'
 
@@ -15,6 +19,43 @@ export const getServers = () => apiGet<ServerEntry[]>('/api/servers')
 
 /** Живий знімок ping-статусів ЗАРАЗ (реально пінгує сервери на бекенді) — для початкового завантаження сторінки. */
 export const getPing = () => apiGet<PingBatchPayload>('/api/ping')
+
+/** Живий знімок активних Zabbix-проблем ЗАРАЗ — Крок 11.1 аудиту (раніше сторінка мала лише SignalR, без REST). */
+export const getZabbixProblems = () => apiGet<ZabbixProblemsPayload>('/api/zabbix')
+
+/** Живий знімок RDP-сесій ЗАРАЗ (реально опитує термінальні сервери) — Крок 11.2 аудиту. */
+export const getRdpSessions = () => apiGet<RdpSnapshotPayload>('/api/rdp-sessions')
+
+// ── Server actions (Пріоритет 3, #3.1) ──────────────────────────────────────
+
+export const restartServer = (ip: string) => apiPost<ServerActionResult>(`/api/servers/${encodeURIComponent(ip)}/restart`)
+
+export const shutdownServer = (ip: string) => apiPost<ServerActionResult>(`/api/servers/${encodeURIComponent(ip)}/shutdown`)
+
+/** URL для .rdp-файлу — використовується напряму як href="" (той самий origin, Windows-авторизація йде через cookie/negotiate так само, як і звичайна навігація). */
+export const rdpFileUrl = (ip: string) => `/api/servers/${encodeURIComponent(ip)}/rdp-file`
+
+// ── SLA Report (Пріоритет 3, #3.2) ──────────────────────────────────────────
+
+export interface SlaReportQuery {
+  /** ISO рядок. */
+  from: string
+  to: string
+  group?: string
+  server?: string
+}
+
+function slaParams(query: SlaReportQuery): URLSearchParams {
+  const params = new URLSearchParams({ from: query.from, to: query.to })
+  if (query.group) params.set('group', query.group)
+  if (query.server) params.set('server', query.server)
+  return params
+}
+
+export const getSlaReport = (query: SlaReportQuery) => apiGet<SlaReport>(`/api/sla?${slaParams(query).toString()}`)
+
+/** Той самий готовий HTML-рендер, що й у щотижневій Hangfire-джобі — просто на вимогу. */
+export const slaReportHtmlUrl = (query: SlaReportQuery) => `/api/sla/html?${slaParams(query).toString()}`
 
 export const getDowntime = () => apiGet<DowntimeRecord[]>('/api/downtime')
 

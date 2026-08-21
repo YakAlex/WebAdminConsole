@@ -28,7 +28,7 @@ export function useDashboardData() {
   const backupsQuery = useBackupsData()
   const resourceHistory = useResourceSnapshot()
   const rdp = useRdpSessions()
-  const zabbixPayload = useZabbixProblems()
+  const zabbixQuery = useZabbixProblems()
   const maintenanceWindows = useMaintenanceWindows()
   const logsQuery = useAppLogEntries(20)
   const { state: hubState } = useDashboardConnection()
@@ -37,15 +37,23 @@ export function useDashboardData() {
     hubState,
     servers: serversQuery.servers,
     serversLoading: serversQuery.loading,
+    serversError: serversQuery.error,
     pingPayload: pingQuery.payload,
     pingLoading: pingQuery.loading,
+    pingError: pingQuery.error,
     downtimeRecords: downtimeQuery.records,
     downtimeLoading: downtimeQuery.loading,
+    downtimeError: downtimeQuery.error,
     backups: backupsQuery.states,
     backupsLoading: backupsQuery.loading,
+    backupsError: backupsQuery.error,
     resourceHistory,
     rdpSessions: rdp.sessions,
-    zabbixProblems: zabbixPayload?.problems ?? [],
+    rdpLoading: rdp.loading,
+    rdpError: rdp.error,
+    zabbixProblems: zabbixQuery.payload?.problems ?? [],
+    zabbixLoading: zabbixQuery.loading,
+    zabbixError: zabbixQuery.error,
     maintenanceWindows,
     logEntries: logsQuery.entries,
   }

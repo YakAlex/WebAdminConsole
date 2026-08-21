@@ -217,6 +217,56 @@ export interface RdpSessionsUpdatedEvent {
   payload: RdpSessionsPayload
 }
 
+// ── SLA Report (Пріоритет 3, #3.2) ──────────────────────────────────────────
+
+export interface IncidentDetail {
+  serverName: string
+  serverGroup: string
+  fellAt: string
+  recoveredAt: string | null
+  /** .NET TimeSpan, формат "c" — напр. "1.02:30:00" (1д 2г 30хв). */
+  effectiveDuration: string
+  isOngoing: boolean
+  closedByMaintenance: boolean
+}
+
+export interface ServerSlaEntry {
+  serverName: string
+  serverIp: string
+  serverGroup: string
+  isRemovedFromMonitoring: boolean
+  uptimePercent: number
+  downtimeInPeriod: string
+  maintenanceDowntimeInPeriod: string
+  incidentCount: number
+  mttr: string | null
+  incidents: IncidentDetail[]
+}
+
+export interface SlaReport {
+  generatedAt: string
+  from: string
+  to: string
+  overallUptimePercent: number | null
+  servers: ServerSlaEntry[]
+  maintenanceAppendix: IncidentDetail[]
+}
+
+/** POST /api/servers/{ip}/restart|shutdown — результат WMI-команди (Пріоритет 3, #3.1). */
+export interface ServerActionResult {
+  success: boolean
+  error: string | null
+}
+
+/** GET /api/rdp-sessions — агрегований живий знімок (Крок 11.2 аудиту). */
+export interface RdpSnapshotPayload {
+  sessions: RdpSessionInfo[]
+  globalDailyPeak: number
+  lastLogoutUsername: string | null
+  lastLogoutServer: string | null
+  lastLogoutAt: string | null
+}
+
 export interface ZabbixProblem {
   eventId: string
   hostName: string

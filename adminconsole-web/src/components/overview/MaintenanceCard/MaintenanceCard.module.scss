@@ -66,11 +66,6 @@
   color: var(--color-text-muted);
 }
 
-.action {
-  @include link-action;
-  justify-content: space-between;
-}
-
 .windows {
   display: flex;
   flex-direction: column;

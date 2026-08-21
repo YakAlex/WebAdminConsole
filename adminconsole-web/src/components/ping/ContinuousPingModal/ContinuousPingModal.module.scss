@@ -1,0 +1,65 @@
+@use '@/styles/mixins' as *;
+
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.ip {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.latest {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.error {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-critical-bg);
+  color: var(--color-critical);
+  font-size: var(--font-size-secondary);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-app);
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: var(--font-size-micro);
+  @include thin-scrollbar;
+}
+
+.waiting {
+  color: var(--color-text-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0;
+}
+
+.time {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.value {
+  color: var(--color-text-secondary);
+}

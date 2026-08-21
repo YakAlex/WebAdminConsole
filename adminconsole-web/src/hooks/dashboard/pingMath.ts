@@ -1,4 +1,4 @@
-import { PingStatus, type PingResult, type ServerEntry } from '@/lib/api/types'
+import { PingStatus, type PingResult, type ServerEntry, type ServerType } from '@/lib/api/types'
 
 export interface GlobalPingStats {
   online: number
@@ -29,6 +29,7 @@ export interface HostRow {
   ip: string
   name: string
   group: string
+  type: ServerType
   status: PingStatus
   latencyMs: number | null
   lastChecked: string | null
@@ -48,6 +49,7 @@ export function mergeServersWithPingResults(servers: ServerEntry[], results: Pin
       ip: server.ip,
       name: server.name,
       group: server.group,
+      type: server.type,
       status: result?.status ?? PingStatus.Unknown,
       latencyMs: result?.latencyMs ?? null,
       lastChecked: result?.lastChecked ?? null,

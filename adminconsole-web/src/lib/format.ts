@@ -55,6 +55,26 @@ export function formatDuration(fellAt: string, recoveredAt: string | null): stri
   return `${minutes}m`
 }
 
+/**
+ * "1d 2h 30m" з .NET TimeSpan "c"-формату (напр. "1.02:30:00") — саме так
+ * System.Text.Json за замовчуванням серіалізує TimeSpan (перевірено
+ * емпірично на .NET 8, це не ISO 8601 duration). Пріоритет 3, #3.2 (SLA-звіт).
+ */
+export function formatTimeSpan(value: string | null | undefined): string {
+  if (!value) return '—'
+  const match = value.match(/^(-)?(?:(\d+)\.)?(\d{2}):(\d{2}):(\d{2})/)
+  if (!match) return value
+
+  const sign = match[1] ? '-' : ''
+  const days = Number(match[2] ?? 0)
+  const hours = Number(match[3])
+  const minutes = Number(match[4])
+
+  if (days > 0) return `${sign}${days}d ${hours}h ${minutes}m`
+  if (hours > 0) return `${sign}${hours}h ${minutes}m`
+  return `${sign}${minutes}m`
+}
+
 /** "2.34 GB" / "412.5 MB" — той самий поріг/округлення, що WPF BackupRowViewModel.FormatSize. */
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null) return '—'

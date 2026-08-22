@@ -141,12 +141,10 @@ public sealed class TelegramAccessControlService(
             _claimCode = null; // одноразовий
         }
 
-        await WithAppSettingsAsync(async r =>
-        {
-            var settings = await r.GetAsync(ct);
-            settings.TelegramPrimaryAdminChatId = chatId;
-            await r.SaveAsync(settings, ct);
-        });
+        // Аудит Зона 2 (2026-08-22): точкове оновлення лише одного поля —
+        // не GetAsync+SaveAsync повного об'єкта (lost update із паралельним
+        // записом RdpMonitorService/MonitoringController).
+        await WithAppSettingsAsync(r => r.UpdateTelegramPrimaryAdminAsync(chatId, ct));
 
         lock (_stateLock) _primaryAdminChatId = chatId;
 

@@ -20,7 +20,44 @@ public sealed class AppSettingsRepository(AdminConsoleDbContext context)
     // AdminConsole.Api завжди один процес.
     private static readonly SemaphoreSlim CreateGate = new(1, 1);
 
-    public async Task<AppSettings> GetAsync(CancellationToken ct = default)
+    public Task<AppSettings> GetAsync(CancellationToken ct = default) => GetTrackedAsync(ct);
+
+    // Аудит Зона 2, Знахідка №2 (2026-08-22): UpdateMonitoringTogglesAsync/
+    // UpdateRdpDailyPeakAsync/UpdateTelegramPrimaryAdminAsync замінили
+    // GetAsync+SaveAsync(повний об'єкт) у своїх трьох викликачів
+    // (MonitoringController, RdpMonitorService, TelegramAccessControlService).
+    // Кожен метод чіпає ТІЛЬКИ свої поля на трекованій сутності — EF Core
+    // за замовчуванням генерує UPDATE лише по позначених "modified" колонках,
+    // тож два конкурентні виклики, що змінюють РІЗНІ поля того самого рядка
+    // (напр. RDP-пік і monitoring-перемикачі одночасно), більше не можуть
+    // затерти зміни одне одного своєю застарілою копією решти полів
+    // (lost update — раніше SaveAsync/ApplyTo копіювали ВСІ поля разом).
+    public async Task UpdateMonitoringTogglesAsync(
+        bool rdpEnabled, bool zabbixEnabled, bool backupEnabled, CancellationToken ct = default)
+    {
+        var settings = await GetTrackedAsync(ct);
+        settings.RdpMonitoringEnabled    = rdpEnabled;
+        settings.ZabbixMonitoringEnabled = zabbixEnabled;
+        settings.BackupMonitoringEnabled = backupEnabled;
+        await SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateRdpDailyPeakAsync(int peak, DateTime date, CancellationToken ct = default)
+    {
+        var settings = await GetTrackedAsync(ct);
+        settings.RdpDailyPeak     = peak;
+        settings.RdpDailyPeakDate = date;
+        await SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateTelegramPrimaryAdminAsync(long chatId, CancellationToken ct = default)
+    {
+        var settings = await GetTrackedAsync(ct);
+        settings.TelegramPrimaryAdminChatId = chatId;
+        await SaveChangesAsync(ct);
+    }
+
+    private async Task<AppSettings> GetTrackedAsync(CancellationToken ct)
     {
         var existing = await Context.AppSettings.FirstOrDefaultAsync(ct);
         if (existing is not null) return existing;

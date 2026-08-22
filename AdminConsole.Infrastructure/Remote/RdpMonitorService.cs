@@ -750,10 +750,11 @@ public sealed class RdpMonitorService(
         {
             using var scope = scopeFactory.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAppSettingsRepository>();
-            var current = await repo.GetAsync(ct);
-            current.RdpDailyPeak     = peak;
-            current.RdpDailyPeakDate = date;
-            await repo.SaveAsync(current, ct);
+            // Аудит Зона 2 (2026-08-22): точкове оновлення лише двох полів —
+            // не GetAsync+SaveAsync повного об'єкта, щоб паралельний запис
+            // (напр. користувач зберігає monitoring-перемикачі в Settings
+            // саме в цю мить) не міг затерти пік своєю застарілою копією.
+            await repo.UpdateRdpDailyPeakAsync(peak, date, ct);
         }
         catch (Exception ex)
         {

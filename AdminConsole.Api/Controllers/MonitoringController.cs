@@ -44,15 +44,16 @@ public sealed class MonitoringController(IAppSettingsRepository repository, IMed
         bool zabbixChanged = settings.ZabbixMonitoringEnabled != request.ZabbixMonitoringEnabled;
         bool backupChanged = settings.BackupMonitoringEnabled != request.BackupMonitoringEnabled;
 
-        settings.RdpMonitoringEnabled    = request.RdpMonitoringEnabled;
-        settings.ZabbixMonitoringEnabled = request.ZabbixMonitoringEnabled;
-        settings.BackupMonitoringEnabled = request.BackupMonitoringEnabled;
-
         // Зберігаємо ПЕРЕД публікацією MonitoringToggledOccurred — поллери,
         // прокинувшись, одразу перечитують IAppSettingsRepository.GetAsync()
         // (Pull, edge-case #2 з їхніх власних коментарів), тож нове значення
         // мусить вже лежати в БД до того, як вони прокинуться.
-        await repository.SaveAsync(settings, ct);
+        //
+        // Аудит Зона 2 (2026-08-22): точкове оновлення лише трьох перемикачів
+        // (не GetAsync+SaveAsync повного об'єкта) — щоб паралельний запис
+        // RdpMonitorService.UpdateRdpDailyPeakAsync не міг затерти й навпаки.
+        await repository.UpdateMonitoringTogglesAsync(
+            request.RdpMonitoringEnabled, request.ZabbixMonitoringEnabled, request.BackupMonitoringEnabled, ct);
 
         if (rdpChanged)
             await mediator.Publish(new MonitoringToggledOccurred(MonitoredService.Rdp, request.RdpMonitoringEnabled), ct);
@@ -62,6 +63,6 @@ public sealed class MonitoringController(IAppSettingsRepository repository, IMed
             await mediator.Publish(new MonitoringToggledOccurred(MonitoredService.Backups, request.BackupMonitoringEnabled), ct);
 
         return Ok(new MonitoringTogglesResponse(
-            settings.RdpMonitoringEnabled, settings.ZabbixMonitoringEnabled, settings.BackupMonitoringEnabled));
+            request.RdpMonitoringEnabled, request.ZabbixMonitoringEnabled, request.BackupMonitoringEnabled));
     }
 }

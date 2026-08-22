@@ -398,6 +398,20 @@ public sealed class RdpMonitorService(
                 await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
                     $"{current.Username} → session went idle on {server.Name} " +
                     $"(Active → Disconnected, logon: {current.LogonTime})"), ct);
+
+                // Аудит-фікс (2026-08-22, "Last logout: —"): раніше _lastLogoutUsername
+                // оновлювався ЛИШЕ коли сесія повністю зникала з виводу quser (справжній
+                // logoff). У реальному використанні набагато частіше користувач просто
+                // закриває RDP-клієнт БЕЗ виходу — сесія лишається на сервері у стані
+                // Disconnected (як і видно в таблиці SESSIONS), а "Last logout"/картка
+                // Overview так і не дізнавались про це. Active → Disconnected — це саме
+                // те, що звичайний користувач і мав на увазі під "logout".
+                lock (_stateLock)
+                {
+                    _lastLogoutUsername = current.Username;
+                    _lastLogoutServer   = server.Name;
+                    _lastLogoutAt       = DateTimeOffset.Now;
+                }
             }
             else if (previous.State == RdpSessionState.Disconnected &&
                      current.State  == RdpSessionState.Active)

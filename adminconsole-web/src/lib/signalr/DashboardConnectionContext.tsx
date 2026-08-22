@@ -6,6 +6,16 @@ import { createDashboardConnection } from './connection'
 interface DashboardConnectionValue {
   connection: HubConnection
   state: HubConnectionState
+  /**
+   * Аудит Зона 5, Знахідка №1 (2026-08-22): rejoin груп після reconnect уже
+   * був (rejoinActiveGroups), але жоден data-хук не перезапитував REST після
+   * успішного reconnect — SignalR-групи коректно перевступлені, а дані,
+   * пропущені за час розриву, ніколи не наздоганялись (тихо застарілий
+   * стан, без жодної помилки в UI). Інкрементується на кожен onreconnected;
+   * хуки додають це значення в залежності свого REST-ефекту (useHubGroups
+   * повертає його), щоб автоматично перезапитувати REST після reconnect.
+   */
+  reconnectGeneration: number
   joinGroup: (group: string) => void
   leaveGroup: (group: string) => void
 }
@@ -29,12 +39,21 @@ export function DashboardConnectionProvider({ children }: { children: ReactNode 
   const connection = connectionRef.current
 
   const [state, setState] = useState<HubConnectionState>(connection.state)
+  const [reconnectGeneration, setReconnectGeneration] = useState(0)
   const { reportDenied, reportAuthorized } = useAuth()
   const groupRefCounts = useRef(new Map<string, number>())
 
   const rejoinActiveGroups = useCallback(() => {
     for (const [group, count] of groupRefCounts.current) {
-      if (count > 0) connection.invoke('JoinGroup', group).catch(() => {})
+      if (count > 0) {
+        // Аудит Зона 5, Знахідка №2 (2026-08-22): раніше .catch(() => {}) тихо
+        // ковтав будь-яку помилку rejoin — якщо саме ЦЯ група не перевступила
+        // після reconnect, відповідна частина UI мовчки лишалась без живих
+        // оновлень, без жодного логу чи індикатора.
+        connection
+          .invoke('JoinGroup', group)
+          .catch((err: unknown) => console.warn(`[SignalR] rejoin group "${group}" failed after reconnect:`, err))
+      }
     }
   }, [connection])
 
@@ -73,6 +92,9 @@ export function DashboardConnectionProvider({ children }: { children: ReactNode 
     connection.onreconnected(() => {
       updateState()
       rejoinActiveGroups()
+      // Сигнал для data-хуків (через useHubGroups) перезапитати REST —
+      // rejoin груп сам по собі не наздоганяє події, пропущені за час розриву.
+      setReconnectGeneration((g) => g + 1)
     })
     connection.onclose(updateState)
 
@@ -96,7 +118,7 @@ export function DashboardConnectionProvider({ children }: { children: ReactNode 
   }, [connection, rejoinActiveGroups, reportAuthorized, reportDenied])
 
   return (
-    <DashboardConnectionContext.Provider value={{ connection, state, joinGroup, leaveGroup }}>
+    <DashboardConnectionContext.Provider value={{ connection, state, reconnectGeneration, joinGroup, leaveGroup }}>
       {children}
     </DashboardConnectionContext.Provider>
   )

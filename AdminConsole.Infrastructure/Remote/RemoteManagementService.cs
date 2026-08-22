@@ -79,6 +79,17 @@ public sealed class RemoteManagementService(IMediator mediator)
 
     // ── WMI helper ────────────────────────────────────────────────────────────
 
+    // Аудит Зона 3, Знахідка №1 (2026-08-22): ConnectionOptions.Timeout
+    // обмежує ЛИШЕ фазу scope.Connect() — не сам запит (searcher.Get()) чи
+    // виклик методу (InvokeMethod). Якщо цільовий сервер прийняв з'єднання,
+    // а потім "завис" (мережевий розрив, зависла WMI-служба), обидва могли
+    // висіти необмежено довго — Task.Run(ct) цьому не завадив би (ct лише
+    // "не запускай, якщо вже скасовано", не перериває вже запущений
+    // синхронний виклик). Той самий таймаут тепер явно застосовано і на
+    // Options пошуковика, і на InvokeMethodOptions — той самий патерн, що
+    // вже коректно використаний у RemoteEventLogService.QueryWmiEventLog.
+    private const int WmiTimeoutSeconds = 15;
+
     private static void ExecuteWmiShutdown(string ip, bool isReboot)
     {
         var scope = new ManagementScope(
@@ -88,14 +99,19 @@ public sealed class RemoteManagementService(IMediator mediator)
                 Impersonation    = ImpersonationLevel.Impersonate,
                 Authentication   = AuthenticationLevel.PacketPrivacy,
                 EnablePrivileges = true,
-                Timeout          = TimeSpan.FromSeconds(15)
+                Timeout          = TimeSpan.FromSeconds(WmiTimeoutSeconds)
             });
 
         scope.Connect();
 
         var query = new ObjectQuery("SELECT * FROM Win32_OperatingSystem WHERE Primary=true");
-        using var searcher = new ManagementObjectSearcher(scope, query);
+        using var searcher = new ManagementObjectSearcher(scope, query)
+        {
+            Options = { Timeout = TimeSpan.FromSeconds(WmiTimeoutSeconds) }
+        };
         using var results  = searcher.Get();
+
+        var invokeOptions = new InvokeMethodOptions { Timeout = TimeSpan.FromSeconds(WmiTimeoutSeconds) };
 
         foreach (ManagementObject os in results.Cast<ManagementObject>())
         {
@@ -106,7 +122,7 @@ public sealed class RemoteManagementService(IMediator mediator)
                 inParams["Flags"] = isReboot ? 6 : 5;
                 inParams["Reserved"] = 0;
 
-                using var outParams = os.InvokeMethod("Win32Shutdown", inParams, null);
+                using var outParams = os.InvokeMethod("Win32Shutdown", inParams, invokeOptions);
 
                 if (outParams != null)
                 {

@@ -412,6 +412,14 @@ public sealed class PingMonitorService(
         var tasks = _servers.Select(s => PingSingleServerAsync(s, _mainThrottle, bag, ct));
         await Task.WhenAll(tasks).ConfigureAwait(false);
 
+        // Аудит-фікс (2026-08-22, троттлінг on-demand): PingSingleServerAsync
+        // тихо ковтає власне OperationCanceledException (щоб один скасований
+        // сервер не валив увесь Task.WhenAll) — тому скасування зовнішнього ct
+        // (клієнт відключився під час опитування) інакше пройшло б непоміченим
+        // і НЕПОВНИЙ/порожній bag кешувався б _onDemandThrottle як валідний
+        // результат на весь PingIntervalSeconds для всіх наступних викликів.
+        ct.ThrowIfCancellationRequested();
+
         var results = bag.ToArray();
         if (results.Length > 0)
         {

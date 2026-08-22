@@ -413,6 +413,18 @@ public sealed class ZabbixPollerService(
                 _settings.ZabbixUrl, auth, useApiToken, WatchedSeverities, ct).ConfigureAwait(false);
             return new ZabbixProblemsPayload(problems, null, DateTimeOffset.Now);
         }
+        // Аудит-фікс (2026-08-22, троттлінг on-demand): catch (Exception) нижче
+        // ловив і OperationCanceledException — скасування запиту (клієнт
+        // відключився) перетворювалось на фальшивий payload "Помилка зв'язку",
+        // який потім _onDemandThrottle кешував на ZabbixPollIntervalSeconds для
+        // ВСІХ наступних викликів, включно з тими, чий ct і не думав скасовуватись.
+        // Пропускаємо далі (без кешування), якщо скасування — справді від ct
+        // цього виклику; інакше (реальний таймаут HttpClient/помилка Zabbix) —
+        // як і раніше, повертаємо повідомлення про помилку.
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return new ZabbixProblemsPayload(null, $"Помилка зв'язку: {ex.Message}", DateTimeOffset.Now);

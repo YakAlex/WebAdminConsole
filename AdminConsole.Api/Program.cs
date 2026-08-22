@@ -178,7 +178,12 @@ builder.Services.AddSingleton<INotificationHandler<MonitoringToggledOccurred>>(
     sp => sp.GetRequiredService<RdpMonitorService>());
 
 // T4.10/T4.11 — Zabbix.
-builder.Services.AddHttpClient<ZabbixApiClient>();
+// Аудит Зона 3, Знахідка №2 (2026-08-22): без явного Timeout діяв дефолтний
+// HttpClient.Timeout (100с) — на REST-шляху (/api/zabbix, GetActiveProblemsNowInternalAsync)
+// це означало, що зависла відповідь Zabbix могла тримати HTTP-запит
+// користувача до 100с. Той самий підхід, що вже застосований для RDP
+// (SnapshotTimeoutMs), лише коротшим шляхом — на рівні самого HttpClient.
+builder.Services.AddHttpClient<ZabbixApiClient>(c => c.Timeout = TimeSpan.FromSeconds(20));
 builder.Services.AddSingleton<ZabbixPollerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ZabbixPollerService>());
 builder.Services.AddSingleton<INotificationHandler<CredentialsChangedOccurred>>(

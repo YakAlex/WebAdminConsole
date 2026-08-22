@@ -2,6 +2,8 @@
 
 .card {
   @include card-surface;
+  position: relative;
+  overflow: hidden;
   padding: var(--card-padding);
   display: flex;
   flex-direction: column;
@@ -10,12 +12,41 @@
 
 .eyebrow {
   @include section-title;
+  position: relative;
+  z-index: 1;
+}
+
+// Декоративна ілюстрація сервера — приліплена до правого краю картки.
+// position:absolute виносить її з потоку, тож на решту вмісту (.top/.footer)
+// вона не впливає; місце під неї резервується явно через .top { padding-right }
+// нижче, лише на ширших екранах (щоб на вузьких не красти простір у метрик).
+.serverIcon {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: calc(var(--card-padding) * -0.4);
+  transform: translateY(-46%);
+  height: 168px;
+  width: auto;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 8px 24px rgb(0 0 0 / 0.45));
+
+  @media (min-width: 860px) {
+    display: block;
+  }
 }
 
 .top {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: var(--space-5);
+
+  @media (min-width: 860px) {
+    padding-right: 132px;
+  }
 }
 
 // ── Ліва частина: ring + статус ─────────────────────────────────────────

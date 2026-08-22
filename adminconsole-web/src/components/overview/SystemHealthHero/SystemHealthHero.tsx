@@ -1,6 +1,7 @@
 import { HeartPulse, Activity, Clock, Database } from 'lucide-react'
 import { HealthRing } from '@/components/ui/HealthRing'
 import { StatusDot } from '@/components/ui/StatusDot'
+import serverIcon from '@/assets/server-icon.png'
 import styles from './SystemHealthHero.module.scss'
 
 export interface SystemHealthHeroProps {
@@ -36,6 +37,8 @@ export function SystemHealthHero({
 
   return (
     <div className={styles.card}>
+      <img src={serverIcon} alt="" className={styles.serverIcon} />
+
       <span className={styles.eyebrow}>System Health</span>
 
       <div className={styles.top}>

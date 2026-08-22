@@ -1,4 +1,3 @@
-import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Spinner } from '@/components/ui/Spinner'
 import { GlobalPingHealth } from '@/components/ping/GlobalPingHealth/GlobalPingHealth'
@@ -8,15 +7,16 @@ import styles from './Ping.module.scss'
 
 /**
  * §26 брифу: Ping НЕ копіює Overview — власний layout під свою функцію:
- * Page header → Global ping health → Hosts table. 401/403 обробляється
- * глобально в App.tsx (AuthProvider), сюди не долітає.
+ * Global ping health → Hosts table (без окремого page header — прибрано
+ * за проханням користувача, 2026-08-22, щоб Global Ping Health піднявся
+ * вище). 401/403 обробляється глобально в App.tsx (AuthProvider), сюди
+ * не долітає.
  */
 export function Ping() {
   const vm = usePingPageViewModel()
 
   return (
     <div className={styles.root}>
-      <PageHeader title="Ping" subtitle="Real-time reachability and latency across all monitored hosts." />
       {vm.errors.map(({ context, error }) => (
         <ErrorBanner key={context} context={context} error={error} />
       ))}

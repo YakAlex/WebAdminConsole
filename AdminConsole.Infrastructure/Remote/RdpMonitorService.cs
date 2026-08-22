@@ -149,6 +149,24 @@ public sealed class RdpMonitorService(
         bool isColdStart = _monitoringWasEnabled is null;
         _monitoringWasEnabled = enabled;
 
+        if (isColdStart)
+        {
+            // Аудит-фікс (2026-08-22, "Peak today: 0"): _globalDailyPeak — лише
+            // в пам'яті, рестарт сервісу (деплой/перезавантаження) стирав його
+            // до 0, навіть якщо сесія була активна й від'єдналась РАНІШЕ того ж
+            // дня — до наступного рестарту ніхто вже не був онлайн, щоб пік
+            // перерахувався заново. Відновлюємо з БД, якщо запис ще за сьогодні.
+            lock (_stateLock)
+            {
+                var today = DateTime.Now.Date;
+                if (current.RdpDailyPeakDate.Date == today)
+                {
+                    _globalDailyPeak = current.RdpDailyPeak;
+                    _peakResetDate   = today;
+                }
+            }
+        }
+
         if (!enabled)
         {
             await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
@@ -280,8 +298,8 @@ public sealed class RdpMonitorService(
                 _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
                     $"{hostname}: помилка автентифікації сервісного акаунту — перевірте права DOMAIN\\svc_adminconsole на цьому сервері."), ct);
-                await mediator.Publish(new RdpSessionsUpdatedOccurred(CreatePayload(
-                    server.Name, server.IP, [], "Помилка автентифікації сервісного акаунту")), ct);
+                await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
+                    server.Name, server.IP, [], "Помилка автентифікації сервісного акаунту", ct)), ct);
                 return;
             }
 
@@ -291,8 +309,8 @@ public sealed class RdpMonitorService(
                 _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
                     $"{hostname}: Access Denied — перевірте права DOMAIN\\svc_adminconsole на цьому сервері."), ct);
-                await mediator.Publish(new RdpSessionsUpdatedOccurred(CreatePayload(
-                    server.Name, server.IP, [], "Access Denied — перевірте права сервісного акаунту")), ct);
+                await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
+                    server.Name, server.IP, [], "Access Denied — перевірте права сервісного акаунту", ct)), ct);
                 return;
             }
 
@@ -300,8 +318,8 @@ public sealed class RdpMonitorService(
             {
                 await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
                     $"{hostname}: RPC недоступний. Переконайся що в appsettings.json вказано доменне ім'я (не IP)."), ct);
-                await mediator.Publish(new RdpSessionsUpdatedOccurred(CreatePayload(
-                    server.Name, server.IP, [], "RPC недоступний — перевір ім'я сервера")), ct);
+                await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
+                    server.Name, server.IP, [], "RPC недоступний — перевір ім'я сервера", ct)), ct);
                 return;
             }
 
@@ -312,8 +330,8 @@ public sealed class RdpMonitorService(
                 await LogSessionChangesAsync(server, [], ct);
                 _previousSessions[server.IP] = [];
 
-                await mediator.Publish(new RdpSessionsUpdatedOccurred(CreatePayload(
-                    server.Name, server.IP, [], noUsers ? null : $"Порожня відповідь (exit {exitCode})")), ct);
+                await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
+                    server.Name, server.IP, [], noUsers ? null : $"Порожня відповідь (exit {exitCode})", ct)), ct);
                 return;
             }
 
@@ -328,16 +346,16 @@ public sealed class RdpMonitorService(
             }
             _previousSessions[server.IP] = newSnapshot;
 
-            await mediator.Publish(new RdpSessionsUpdatedOccurred(CreatePayload(
-                server.Name, server.IP, sessions, null)), ct);
+            await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
+                server.Name, server.IP, sessions, null, ct)), ct);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "RdpMonitorService: помилка при опитуванні {Server}", hostname);
             await mediator.Publish(AppLogEntryOccurred.Error(LogSource, $"{hostname}: {ex.GetType().Name}: {ex.Message}"), ct);
-            await mediator.Publish(new RdpSessionsUpdatedOccurred(CreatePayload(
-                server.Name, server.IP, [], ex.Message)), ct);
+            await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
+                server.Name, server.IP, [], ex.Message, ct)), ct);
         }
     }
 
@@ -630,10 +648,19 @@ public sealed class RdpMonitorService(
     /// <summary>
     /// Розраховує глобальний пік і формує Payload.
     /// Це гарантує, що клієнт отримає консистентні історичні дані.
+    /// Асинхронна — при НОВОМУ піку одразу персистить його в AppSettings
+    /// (поза lock, бо lock не може огортати await), щоб "Peak today" пережив
+    /// рестарт сервісу протягом тієї ж доби (див. EvaluateMonitoringToggleAsync).
     /// </summary>
-    private RdpSessionsPayload CreatePayload(
-        string serverName, string serverIp, IReadOnlyList<RdpSessionInfo> sessions, string? errorMessage)
+    private async Task<RdpSessionsPayload> CreatePayloadAsync(
+        string serverName, string serverIp, IReadOnlyList<RdpSessionInfo> sessions, string? errorMessage,
+        CancellationToken ct)
     {
+        bool peakChanged;
+        int  peakToPersist;
+        DateTime dateToPersist;
+        RdpSessionsPayload payload;
+
         lock (_stateLock)
         {
             var today = DateTime.Now.Date;
@@ -647,12 +674,38 @@ public sealed class RdpMonitorService(
                 .SelectMany(dict => dict.Values)
                 .Count(s => s.State == RdpSessionState.Active);
 
-            if (currentTotalActive > _globalDailyPeak)
+            peakChanged = currentTotalActive > _globalDailyPeak;
+            if (peakChanged)
                 _globalDailyPeak = currentTotalActive;
 
-            return new RdpSessionsPayload(
+            peakToPersist  = _globalDailyPeak;
+            dateToPersist  = _peakResetDate;
+
+            payload = new RdpSessionsPayload(
                 serverName, serverIp, sessions, errorMessage,
                 _globalDailyPeak, _lastLogoutUsername, _lastLogoutServer, _lastLogoutAt);
+        }
+
+        if (peakChanged)
+            await PersistDailyPeakAsync(peakToPersist, dateToPersist, ct).ConfigureAwait(false);
+
+        return payload;
+    }
+
+    private async Task PersistDailyPeakAsync(int peak, DateTime date, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<IAppSettingsRepository>();
+            var current = await repo.GetAsync(ct);
+            current.RdpDailyPeak     = peak;
+            current.RdpDailyPeakDate = date;
+            await repo.SaveAsync(current, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "RdpMonitorService: не вдалось зберегти RdpDailyPeak у AppSettings.");
         }
     }
 }

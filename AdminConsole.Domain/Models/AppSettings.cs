@@ -35,4 +35,16 @@ public sealed class AppSettings
     /// /claim_admin з кодом, згенерованим у Settings. Null = ще не прив'язано.
     /// </summary>
     public long? TelegramPrimaryAdminChatId { get; set; }
+
+    /// <summary>
+    /// Найвище значення одночасно активних RDP-сесій за поточну добу
+    /// (RdpDailyPeakDate). Персистується, бо RdpMonitorService інакше тримає
+    /// пік лише в пам'яті — рестарт сервісу (деплой, перезавантаження) стирав
+    /// би "Peak today" до 0, навіть якщо сесія вже була й від'єдналась раніше
+    /// того ж дня.
+    /// </summary>
+    public int RdpDailyPeak { get; set; }
+
+    /// <summary>Дата (без часу), для якої актуальне RdpDailyPeak. Інша дата = новий день, пік скидається.</summary>
+    public DateTime RdpDailyPeakDate { get; set; }
 }

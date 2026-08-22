@@ -31,6 +31,8 @@ public sealed class AppSettingsRepository(AdminConsoleDbContext context)
             existing.ZabbixMonitoringEnabled    = settings.ZabbixMonitoringEnabled;
             existing.BackupMonitoringEnabled    = settings.BackupMonitoringEnabled;
             existing.TelegramPrimaryAdminChatId = settings.TelegramPrimaryAdminChatId;
+            existing.RdpDailyPeak                = settings.RdpDailyPeak;
+            existing.RdpDailyPeakDate            = settings.RdpDailyPeakDate;
         }
 
         await SaveChangesAsync(ct);

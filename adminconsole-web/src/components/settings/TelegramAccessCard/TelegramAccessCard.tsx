@@ -24,7 +24,7 @@ function formatCountdown(seconds: number): string {
  * гейтом, що й довіра до Telegram-схвалення.
  */
 export function TelegramAccessCard() {
-  const { pending, isPrimaryAdminClaimed, loading, refetch } = useTelegramPendingRequests()
+  const { pending, isPrimaryAdminClaimed, loading, error, refetch } = useTelegramPendingRequests()
 
   const [claimCode, setClaimCode] = useState<string | null>(null)
   const [claimExpiresAt, setClaimExpiresAt] = useState<number | null>(null)
@@ -116,6 +116,7 @@ export function TelegramAccessCard() {
               {pending.length > 0 && <span className={styles.count}>{pending.length}</span>}
             </span>
 
+            {error && <p className={styles.error}>Failed to load pending requests: {error.message}</p>}
             {actionError && <p className={styles.error}>{actionError}</p>}
 
             {pending.length === 0 ? (

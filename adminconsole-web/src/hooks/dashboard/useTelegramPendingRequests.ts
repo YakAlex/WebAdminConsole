@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getTelegramPending } from '@/lib/api/endpoints'
+import { ApiError, isAuthError } from '@/lib/api/http'
+import { useAuth } from '@/lib/auth/AuthContext'
 import { useHubGroups } from '@/lib/signalr/useHubGroups'
 import { useHubEvent } from '@/lib/signalr/useHubEvent'
 import {
@@ -28,18 +30,30 @@ export function useTelegramPendingRequests() {
   const [pending, setPending] = useState<TelegramPendingRequest[]>([])
   const [isPrimaryAdminClaimed, setIsPrimaryAdminClaimed] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<ApiError | null>(null)
+  const { reportDenied } = useAuth()
 
   const reconnectGeneration = useHubGroups(GROUPS)
 
+  // Аудит Зона 6, Знахідка №1 (2026-08-22): раніше без catch — будь-яка
+  // помилка (мережа, 401/403, 500) ставала unhandled promise rejection,
+  // і, на відміну від усіх інших хуків цього класу, 401/403 тут ніколи не
+  // доходив до reportDenied() — стан авторизації на весь застосунок міг не
+  // дізнатись про прострочену сесію саме через цей ендпоінт.
   const refetch = useCallback(async () => {
     try {
       const data = await getTelegramPending()
       setPending(data.pending)
       setIsPrimaryAdminClaimed(data.isPrimaryAdminClaimed)
+      setError(null)
+    } catch (err: unknown) {
+      const apiError = err instanceof ApiError ? err : new ApiError(0, 'Unknown error')
+      setError(apiError)
+      if (isAuthError(apiError)) reportDenied()
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [reportDenied])
 
   useEffect(() => {
     refetch()
@@ -54,5 +68,5 @@ export function useTelegramPendingRequests() {
       setPending((prev) => prev.filter((p) => p.chatId !== evt.chatId))
   })
 
-  return { pending, isPrimaryAdminClaimed, loading, refetch }
+  return { pending, isPrimaryAdminClaimed, loading, error, refetch }
 }

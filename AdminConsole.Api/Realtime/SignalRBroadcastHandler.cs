@@ -2,6 +2,7 @@ using AdminConsole.Api.Hubs;
 using AdminConsole.Domain.Events;
 using MediatR;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 
 namespace AdminConsole.Api.Realtime;
 
@@ -23,7 +24,7 @@ namespace AdminConsole.Api.Realtime;
 /// (ResourceSnapshotUpdatedOccurred/ResourceMonitorService прибрано
 /// повністю 2026-08-22 разом із фронтенд-вкладкою Resources.)
 /// </summary>
-public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub) :
+public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub, ILogger<SignalRBroadcastHandler> logger) :
     INotificationHandler<AppLogEntryOccurred>,
     INotificationHandler<PingBatchResultOccurred>,
     INotificationHandler<MaintenanceChangedOccurred>,
@@ -73,6 +74,27 @@ public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub) :
 
     public Task Handle(TelegramAccessRequestOccurred n, CancellationToken ct) => Send(Logs, n, ct);
 
-    private Task Send<T>(string group, T notification, CancellationToken ct) where T : notnull =>
-        hub.Clients.Group(group).SendAsync(typeof(T).Name, notification, ct);
+    // Аудит Зона 5, Знахідка №3 (2026-08-22): для кількох типів подій
+    // зареєстровано ПО КІЛЬКА MediatR-хендлерів одночасно (напр.
+    // AppLogEntryOccurred → і AppLogPersistenceHandler, і цей). MediatR за
+    // замовчуванням виконує їх послідовно й зупиняється на першому винятку —
+    // транспортний збій SignalR (клієнт відключився саме в момент розсилки,
+    // цілком нормальна, часта подія) міг тихо "з'їсти" сусідній хендлер
+    // (запис у AppLogEntries чи Telegram-сповіщення), а через захист Зони 1 —
+    // ще й передчасно завершити поточний poll-цикл викликача. SignalR-збій
+    // сам по собі ніколи не мав впливати на щось поза межами самої розсилки.
+    private async Task Send<T>(string group, T notification, CancellationToken ct) where T : notnull
+    {
+        try
+        {
+            await hub.Clients.Group(group).SendAsync(typeof(T).Name, notification, ct);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "SignalRBroadcastHandler: не вдалось розіслати {EventType} у групу {Group}.",
+                typeof(T).Name, group);
+        }
+    }
 }

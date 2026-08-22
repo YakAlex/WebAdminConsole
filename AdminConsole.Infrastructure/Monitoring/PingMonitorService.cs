@@ -134,7 +134,20 @@ public sealed class PingMonitorService(
         }
 
         logger.LogInformation("PingMonitorService stopped.");
-        await mediator.Publish(AppLogEntryOccurred.Warning(LogSource, "Ping monitor stopped."), CancellationToken.None);
+
+        // Аудит Зона 1 — знахідка з живого тестування (2026-08-22): цей рядок
+        // стоїть ПІСЛЯ try/catch вище (не всередині), тож нічим не був
+        // захищений. Під час реального shutdown хоста (не лише скасування
+        // stoppingToken, а й тому, що DI-контейнер уже почав звільнятись)
+        // цей виклик може впасти з ObjectDisposedException ("IServiceProvider"),
+        // а не з OperationCanceledException — підтверджено живим запуском.
+        // Це останній рядок методу, тож будь-який необхоплений виняток тут
+        // так само вилітав би з ExecuteAsync назовні.
+        try
+        {
+            await mediator.Publish(AppLogEntryOccurred.Warning(LogSource, "Ping monitor stopped."), CancellationToken.None);
+        }
+        catch { /* найгірший випадок — хост уже звільняє ресурси, ILogger вище вже зафіксував головне */ }
     }
 
     // ── Основний цикл (всі сервери, кожні N секунд) ──────────────────────────

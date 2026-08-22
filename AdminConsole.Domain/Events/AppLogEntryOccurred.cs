@@ -4,9 +4,9 @@ using MediatR;
 namespace AdminConsole.Domain.Events;
 
 /// <summary>
-/// Публікується будь-яким сервісом, що хоче додати структурований запис
-/// у застосунковий лог (вкладка Logs + AppLogEntries у БД).
-/// Заміна AppLogEntryMessage (WeakReferenceMessenger) на MediatR.
+/// Published by any service that wants to add a structured entry to the
+/// application log (Logs tab + AppLogEntries in the DB).
+/// Replaces AppLogEntryMessage (WeakReferenceMessenger) with MediatR.
 /// </summary>
 public sealed record AppLogEntryOccurred(AppLogEntry Entry) : INotification
 {

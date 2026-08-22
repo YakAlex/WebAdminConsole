@@ -4,10 +4,11 @@ using MediatR;
 namespace AdminConsole.Domain.Events;
 
 /// <summary>
-/// Публікується коли прийшов новий /start від неавторизованого chat_id.
-/// SignalR-хендлер розсилає pending-запит у React Settings як backup-канал
-/// (на випадок якщо Primary Admin не в мережі в Telegram, але дивиться в дашборд).
-/// Заміна TelegramAccessRequestMessage.
+/// Published when a new /start arrives from an unauthorized chat_id.
+/// The SignalR handler broadcasts the pending request to React Settings as
+/// a backup channel (in case the Primary Admin isn't online in Telegram but
+/// is watching the dashboard).
+/// Replaces TelegramAccessRequestMessage.
 /// </summary>
 public sealed record TelegramAccessRequestOccurred(
     TelegramPendingRequest Request

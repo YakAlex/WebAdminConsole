@@ -1,50 +1,53 @@
 namespace AdminConsole.Domain.Models;
 
 /// <summary>
-/// Персистентні налаштування застосунку (single-row таблиця AppSettings,
-/// Фаза 2). Заміна WPF UserSettings (%LocalAppData%\...\user_settings.json)
-/// МІНУС CloseToTray — поле не має сенсу на сервері (Windows Service без
-/// системного трею).
+/// Persistent application settings (single-row AppSettings table,
+/// Phase 2). Replaces the WPF UserSettings (%LocalAppData%\...\user_settings.json)
+/// MINUS CloseToTray — that field makes no sense on a server (a Windows
+/// Service has no system tray).
 /// </summary>
 public sealed class AppSettings
 {
     /// <summary>
-    /// true  — RdpMonitorService опитує Terminal Servers.
-    /// false — сервіс не робить quser-запитів і не запитує RDP credentials,
-    ///         навіть якщо вони відсутні (перевіряється ДО credential-логіки).
+    /// true  — RdpMonitorService polls Terminal Servers.
+    /// false — the service makes no quser calls and does not prompt for
+    ///         RDP credentials, even if they are missing (checked BEFORE
+    ///         any credential logic).
     /// </summary>
     public bool RdpMonitoringEnabled { get; set; } = true;
 
     /// <summary>
-    /// true  — ZabbixPollerService опитує Zabbix API.
-    /// false — сервіс не робить запитів і не запитує Zabbix токен,
-    ///         навіть якщо він відсутній (перевіряється ДО credential-логіки).
+    /// true  — ZabbixPollerService polls the Zabbix API.
+    /// false — the service makes no requests and does not prompt for a
+    ///         Zabbix token, even if one is missing (checked BEFORE any
+    ///         credential logic).
     /// </summary>
     public bool ZabbixMonitoringEnabled { get; set; } = true;
 
     /// <summary>
-    /// true  — BackupMonitorService виконує перевірки BackupChecks.
-    /// false — сервіс не робить жодного файлового/мережевого I/O по шляхах
-    ///         з BackupChecks, навіть якщо вони сконфігуровані (перевіряється
-    ///         ДО будь-якого звернення до файлової системи).
+    /// true  — BackupMonitorService runs the BackupChecks.
+    /// false — the service performs no file/network I/O against
+    ///         BackupChecks paths, even if they are configured (checked
+    ///         BEFORE any filesystem access).
     /// </summary>
     public bool BackupMonitoringEnabled { get; set; } = true;
 
     /// <summary>
-    /// Chat ID Primary Admin в Telegram. Встановлюється один раз через
-    /// /claim_admin з кодом, згенерованим у Settings. Null = ще не прив'язано.
+    /// Telegram Primary Admin chat ID. Set once via /claim_admin with a
+    /// code generated in Settings. Null = not yet claimed.
     /// </summary>
     public long? TelegramPrimaryAdminChatId { get; set; }
 
     /// <summary>
-    /// Найвище значення одночасно активних RDP-сесій за поточну добу
-    /// (RdpDailyPeakDate). Персистується, бо RdpMonitorService інакше тримає
-    /// пік лише в пам'яті — рестарт сервісу (деплой, перезавантаження) стирав
-    /// би "Peak today" до 0, навіть якщо сесія вже була й від'єдналась раніше
-    /// того ж дня.
+    /// The highest number of simultaneously active RDP sessions seen on
+    /// the current day (RdpDailyPeakDate). Persisted because
+    /// RdpMonitorService would otherwise keep the peak only in memory —
+    /// a service restart (deploy, reboot) would reset "Peak today" to 0
+    /// even if a session had already connected and disconnected earlier
+    /// that same day.
     /// </summary>
     public int RdpDailyPeak { get; set; }
 
-    /// <summary>Дата (без часу), для якої актуальне RdpDailyPeak. Інша дата = новий день, пік скидається.</summary>
+    /// <summary>The date (no time) that RdpDailyPeak applies to. A different date means a new day, and the peak resets.</summary>
     public DateTime RdpDailyPeakDate { get; set; }
 }

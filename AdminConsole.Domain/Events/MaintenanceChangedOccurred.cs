@@ -6,16 +6,16 @@ namespace AdminConsole.Domain.Events;
 public enum MaintenanceAction { Started, Ended }
 
 /// <summary>
-/// Публікується MaintenanceService при старті/завершенні вікна
-/// (як вручну через UI, так і автоматично по закінченню To).
+/// Published by MaintenanceService when a window starts/ends
+/// (either manually via the UI, or automatically when To elapses).
 ///
-/// Підписники:
-///   - UptimeTrackerService  (Started) — закриває "завислі" відкриті інциденти
-///   - PingMonitorService    (Ended)   — скидає previousStatus щоб згенерувати
-///                                       свіжий алерт якщо сервер все ще Offline
-///   - SignalR-хендлер       (обидва)  — миттєво оновлює бейдж у React UI
+/// Subscribers:
+///   - UptimeTrackerService  (Started) — closes "stuck" open incidents
+///   - PingMonitorService    (Ended)   — resets previousStatus so a fresh
+///                                       alert fires if the server is still Offline
+///   - SignalR handler       (both)    — instantly updates the badge in the React UI
 ///
-/// Заміна MaintenanceChangedMessage.
+/// Replaces MaintenanceChangedMessage.
 /// </summary>
 public sealed record MaintenanceChangedOccurred(
     MaintenanceAction Action,

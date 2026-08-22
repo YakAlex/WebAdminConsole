@@ -7,16 +7,16 @@ using Microsoft.Extensions.Logging;
 namespace AdminConsole.Infrastructure.Remote;
 
 /// <summary>
-/// Читає Error/Critical записи з Windows Event Log (System + Application)
-/// і публікує EventLogUpdatedOccurred.
+/// Reads Error/Critical records from the Windows Event Log (System +
+/// Application) and publishes EventLogUpdatedOccurred.
 ///
-/// Оптимізація: зберігає _lastRead timestamp між ітераціями.
-/// Перший запуск — читає останні FetchCount помилок за весь час.
-/// Наступні запуски — сканує лише записи новіші за _lastRead,
-/// зупиняючись одразу як тільки зустрів старий запис (early exit).
-/// Повідомлення не надсилається якщо нових записів немає.
+/// Optimization: keeps a _lastRead timestamp between iterations.
+/// First run — reads the last FetchCount errors overall.
+/// Subsequent runs — scan only records newer than _lastRead, stopping as
+/// soon as an old record is encountered (early exit).
+/// No notification is sent if there are no new records.
 ///
-/// T4.7: BackgroundService, тісний цикл (30с) — без Hangfire.
+/// T4.7: BackgroundService, tight loop (30s) — no Hangfire.
 /// </summary>
 public sealed class EventLogService(
     IMediator                 mediator,
@@ -26,21 +26,23 @@ public sealed class EventLogService(
     private const int FetchCount          = 20;
     private const int PollIntervalSeconds = 30;
 
-    // Зберігає час останнього прочитаного запису.
-    // null = перший запуск, читаємо весь InitialMaxScan назад.
-    // non-null = інкрементальний режим, читаємо лише нове.
+    // Keeps the timestamp of the last record read.
+    // null = first run, read the full InitialMaxScan window back.
+    // non-null = incremental mode, read only what's new.
     private DateTimeOffset? _lastRead;
 
-    // Кеш останнього повного знімку — потрібен для React-клієнтів, що
-    // підключаються ПІСЛЯ того як цей BackgroundService уже опублікував
-    // перше повідомлення (SignalR-подія "губиться", якщо нікого не було
-    // підписано в момент Publish). REST-контролер (Фаза 6) читає це поле
-    // напряму при початковому завантаженні, не чекаючи наступного PollIntervalSeconds.
+    // Cache of the last full snapshot — needed for React clients that
+    // connect AFTER this BackgroundService has already published its first
+    // notification (a SignalR event is "lost" if no one was subscribed at
+    // the moment of Publish). The REST controller (Phase 6) reads this
+    // field directly on initial load, without waiting for the next
+    // PollIntervalSeconds.
     private readonly List<EventLogEntry> _lastSnapshot = new();
     private readonly object _snapshotLock = new();
 
-    // Повертаємо знімок під lock — захищаємо від race з FetchAndPublishAsync,
-    // яка пише з thread pool, поки читач (API/тест) читає паралельно.
+    // Return the snapshot under lock — protects against a race with
+    // FetchAndPublishAsync, which writes from the thread pool while a
+    // reader (API/test) reads concurrently.
     public IReadOnlyList<EventLogEntry> LastSnapshot
     {
         get
@@ -71,7 +73,7 @@ public sealed class EventLogService(
         }
         catch (OperationCanceledException)
         {
-            // Нормальне завершення при StopAsync — ігноруємо.
+            // Normal completion on StopAsync — ignore.
         }
 
         logger.LogInformation("EventLogService stopped.");
@@ -83,8 +85,8 @@ public sealed class EventLogService(
     {
         try
         {
-            // Знімаємо час ДО читання — щоб не пропустити записи
-            // що з'явились поки ми читали.
+            // Capture the time BEFORE reading — so we don't miss records
+            // that appear while we're reading.
             var readStart = DateTimeOffset.Now;
             var since     = _lastRead;
 
@@ -92,12 +94,12 @@ public sealed class EventLogService(
                 .Run(() => ReadErrors(since), ct)
                 .ConfigureAwait(false);
 
-            // Оновлюємо курсор лише якщо читання пройшло успішно
+            // Advance the cursor only if the read succeeded
             _lastRead = readStart;
 
-            // Оновлюємо кеш — при першому читанні просто зберігаємо,
-            // при наступних додаємо нові записи на початок (найновіші зверху)
-            // і ріжемо хвіст так само, як робив старий ViewModel.
+            // Update the cache — on the first read just store it, on
+            // subsequent reads prepend the new records (newest on top) and
+            // trim the tail the same way the old ViewModel did.
             lock (_snapshotLock)
             {
                 if (since is null)
@@ -113,9 +115,9 @@ public sealed class EventLogService(
                 }
             }
 
-            // Не надсилаємо повідомлення якщо нічого нового немає.
-            // Виключення: перший запуск (since == null) — завжди надсилаємо
-            // щоб UI отримав початковий стан.
+            // Don't send a notification if there's nothing new.
+            // Exception: the first run (since == null) — always send so
+            // the UI gets the initial state.
             if (since is not null && entries.Count == 0)
             {
                 logger.LogDebug("EventLogService: no new errors since {LastRead}.", since);
@@ -134,9 +136,9 @@ public sealed class EventLogService(
         }
     }
 
-    // ── Читання записів ───────────────────────────────────────────────────────
-    // Винесено у WinEventLogReader — спільний для local (цей сервіс)
-    // і remote (RemoteEventLogService) читання.
+    // ── Reading records ───────────────────────────────────────────────────────
+    // Delegated to WinEventLogReader — shared reading logic for local
+    // (this service) and remote (RemoteEventLogService).
     private static List<EventLogEntry> ReadErrors(DateTimeOffset? since)
         => WinEventLogReader.ReadErrors(".", since);
 }

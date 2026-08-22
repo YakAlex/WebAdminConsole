@@ -6,23 +6,24 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AdminConsole.Infrastructure.Monitoring;
 
 /// <summary>
-/// T4.13: заміна FileLoggerService (видалено повністю) — замість
-/// ConcurrentQueue + окремого flush-циклу в rolling app-YYYY-MM-DD.log,
-/// кожен AppLogEntryOccurred одразу пишеться в таблицю AppLogEntries
-/// через IAppLogRepository. Прибирає весь клас проблем із multi-file
-/// merge/"хвіст найновішого файлу при старті" — тепер це просто
-/// ORDER BY Timestamp DESC LIMIT :take в SQL (LogsController, Фаза 3).
+/// T4.13: replacement for FileLoggerService (removed entirely) — instead
+/// of a ConcurrentQueue + a separate flush cycle into a rolling
+/// app-YYYY-MM-DD.log, every AppLogEntryOccurred is written immediately to
+/// the AppLogEntries table via IAppLogRepository. This eliminates the
+/// entire class of multi-file merge / "tail of the newest file at startup"
+/// problems — it's now just an ORDER BY Timestamp DESC LIMIT :take in SQL
+/// (LogsController, Phase 3).
 ///
-/// MediatR fan-out означає, що цей хендлер працює паралельно з
-/// SignalRBroadcastHandler (Api, Фаза 3) для ТІЄЇ Ж події — падіння
-/// одного не гасить інший.
+/// MediatR fan-out means this handler runs in parallel with
+/// SignalRBroadcastHandler (Api, Phase 3) for the SAME event — one failing
+/// doesn't take down the other.
 ///
-/// IServiceScopeFactory замість прямої ін'єкції IAppLogRepository: цей
-/// хендлер реєструється Singleton (той самий root-провайдер, що й решта
-/// Infrastructure-хендлерів — MediatR, впроваджений у Singleton-сервіс
-/// на кшталт UptimeTrackerService, викликає Publish через ЗАХОПЛЕНИЙ
-/// root-провайдер, тому НІЯКИЙ хендлер, якого він резолвить, не може
-/// бути Scoped — навіть якщо сам хендлер синтаксично не Singleton).
+/// IServiceScopeFactory instead of injecting IAppLogRepository directly:
+/// this handler is registered as Singleton (the same root provider as the
+/// rest of the Infrastructure handlers — MediatR, injected into a
+/// Singleton service like UptimeTrackerService, calls Publish through the
+/// CAPTURED root provider, so NO handler it resolves can be Scoped — even
+/// if the handler itself isn't syntactically Singleton).
 /// </summary>
 public sealed class AppLogPersistenceHandler(IServiceScopeFactory scopeFactory)
     : INotificationHandler<AppLogEntryOccurred>

@@ -8,16 +8,17 @@ namespace AdminConsole.Api.Controllers;
 public sealed record StartMaintenanceRequest(string? ServerIp, string? TargetGroup, int? DurationMinutes, string? Reason);
 
 /// <summary>
-/// Аудит-фікс (2026-08-22, п.1 звіту про прогалини міграції): REST-шар над
-/// MaintenanceService.StartMaintenanceAsync/EndMaintenanceEarlyAsync — обидва
-/// існували з Фази 4 в очікуванні "майбутнього Settings/Maintenance API"
-/// (див. коментар класу), просто ніхто їх не викликав з REST.
+/// Audit fix (2026-08-22, item 1 of the migration gap report): a REST layer
+/// over MaintenanceService.StartMaintenanceAsync/EndMaintenanceEarlyAsync —
+/// both had existed since Phase 4 in anticipation of a "future Settings/
+/// Maintenance API" (see the class comment), nobody had just called them
+/// from REST yet.
 ///
-/// GET заразом закриває другу, суміжну прогалину: useMaintenanceWindows()
-/// на фронтенді був суто SignalR-стрімом (лише MaintenanceChangedOccurred
-/// на кожен Start/End) — уже активні вікна, створені ДО того як хтось
-/// відкрив сторінку, були невидимі аж до наступної події. Той самий клас
-/// бага, що вже фіксився для Zabbix/RDP/Ping REST-знімків.
+/// GET also closes a second, related gap: useMaintenanceWindows() on the
+/// frontend was a pure SignalR stream (only MaintenanceChangedOccurred on
+/// each Start/End) — windows that were already active before someone opened
+/// the page were invisible until the next event. The same class of bug
+/// already fixed for the Zabbix/RDP/Ping REST snapshots.
 /// </summary>
 public sealed class MaintenanceController(MaintenanceService maintenance, IOptions<List<ServerEntry>> servers)
     : AdminConsoleControllerBase
@@ -26,11 +27,12 @@ public sealed class MaintenanceController(MaintenanceService maintenance, IOptio
     public ActionResult<IReadOnlyList<MaintenanceWindow>> Get() => Ok(maintenance.GetActiveWindows());
 
     /// <summary>
-    /// Рівно одне з ServerIp/TargetGroup, обидва звіряються проти реального
-    /// appsettings.json-списку (той самий захист від довільного клієнтського
-    /// вводу, що вже є в ServersController.Find) — DisplayName формується тут,
-    /// а не з клієнта. To рахується на бекенді від DateTimeOffset.Now, а не
-    /// приймається як готовий timestamp з фронтенду.
+    /// Exactly one of ServerIp/TargetGroup — both are validated against the
+    /// real appsettings.json list (the same protection against arbitrary
+    /// client input already used in ServersController.Find) — DisplayName is
+    /// built here, not sent by the client. To is computed on the backend from
+    /// DateTimeOffset.Now rather than accepted as a ready-made timestamp from
+    /// the frontend.
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<MaintenanceWindow>> Start([FromBody] StartMaintenanceRequest request, CancellationToken ct)
@@ -39,10 +41,10 @@ public sealed class MaintenanceController(MaintenanceService maintenance, IOptio
         bool hasGroup = !string.IsNullOrWhiteSpace(request.TargetGroup);
 
         if (hasServer == hasGroup)
-            return BadRequest(new { error = "Вкажіть або serverIp, або targetGroup — рівно одне з двох." });
+            return BadRequest(new { error = "Specify either serverIp or targetGroup — exactly one of the two." });
 
         if (request.DurationMinutes is { } minutes && minutes <= 0)
-            return BadRequest(new { error = "durationMinutes має бути додатним числом, або відсутнім (без обмеження часу)." });
+            return BadRequest(new { error = "durationMinutes must be a positive number, or omitted (no time limit)." });
 
         string displayName;
         string? serverIp = null;
@@ -52,7 +54,7 @@ public sealed class MaintenanceController(MaintenanceService maintenance, IOptio
         {
             var server = servers.Value.FirstOrDefault(s => s.IP == request.ServerIp);
             if (server is null)
-                return NotFound(new { error = $"Сервер з IP '{request.ServerIp}' не знайдено в конфігурації." });
+                return NotFound(new { error = $"Server with IP '{request.ServerIp}' not found in configuration." });
 
             serverIp = server.IP;
             displayName = server.Name;
@@ -62,7 +64,7 @@ public sealed class MaintenanceController(MaintenanceService maintenance, IOptio
             var group = servers.Value.FirstOrDefault(s =>
                 s.Group.Equals(request.TargetGroup, StringComparison.OrdinalIgnoreCase))?.Group;
             if (group is null)
-                return NotFound(new { error = $"Групу '{request.TargetGroup}' не знайдено в конфігурації." });
+                return NotFound(new { error = $"Group '{request.TargetGroup}' not found in configuration." });
 
             targetGroup = group;
             displayName = group;
@@ -82,11 +84,11 @@ public sealed class MaintenanceController(MaintenanceService maintenance, IOptio
         return Ok(window);
     }
 
-    /// <summary>Key — ServerIp або "group:{TargetGroup}" (MaintenanceWindow.Key), як query-параметр — уникає проблем із ':' у маршруті.</summary>
+    /// <summary>Key — ServerIp or "group:{TargetGroup}" (MaintenanceWindow.Key), passed as a query parameter — avoids ':' issues in the route.</summary>
     [HttpDelete]
     public async Task<IActionResult> End([FromQuery] string key, CancellationToken ct)
     {
         bool ended = await maintenance.EndMaintenanceEarlyAsync(key, ct);
-        return ended ? NoContent() : NotFound(new { error = $"Активного вікна обслуговування з ключем '{key}' не знайдено." });
+        return ended ? NoContent() : NotFound(new { error = $"No active maintenance window found with key '{key}'." });
     }
 }

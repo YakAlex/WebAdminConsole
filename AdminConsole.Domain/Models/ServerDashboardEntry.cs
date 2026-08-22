@@ -1,9 +1,9 @@
 namespace AdminConsole.Domain.Models;
 
 /// <summary>
-/// Запис у ComboBox Server Dashboard.
-/// Може бути "localhost" (локальна машина) або будь-який ServerEntry з appsettings.
-/// Лише Windows-сервери показуються — Linux і Network не підтримують WMI/EventLog.
+/// An entry in the Server Dashboard ComboBox.
+/// Can be "localhost" (the local machine) or any ServerEntry from appsettings.
+/// Only Windows servers are shown — Linux and Network devices don't support WMI/EventLog.
 /// </summary>
 public sealed class ServerDashboardEntry
 {
@@ -11,7 +11,7 @@ public sealed class ServerDashboardEntry
     public string IP         { get; }
     public bool   IsLocal    { get; }
 
-    /// <summary>Поточний ping-статус — оновлюється з PingBatchResultMessage.</summary>
+    /// <summary>Current ping status — updated from PingBatchResultMessage.</summary>
     public PingStatus PingStatus { get; set; } = PingStatus.Unknown;
 
     private ServerDashboardEntry(string name, string ip, bool isLocal)
@@ -27,6 +27,6 @@ public sealed class ServerDashboardEntry
     public static ServerDashboardEntry FromServerEntry(ServerEntry entry) =>
         new(entry.Name, entry.IP, isLocal: false);
 
-    // ComboBox відображає це
+    // Displayed by the ComboBox
     public override string ToString() => Name;
 }

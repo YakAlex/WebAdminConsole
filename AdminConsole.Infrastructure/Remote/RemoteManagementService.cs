@@ -12,31 +12,34 @@ namespace AdminConsole.Infrastructure.Remote;
 ///
 /// WMI dependency: System.Management (NuGet package on net8.0-windows).
 ///
-/// T4.9: on-demand сервіс, НЕ BackgroundService — дії ініціюються кліком
-/// користувача через ServersController (Пріоритет 3, #3.1), не циклом опитування.
+/// T4.9: an on-demand service, NOT a BackgroundService — actions are
+/// triggered by a user click through ServersController (Priority 3, #3.1),
+/// not by a polling loop.
 /// </summary>
 public sealed class RemoteManagementService(IMediator mediator)
 {
     private const string LogSource = "RemoteMgmt";
 
-    // Крок 12 (Пріоритет 3, #3.1): OpenContinuousPingAsync/OpenRdpAsync/
-    // OpenSshAsync видалені — вони викликали Process.Start(cmd.exe/mstsc.exe/
-    // putty.exe) НА МАШИНІ, де крутиться сама служба. У WPF це був комп'ютер
-    // адміна (інтерактивна сесія), тепер це headless Windows Service (Session
-    // 0 isolation, без робочого стола) — вікно просто нікому не покажеться,
-    // і навіть якби показалось, то не на комп'ютері адміна, а на сервері.
-    // Веб-нативна заміна: RDP → .rdp-файл на скачування (нижче), Continuous
-    // Ping → фронтенд сам опитує вже готовий GET /api/ping, поки відкрита
-    // модалка (без нового бекенд-виклику). SSH — поза скоупом.
+    // Step 12 (Priority 3, #3.1): OpenContinuousPingAsync/OpenRdpAsync/
+    // OpenSshAsync were removed — they called Process.Start(cmd.exe/mstsc.exe/
+    // putty.exe) ON THE MACHINE running the service itself. In WPF that was
+    // the admin's own computer (an interactive session); now it's a
+    // headless Windows Service (Session 0 isolation, no desktop) — the
+    // window simply wouldn't be shown to anyone, and even if it were, it
+    // would appear on the server, not the admin's computer. The web-native
+    // replacement: RDP → downloadable .rdp file (below), Continuous Ping →
+    // the frontend itself polls the already-existing GET /api/ping while
+    // the modal is open (no new backend call needed). SSH is out of scope.
 
     // ── Remote restart ────────────────────────────────────────────────────────
 
     /// <summary>
     /// Issues a WMI Win32_OperatingSystem.Reboot() call against the remote host.
     /// Requires the current user to have admin rights on the target machine.
-    /// Повертає (Success, Error) — раніше винятки лише логувались і губились
-    /// (fire-and-forget); тепер REST-контролер може одразу повідомити адміна,
-    /// чи команда реально прийнялась, а не лише "запит відправлено".
+    /// Returns (Success, Error) — exceptions used to just be logged and
+    /// lost (fire-and-forget); now the REST controller can immediately tell
+    /// the admin whether the command actually went through, rather than
+    /// just "request sent".
     /// </summary>
     public async Task<(bool Success, string? Error)> RemoteRestartAsync(string ip, string serverName, CancellationToken ct = default)
     {
@@ -79,15 +82,16 @@ public sealed class RemoteManagementService(IMediator mediator)
 
     // ── WMI helper ────────────────────────────────────────────────────────────
 
-    // Аудит Зона 3, Знахідка №1 (2026-08-22): ConnectionOptions.Timeout
-    // обмежує ЛИШЕ фазу scope.Connect() — не сам запит (searcher.Get()) чи
-    // виклик методу (InvokeMethod). Якщо цільовий сервер прийняв з'єднання,
-    // а потім "завис" (мережевий розрив, зависла WMI-служба), обидва могли
-    // висіти необмежено довго — Task.Run(ct) цьому не завадив би (ct лише
-    // "не запускай, якщо вже скасовано", не перериває вже запущений
-    // синхронний виклик). Той самий таймаут тепер явно застосовано і на
-    // Options пошуковика, і на InvokeMethodOptions — той самий патерн, що
-    // вже коректно використаний у RemoteEventLogService.QueryWmiEventLog.
+    // Audit Zone 3, Finding #1 (2026-08-22): ConnectionOptions.Timeout only
+    // bounds the scope.Connect() phase — not the query itself (searcher.Get())
+    // or the method call (InvokeMethod). If the target server accepted the
+    // connection and then "hung" (network drop, a stuck WMI service), both
+    // could hang indefinitely — Task.Run(ct) wouldn't help (ct only means
+    // "don't start if already canceled", it doesn't interrupt an
+    // already-running synchronous call). The same timeout is now explicitly
+    // applied to both the searcher's Options and InvokeMethodOptions — the
+    // same pattern already correctly used in
+    // RemoteEventLogService.QueryWmiEventLog.
     private const int WmiTimeoutSeconds = 15;
 
     private static void ExecuteWmiShutdown(string ip, bool isReboot)

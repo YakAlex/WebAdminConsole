@@ -7,15 +7,15 @@ using Microsoft.Extensions.Logging;
 namespace AdminConsole.Infrastructure.Reports;
 
 /// <summary>
-/// T4.12: Hangfire recurring job — SLA-звіт "за розкладом", доповнення до
-/// on-demand SlaController (REST). Рахує ковзний тижневий звіт і публікує
-/// коротке зведення через AppLogEntryOccurred (видно у Logs feed).
+/// T4.12: Hangfire recurring job — a "scheduled" SLA report, complementing the
+/// on-demand SlaController (REST). Computes a rolling weekly report and
+/// publishes a short summary via AppLogEntryOccurred (visible in the Logs feed).
 ///
-/// Свідомо НЕ надсилає email/Telegram — канал доставки розкладних звітів
-/// не визначений жодним з двох планів для Фази 4 (Telegram-бот — Фаза 5,
-/// T5.3); розширювати це зараз означало б вигадувати недомовлений
-/// функціонал. HTML-рендер для "завантажити звіт" лишається виключно
-/// на REST-ендпоінті (on-demand, SlaController).
+/// Deliberately does NOT send email/Telegram — the delivery channel for
+/// scheduled reports isn't defined by either of the two plans for Phase 4
+/// (the Telegram bot is Phase 5, T5.3); extending this now would mean
+/// inventing unspecified functionality. The HTML render for "download the
+/// report" remains exclusively on the REST endpoint (on-demand, SlaController).
 /// </summary>
 public sealed class SlaReportJob(
     IMediator             mediator,
@@ -24,7 +24,7 @@ public sealed class SlaReportJob(
 {
     private const string LogSource = "SlaReport";
 
-    /// <summary>Аудит Зона 1, Знахідка №7 (2026-08-22): захист від паралельного запуску, як BackupMonitorJob.</summary>
+    /// <summary>Audit Zone 1, Finding #7 (2026-08-22): guards against concurrent runs, same as BackupMonitorJob.</summary>
     [DisableConcurrentExecution(timeoutInSeconds: 10)]
     public async Task RunWeeklyAsync(CancellationToken ct = default)
     {
@@ -34,15 +34,15 @@ public sealed class SlaReportJob(
         var report = slaReportService.Generate(new SlaReportRequest { From = from, To = to });
 
         logger.LogInformation(
-            "SlaReportJob: тижневий звіт {From}–{To}, {Servers} серверів, overall={Overall}%.",
+            "SlaReportJob: weekly report {From}–{To}, {Servers} servers, overall={Overall}%.",
             from, to, report.Servers.Count, report.OverallUptimePercent);
 
         var overallText = report.OverallUptimePercent is { } p
             ? $"{p:0.00}%"
-            : "н/д (немає серверів у звіті)";
+            : "n/a (no servers in the report)";
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Тижневий SLA-звіт ({from:dd.MM}–{to:dd.MM}): overall uptime {overallText}, " +
-            $"{report.Servers.Sum(s => s.IncidentCount)} інцидент(ів) на {report.Servers.Count} сервер(ах)."), ct);
+            $"Weekly SLA report ({from:dd.MM}–{to:dd.MM}): overall uptime {overallText}, " +
+            $"{report.Servers.Sum(s => s.IncidentCount)} incident(s) across {report.Servers.Count} server(s)."), ct);
     }
 }

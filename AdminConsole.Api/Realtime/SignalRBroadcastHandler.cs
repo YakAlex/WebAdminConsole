@@ -7,22 +7,22 @@ using Microsoft.Extensions.Logging;
 namespace AdminConsole.Api.Realtime;
 
 /// <summary>
-/// Міст доменних подій (MediatR INotification, Domain/Events, Фаза 1) →
-/// SignalR DashboardHub. Замінює пряму WPF-підписку ViewModel-ів на
-/// IMessenger — кожна доменна подія автоматично летить у відповідну групу
-/// замість прямого виклику підписника.
+/// Bridge from domain events (MediatR INotification, Domain/Events, Phase 1) →
+/// SignalR DashboardHub. Replaces the old WPF direct ViewModel subscription via
+/// IMessenger — every domain event now automatically flows into the matching
+/// group instead of directly invoking a subscriber.
 ///
-/// Обробляє події, перенесені з Core/Messages. Чотири з них мають
-/// прямий, однозначний UI-відповідник (ping/uptime/backups); решта — RDP,
-/// Zabbix, Event Log, credentials/monitoring-toggle, Telegram access —
-/// не мають власної сторінки в поточному обсязі Фази 6
-/// (Dashboard/Uptime/Backups/Logs/Maintenance/Settings), тож летять у
-/// "logs" як загальний потік адміністративної активності — той самий
-/// принцип, що й у старому WPF, де все зрештою потрапляло у вкладку Logs
-/// через AppLogEntryMessage.
+/// Handles events carried over from Core/Messages. Four of them have a
+/// direct, unambiguous UI counterpart (ping/uptime/backups); the rest — RDP,
+/// Zabbix, Event Log, credentials/monitoring-toggle, Telegram access — don't
+/// have their own page in the current Phase 6 scope
+/// (Dashboard/Uptime/Backups/Logs/Maintenance/Settings), so they go into
+/// "logs" as a general stream of administrative activity — the same
+/// principle used in the old WPF app, where everything eventually ended up
+/// in the Logs tab via AppLogEntryMessage.
 ///
-/// (ResourceSnapshotUpdatedOccurred/ResourceMonitorService прибрано
-/// повністю 2026-08-22 разом із фронтенд-вкладкою Resources.)
+/// (ResourceSnapshotUpdatedOccurred/ResourceMonitorService was removed
+/// entirely on 2026-08-22 along with the frontend Resources tab.)
 /// </summary>
 public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub, ILogger<SignalRBroadcastHandler> logger) :
     INotificationHandler<AppLogEntryOccurred>,
@@ -48,9 +48,9 @@ public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub, ILogg
 
     public Task Handle(PingBatchResultOccurred n, CancellationToken ct) => Send(Ping, n, ct);
 
-    // Впливає і на бейдж Ping Dashboard, і на трекінг інцидентів Uptime —
-    // той самий подвійний вплив, що мав MaintenanceChangedMessage у WPF
-    // (підписники: UptimeTrackerService, PingMonitorService, PingResultViewModel).
+    // Affects both the Ping Dashboard badge and the Uptime incident tracking —
+    // the same dual effect MaintenanceChangedMessage had in WPF (subscribers:
+    // UptimeTrackerService, PingMonitorService, PingResultViewModel).
     public Task Handle(MaintenanceChangedOccurred n, CancellationToken ct) =>
         Task.WhenAll(Send(Ping, n, ct), Send(Uptime, n, ct));
 
@@ -74,15 +74,16 @@ public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub, ILogg
 
     public Task Handle(TelegramAccessRequestOccurred n, CancellationToken ct) => Send(Logs, n, ct);
 
-    // Аудит Зона 5, Знахідка №3 (2026-08-22): для кількох типів подій
-    // зареєстровано ПО КІЛЬКА MediatR-хендлерів одночасно (напр.
-    // AppLogEntryOccurred → і AppLogPersistenceHandler, і цей). MediatR за
-    // замовчуванням виконує їх послідовно й зупиняється на першому винятку —
-    // транспортний збій SignalR (клієнт відключився саме в момент розсилки,
-    // цілком нормальна, часта подія) міг тихо "з'їсти" сусідній хендлер
-    // (запис у AppLogEntries чи Telegram-сповіщення), а через захист Зони 1 —
-    // ще й передчасно завершити поточний poll-цикл викликача. SignalR-збій
-    // сам по собі ніколи не мав впливати на щось поза межами самої розсилки.
+    // Audit Zone 5, Finding #3 (2026-08-22): several event types have
+    // MULTIPLE MediatR handlers registered at once (e.g. AppLogEntryOccurred
+    // → both AppLogPersistenceHandler and this one). By default MediatR runs
+    // them sequentially and stops at the first exception — a SignalR
+    // transport failure (client disconnected right at broadcast time, a
+    // perfectly normal and frequent occurrence) could silently swallow the
+    // neighboring handler (writing to AppLogEntries or sending a Telegram
+    // notification), and thanks to the Zone 1 guard, also prematurely end the
+    // caller's current poll cycle. A SignalR failure on its own should never
+    // have affected anything beyond the broadcast itself.
     private async Task Send<T>(string group, T notification, CancellationToken ct) where T : notnull
     {
         try
@@ -93,7 +94,7 @@ public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub, ILogg
         catch (Exception ex)
         {
             logger.LogWarning(ex,
-                "SignalRBroadcastHandler: не вдалось розіслати {EventType} у групу {Group}.",
+                "SignalRBroadcastHandler: failed to broadcast {EventType} to group {Group}.",
                 typeof(T).Name, group);
         }
     }

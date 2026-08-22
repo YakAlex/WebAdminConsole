@@ -3,27 +3,27 @@ using System.Collections.Concurrent;
 namespace AdminConsole.Infrastructure.Telegram;
 
 /// <summary>
-/// Мапить довільно довгі рядки (назви серверів, групи тощо) на короткі
-/// числові ID для використання в callback_data inline-кнопок.
+/// Maps arbitrarily long strings (server names, group names, etc.) to short
+/// numeric IDs for use in inline-button callback_data.
 ///
-/// ВАЖЛИВО: Telegram обмежує callback_data 1–64 байтами. Пряме вкладання
-/// довгого рядка ризикує перевищити ліміт і викликати виняток при
-/// відправці клавіатури.
+/// IMPORTANT: Telegram limits callback_data to 1-64 bytes. Embedding a long
+/// string directly risks exceeding the limit and throwing an exception when
+/// sending the keyboard.
 ///
-/// Живе виключно в пам'яті процесу — не персистентний. Це нормально:
-/// мапінг актуальний лише в межах поточної "сесії" списку серверів
-/// (перезапуск процесу — новий список кнопок, нові ID).
+/// Lives purely in process memory — not persistent. That's fine: the mapping
+/// is only valid within the current "session" of the server list
+/// (process restart — new button list, new IDs).
 ///
-/// Перенесено без змін (T5.3).
+/// Carried over unchanged (T5.3).
 /// </summary>
 public sealed class TelegramCallbackRegistry
 {
     private readonly ConcurrentDictionary<int, string> _forward = new();
 
     /// <summary>
-    /// Зворотній індекс для дедуплікації — без нього кожен виклик Register()
-    /// з тим самим value створював би новий запис, і за місяці 24/7-роботи
-    /// _forward зростав би необмежено (memory leak).
+    /// Reverse index for deduplication — without it, every call to Register()
+    /// with the same value would create a new entry, and over months of 24/7
+    /// operation _forward would grow without bound (memory leak).
     /// </summary>
     private readonly ConcurrentDictionary<string, int> _reverse = new();
 

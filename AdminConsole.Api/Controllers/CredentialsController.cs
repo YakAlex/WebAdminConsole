@@ -22,27 +22,28 @@ public sealed record StoreZabbixCredentialsRequest(string Username, string Passw
 public sealed record StoreTelegramTokenRequest(string BotToken);
 
 /// <summary>
-/// Результат негайної перевірки з'єднання одразу після Save (#5 UX-беклогу:
-/// раніше юзер зберігав токен і не мав жодного фідбеку — доводилось чекати
-/// до 180с наступного poll-циклу і сподіватись, що щось з'явиться в Logs).
+/// Result of the immediate connection check performed right after Save
+/// (UX backlog #5: previously the user saved a token and got no feedback at
+/// all — they had to wait up to 180s for the next poll cycle and hope
+/// something showed up in Logs).
 /// </summary>
 public sealed record ZabbixTestResult(bool Success, string? Version, string? Error);
 
 /// <summary>
-/// T5.2 — GET/POST/DELETE для credentials (Zabbix/Telegram). Захищено
-/// тією ж політикою "Viewer" (AdminConsole-Admins), що й решта API —
-/// React-сторінка "Налаштування → Облікові дані" (Фаза 6) буде тонким
-/// клієнтом над цими ендпоінтами замість WPF credential-модалок.
+/// T5.2 — GET/POST/DELETE for credentials (Zabbix/Telegram). Protected by
+/// the same "Viewer" policy (AdminConsole-Admins) as the rest of the API —
+/// the React "Settings → Credentials" page (Phase 6) will be a thin client
+/// over these endpoints instead of the WPF credential modals.
 ///
-/// RDP-ендпоінтів тут більше немає: бекенд-служба працює під виділеним
-/// доменним акаунтом (DOMAIN\svc_adminconsole) з правами на цільових
-/// серверах, тож quser.exe відпрацьовує через Kerberos у контексті
-/// самого процесу — окремих RDP credentials зберігати не потрібно.
+/// There are no RDP endpoints here anymore: the backend service runs under a
+/// dedicated domain account (DOMAIN\svc_adminconsole) with rights on the
+/// target servers, so quser.exe authenticates via Kerberos in the process's
+/// own context — no separate RDP credentials need to be stored.
 ///
-/// Кожен успішний Save/Clear публікує CredentialsChangedOccurred — той самий
-/// механізм, яким ZabbixPollerService прокидається з очікування (Фаза 4) і
-/// негайно застосовує нові credentials без чекання на наступний інтервал
-/// опитування.
+/// Every successful Save/Clear publishes CredentialsChangedOccurred — the
+/// same mechanism ZabbixPollerService uses to wake up from its wait (Phase 4)
+/// and immediately apply the new credentials without waiting for the next
+/// poll interval.
 /// </summary>
 public sealed class CredentialsController(
     CredentialStore credentials,
@@ -53,18 +54,19 @@ public sealed class CredentialsController(
     private const string ZabbixLogSource = "ZabbixPoller";
 
     /// <summary>
-    /// Негайна перевірка щойно збереженого токена/сесії через apiinfo.version +
-    /// user.checkAuthentication (ZabbixApiClient.TestConnectionAsync — до цього
-    /// був написаний, але ніде не викликався). Результат публікується і в
-    /// AppLogEntries (видимо в Logs одразу, без очікування poll-циклу), і
-    /// повертається в HTTP-відповіді (видимо в Settings одразу).
+    /// Immediately checks the just-saved token/session via apiinfo.version +
+    /// user.checkAuthentication (ZabbixApiClient.TestConnectionAsync — written
+    /// earlier but never actually called before this). The result is
+    /// published both to AppLogEntries (visible in Logs right away, no need
+    /// to wait for a poll cycle) and returned in the HTTP response (visible
+    /// in Settings right away).
     /// </summary>
     private async Task<ZabbixTestResult> TestAndLogAsync(string tokenForBearerHeader, CancellationToken ct)
     {
         var url = monitoringSettings.Value.ZabbixUrl;
         if (string.IsNullOrWhiteSpace(url))
         {
-            const string msg = "ZabbixUrl не налаштований у appsettings.json (Monitoring:ZabbixUrl) — перевірку неможливо виконати.";
+            const string msg = "ZabbixUrl is not configured in appsettings.json (Monitoring:ZabbixUrl) — cannot run the check.";
             await mediator.Publish(AppLogEntryOccurred.Warning(ZabbixLogSource, $"Zabbix: {msg}"), ct);
             return new ZabbixTestResult(false, null, msg);
         }
@@ -72,8 +74,8 @@ public sealed class CredentialsController(
         var (success, version, error) = await zabbixClient.TestConnectionAsync(url, tokenForBearerHeader, ct);
 
         await mediator.Publish(success
-            ? AppLogEntryOccurred.Success(ZabbixLogSource, $"Zabbix: з'єднання перевірено успішно (версія {version}).")
-            : AppLogEntryOccurred.Warning(ZabbixLogSource, $"Zabbix: перевірка з'єднання не пройшла — {error}"), ct);
+            ? AppLogEntryOccurred.Success(ZabbixLogSource, $"Zabbix: connection verified successfully (version {version}).")
+            : AppLogEntryOccurred.Warning(ZabbixLogSource, $"Zabbix: connection check failed — {error}"), ct);
 
         return new ZabbixTestResult(success, version, error);
     }
@@ -96,7 +98,7 @@ public sealed class CredentialsController(
     public async Task<ActionResult<ZabbixTestResult>> SaveZabbixToken([FromBody] StoreZabbixTokenRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Token))
-            return BadRequest(new { error = "Token обов'язковий." });
+            return BadRequest(new { error = "Token is required." });
 
         try
         {
@@ -117,7 +119,7 @@ public sealed class CredentialsController(
     public async Task<ActionResult<ZabbixTestResult>> SaveZabbixCredentials([FromBody] StoreZabbixCredentialsRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-            return BadRequest(new { error = "Username і Password обов'язкові." });
+            return BadRequest(new { error = "Username and Password are required." });
 
         try
         {
@@ -137,7 +139,7 @@ public sealed class CredentialsController(
 
         if (sessionToken is null)
         {
-            const string msg = "Не вдалося авторизуватись у Zabbix — перевірте логін/пароль.";
+            const string msg = "Failed to authenticate with Zabbix — check the username/password.";
             await mediator.Publish(AppLogEntryOccurred.Warning(ZabbixLogSource, $"Zabbix: {msg}"), ct);
             return Ok(new ZabbixTestResult(false, null, msg));
         }
@@ -160,7 +162,7 @@ public sealed class CredentialsController(
     public async Task<IActionResult> SaveTelegram([FromBody] StoreTelegramTokenRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.BotToken))
-            return BadRequest(new { error = "BotToken обов'язковий." });
+            return BadRequest(new { error = "BotToken is required." });
 
         try
         {
@@ -171,8 +173,8 @@ public sealed class CredentialsController(
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
         }
 
-        // TelegramBotService (T5.3) слухає CredentialsChangedOccurred(Telegram, Saved)
-        // і перезапускає long-polling з новим токеном без перезапуску процесу.
+        // TelegramBotService (T5.3) listens for CredentialsChangedOccurred(Telegram, Saved)
+        // and restarts long-polling with the new token without restarting the process.
         await mediator.Publish(new CredentialsChangedOccurred(CredentialTarget.Telegram, CredentialAction.Saved), ct);
         return NoContent();
     }

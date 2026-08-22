@@ -10,23 +10,23 @@ namespace AdminConsole.Infrastructure.Data;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Реєструє AdminConsoleDbContext + усі репозиторії.
+    /// Registers AdminConsoleDbContext + all repositories.
     ///
-    /// PRAGMA journal_mode=WAL і PRAGMA busy_timeout виконуються через
-    /// SqliteConnection.StateChange — тобто при КОЖНОМУ фізичному відкритті
-    /// з'єднання, а не одноразово при старті процесу (T2.2). Дешева
-    /// ідемпотентна операція; безпечніше так, ніж покладатись на те, що
-    /// WAL-режим "уже стоїть" з минулого запуску.
+    /// PRAGMA journal_mode=WAL and PRAGMA busy_timeout are executed via
+    /// SqliteConnection.StateChange — meaning on EVERY physical connection
+    /// open, not once at process startup (T2.2). It's a cheap, idempotent
+    /// operation; safer than relying on the WAL mode "already being set"
+    /// from a previous run.
     ///
-    /// Аудит Зона 2 (2026-08-22): WAL сам по собі НЕ гарантує відсутність
-    /// SQLITE_BUSY при справжньому одночасному записі — без busy_timeout
-    /// "програвша" транзакція отримувала б помилку МИТТЄВО замість того,
-    /// щоб почекати на writer-лок. AppLogEntries — найгарячіша таблиця в
-    /// системі (кожен з 7 BackgroundServices + обидва Hangfire-джоби + REST
-    /// логують туди через AppLogPersistenceHandler, кожен виклик — окреме
-    /// з'єднання/транзакція) — саме тут конкурентний запис найреалістичніший.
-    /// 5с — достатньо, щоб пережити типовий короткий сплеск записів, і
-    /// достатньо коротко, щоб не ховати справжній deadlock надовго.
+    /// Zone 2 audit (2026-08-22): WAL by itself does NOT guarantee the
+    /// absence of SQLITE_BUSY under genuinely concurrent writes — without
+    /// busy_timeout, the "losing" transaction would get an error IMMEDIATELY
+    /// instead of waiting for the writer lock. AppLogEntries is the hottest
+    /// table in the system (each of the 7 BackgroundServices + both Hangfire
+    /// jobs + REST all log to it through AppLogPersistenceHandler, each call
+    /// being a separate connection/transaction) — this is where concurrent
+    /// writes are most realistic. 5s is enough to ride out a typical short
+    /// burst of writes, and short enough not to hide a real deadlock for long.
     /// </summary>
     public static IServiceCollection AddAdminConsoleDb(
         this IServiceCollection services, string connectionString)

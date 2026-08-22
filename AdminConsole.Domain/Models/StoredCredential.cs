@@ -1,13 +1,13 @@
 namespace AdminConsole.Domain.Models;
 
 /// <summary>
-/// Персистентний секрет (Фаза 5, T5.1) — заміна Win32 Credential Manager.
-/// Target — "Rdp" / "Zabbix" / "Telegram" (одна активна пара на ціль,
-/// той самий принцип, що RdpTarget/ZabbixTarget/TelegramTarget у старому
-/// CredentialStore). Username лишається у відкритому вигляді (не є
-/// секретом сам по собі — DOMAIN\\user або порожній для Zabbix API-токена);
-/// ProtectedSecret — пароль/токен, зашифрований через IDataProtector
-/// (ключі — DPAPI-NG, T3.3), ніколи не зберігається у відкритому вигляді.
+/// Persistent secret (Phase 5, T5.1) — replaces the Win32 Credential Manager.
+/// Target is "Rdp" / "Zabbix" / "Telegram" (one active pair per target,
+/// the same principle as RdpTarget/ZabbixTarget/TelegramTarget in the old
+/// CredentialStore). Username is stored in plain text (not a secret in
+/// itself — DOMAIN\\user, or empty for a Zabbix API token);
+/// ProtectedSecret is the password/token, encrypted via IDataProtector
+/// (keys — DPAPI-NG, T3.3), and is never stored in plain text.
 /// </summary>
 public sealed class StoredCredential
 {

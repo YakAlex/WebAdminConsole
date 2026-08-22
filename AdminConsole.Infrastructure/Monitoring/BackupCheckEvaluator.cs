@@ -4,26 +4,25 @@ using AdminConsole.Infrastructure.Remote;
 namespace AdminConsole.Infrastructure.Monitoring;
 
 /// <summary>
-/// Чиста логіка перевірки одного бекапу (FileAge). Не має стану,
-/// нічого не персистує і нікуди не шле повідомлень — лише файлова
-/// система на вхід, BackupCheckResult на вихід. Це навмисно окремо
-/// від BackupMonitorJob (Фаза 4, Hangfire): можна викликати напряму
-/// й перевірити вручну на тестовій теці, без DI/хосту.
+/// Pure logic for checking a single backup (FileAge). Stateless, persists
+/// nothing, and sends no notifications — the file system is the only
+/// input, BackupCheckResult the only output. Deliberately kept separate
+/// from BackupMonitorJob (Phase 4, Hangfire): it can be called directly
+/// and tested manually against a test folder, without DI/a host.
 ///
-/// Anti-flapping і LastConfirmed*-логіка сюди НЕ входять — це вже
-/// відповідальність джоби, яка викликає Evaluate і вирішує, чи
-/// "сирий" результат достатньо стабільний, щоб стати підтвердженим.
+/// Anti-flapping and the LastConfirmed* logic are NOT part of this — that's
+/// already the job's responsibility: it calls Evaluate and decides whether
+/// the "raw" result is stable enough to become confirmed.
 ///
-/// Перенесено майже без змін (T4.4) — єдина залежність
-/// WinEventLogReader.IsReachableAsync переноситься разом.
+/// Carried over almost unchanged (T4.4) — its one dependency,
+/// WinEventLogReader.IsReachableAsync, moves along with it.
 /// </summary>
 public sealed class BackupCheckEvaluator
 {
     /// <summary>
-    /// Виконує одну перевірку. <paramref name="history"/> — поточна
-    /// (до цього виклику) rolling-історія розмірів для цього
-    /// сервера+Kind; використовується лише для порівняння, нічого
-    /// в ній не змінюється.
+    /// Runs a single check. <paramref name="history"/> is the current
+    /// (as of before this call) rolling size history for this server+Kind;
+    /// used only for comparison, nothing in it is modified.
     /// </summary>
     public async Task<BackupCheckResult> EvaluateAsync(
         BackupCheckDefinition definition,
@@ -36,20 +35,22 @@ public sealed class BackupCheckEvaluator
 
         if (string.IsNullOrWhiteSpace(pattern))
         {
-            // Викликач (BackupMonitorJob) має пропускати Kind з порожнім
-            // патерном ще ДО виклику Evaluate — це не "Missing", а "ця
-            // перевірка для цього сервера не налаштована взагалі".
+            // The caller (BackupMonitorJob) is expected to skip a Kind with
+            // an empty pattern BEFORE calling Evaluate — this isn't
+            // "Missing", it's "this check isn't configured for this server
+            // at all".
             throw new ArgumentException(
-                $"Патерн для {kind} порожній — не викликай Evaluate для не налаштованого Kind.",
+                $"Pattern for {kind} is empty — don't call Evaluate for an unconfigured Kind.",
                 nameof(kind));
         }
 
-        // ── Stage A0 — швидка перевірка досяжності UNC-хоста ДО важкого I/O ──
-        // Directory.Exists/EnumerateFiles на недоступному мережевому шарі
-        // можуть блокуватись на нативному Windows-таймауті десятки секунд,
-        // і CancellationToken тут не рятує (Task.Run не скасовує вже
-        // запущений синхронний виклик). Коротким пінгом (той самий підхід,
-        // що WinEventLogReader.IsReachableAsync) відсікаємо це заздалегідь.
+        // ── Stage A0 — quick UNC host reachability check BEFORE heavy I/O ──
+        // Directory.Exists/EnumerateFiles against an unreachable network
+        // share can block on a native Windows timeout for tens of seconds,
+        // and CancellationToken doesn't help here (Task.Run doesn't cancel
+        // an already-running synchronous call). A short ping (the same
+        // approach as WinEventLogReader.IsReachableAsync) heads this off
+        // in advance.
         if (TryGetUncHost(definition.Path, out var host))
         {
             var reachable = await WinEventLogReader
@@ -57,12 +58,12 @@ public sealed class BackupCheckEvaluator
                 .ConfigureAwait(false);
 
             if (!reachable)
-                return BackupCheckResult.Unknown($"Хост '{host}' недоступний (ping timeout).");
+                return BackupCheckResult.Unknown($"Host '{host}' is unreachable (ping timeout).");
         }
 
         // ── Stage A
-        // Будь-який збій доступу тут — завжди Unknown, без винятків
-        // (жодна причина недоступності не прирівнюється до Missing).
+        // Any access failure here is always Unknown, no exceptions
+        // (no reason for unreachability is ever treated as Missing).
         FileInfo? newest;
         try
         {
@@ -93,11 +94,11 @@ public sealed class BackupCheckEvaluator
             return BackupCheckResult.Stale(sample);
 
         if (history.Count < definition.MinSamplesForBaseline)
-            return BackupCheckResult.Ok(sample); // замало історії — чесно оцінити розмір поки не можемо
+            return BackupCheckResult.Ok(sample); // not enough history yet to honestly evaluate the size
 
         var average = history.Average(s => (double)s.SizeBytes);
         if (average <= 0)
-            return BackupCheckResult.Ok(sample); // захист від ділення на нуль (History з самих нульових розмірів)
+            return BackupCheckResult.Ok(sample); // guard against division by zero (History made up of zero-size entries only)
 
         var deviationPct = Math.Abs(sample.SizeBytes - average) / average * 100.0;
 
@@ -109,14 +110,14 @@ public sealed class BackupCheckEvaluator
     private static FileInfo? FindNewestMatchingFile(string path, string pattern)
     {
         if (!Directory.Exists(path))
-            throw new IOException($"Шлях недоступний: {path}");
+            throw new IOException($"Path is unreachable: {path}");
 
         return new DirectoryInfo(path)
             .EnumerateFiles(pattern, SearchOption.TopDirectoryOnly)
             .MaxBy(f => f.LastWriteTime);
     }
 
-    /// <summary>Витягує ім'я хоста з UNC-шляху (\\host\share\...). false для локальних шляхів (C:\...).</summary>
+    /// <summary>Extracts the host name from a UNC path (\\host\share\...). Returns false for local paths (C:\...).</summary>
     private static bool TryGetUncHost(string path, out string host)
     {
         host = string.Empty;

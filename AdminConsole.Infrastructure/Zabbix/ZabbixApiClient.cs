@@ -13,7 +13,7 @@ namespace AdminConsole.Infrastructure.Zabbix;
 /// All methods are async and allocate minimally.
 /// This class is stateless except for the injected HttpClient.
 ///
-/// T4.10: перенесено без змін.
+/// T4.10: carried over unchanged.
 /// </summary>
 public sealed class ZabbixApiClient(HttpClient http)
 {
@@ -46,15 +46,15 @@ public sealed class ZabbixApiClient(HttpClient http)
     // ── Connection test ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Перевіряє доступність Zabbix API і валідність токену.
-    /// Використовує легкий метод apiinfo.version — не потребує авторизації
-    /// для отримання версії, але наступний крок (problem.get) перевірить токен.
-    /// Повертає (true, "Zabbix 6.4.0", null) або (false, null, "повідомлення помилки").
+    /// Checks Zabbix API availability and token validity.
+    /// Uses the lightweight apiinfo.version method — no auth required to get the
+    /// version, but the next step (problem.get) verifies the token.
+    /// Returns (true, "Zabbix 6.4.0", null) or (false, null, "error message").
     /// </summary>
     public async Task<(bool Success, string? Version, string? Error)> TestConnectionAsync(
         string url, string token, CancellationToken ct = default)
     {
-        // Крок 1 — перевіряємо доступність API (без авторизації)
+        // Step 1 — check API availability (no auth)
         try
         {
             var versionRequest = BuildRequest("apiinfo.version", new JsonObject());
@@ -63,12 +63,12 @@ public sealed class ZabbixApiClient(HttpClient http)
 
             var version = versionResponse?["result"]?.GetValue<string>();
             if (version is null)
-                return (false, null, "Zabbix API не відповів коректно");
+                return (false, null, "Zabbix API did not respond correctly");
 
-            // Крок 2 — перевіряємо токен через user.checkAuthentication.
-            // Zabbix 6.0+: auth передається ТІЛЬКИ через Bearer заголовок або
-            // поле "token" у params — НЕ через поле "auth" у тілі JSON-RPC.
-            // BuildRequest без третього аргументу = не додає "auth" у тіло.
+            // Step 2 — verify the token via user.checkAuthentication.
+            // Zabbix 6.0+: auth is passed ONLY via the Bearer header or the
+            // "token" field in params — NOT via the "auth" field in the JSON-RPC body.
+            // BuildRequest without the third argument = doesn't add "auth" to the body.
             var testRequest = BuildRequest("user.checkAuthentication", new JsonObject
             {
                 ["token"] = token
@@ -82,23 +82,23 @@ public sealed class ZabbixApiClient(HttpClient http)
             {
                 var errorData = errorNode["data"]?.GetValue<string>()
                     ?? errorNode["message"]?.GetValue<string>()
-                    ?? "Невідома помилка";
-                return (false, version, $"Токен недійсний: {errorData}");
+                    ?? "Unknown error";
+                return (false, version, $"Token is invalid: {errorData}");
             }
 
             return (true, version, null);
         }
         catch (OperationCanceledException)
         {
-            return (false, null, "Перевірку скасовано");
+            return (false, null, "Check cancelled");
         }
         catch (HttpRequestException ex)
         {
-            return (false, null, $"Не вдалося підключитись: {ex.Message}");
+            return (false, null, $"Failed to connect: {ex.Message}");
         }
         catch (Exception ex)
         {
-            return (false, null, $"Помилка: {ex.Message}");
+            return (false, null, $"Error: {ex.Message}");
         }
     }
 
@@ -131,18 +131,18 @@ public sealed class ZabbixApiClient(HttpClient http)
         var response = await PostAsync(url, request, ct, useApiToken ? auth : null).ConfigureAwait(false);
         if (response is null) return [];
 
-        // ── Перевіряємо чи Zabbix повернув error у тілі відповіді ────────────────
-        // Zabbix повертає HTTP 200 навіть при помилках авторизації,
-        // але поле "error" присутнє, а "result" відсутнє.
+        // ── Check whether Zabbix returned an error in the response body ──────────
+        // Zabbix returns HTTP 200 even on authentication errors,
+        // but the "error" field is present while "result" is absent.
         var errorNode = response["error"];
         if (errorNode is not null)
         {
             int    code = errorNode["code"]?.GetValue<int>() ?? 0;
             string data = errorNode["data"]?.GetValue<string>() ?? string.Empty;
 
-            // Коди що означають невалідний токен / немає доступу:
+            // Codes meaning an invalid token / no access:
             // -32602 = Invalid params / No permissions
-            // -32500 = Application error (зазвичай auth)
+            // -32500 = Application error (usually auth)
             bool isAuthError = code is -32602 or -32500
                 || data.Contains("No permissions", StringComparison.OrdinalIgnoreCase)
                 || data.Contains("re-login", StringComparison.OrdinalIgnoreCase)
@@ -150,7 +150,7 @@ public sealed class ZabbixApiClient(HttpClient http)
 
             if (isAuthError)
                 throw new ZabbixAuthException(
-                    $"Zabbix відхилив токен (code={code}): {data}");
+                    $"Zabbix rejected the token (code={code}): {data}");
 
             throw new InvalidOperationException(
                 $"Zabbix API error (code={code}): {data}");
@@ -264,10 +264,10 @@ public sealed class ZabbixApiClient(HttpClient http)
 }
 
 /// <summary>
-/// Кидається ZabbixApiClient коли Zabbix повертає помилку авторизації
-/// у тілі відповіді (HTTP 200 + error field) або HTTP 401/403.
-/// Перехоплюється в ZabbixPollerService.PollAsync для запиту нового токена.
-/// Перенесено з вкладеного класу ZabbixPollerService у власний файл —
-/// уникаємо циклічної залежності "клієнт кидає виняток, визначений у поллері".
+/// Thrown by ZabbixApiClient when Zabbix returns an authentication error
+/// in the response body (HTTP 200 + error field) or HTTP 401/403.
+/// Caught in ZabbixPollerService.PollAsync to request a new token.
+/// Moved out of a nested class in ZabbixPollerService into its own file —
+/// avoids the circular dependency of "the client throws an exception defined in the poller".
 /// </summary>
 public sealed class ZabbixAuthException(string message) : Exception(message);

@@ -5,21 +5,22 @@ using Microsoft.Extensions.Logging;
 namespace AdminConsole.Infrastructure.Remote;
 
 /// <summary>
-/// On-demand читання Event Log з віддаленої Windows-машини.
+/// On-demand reading of the Event Log from a remote Windows machine.
 ///
-/// ВАЖЛИВО: на відміну від локального EventLogService, який використовує
-/// System.Diagnostics.EventLog(name, ".") — для remote-машин цей API
-/// ненадійний з чистими IP-адресами (вимагає NetBIOS-резолву, легко
-/// підвисає чи мовчки повертає 0 записів). Тому тут читання йде через
-/// WMI (Win32_NTLogEvent) — той самий ManagementScope/DCOM шлях.
+/// IMPORTANT: unlike the local EventLogService, which uses
+/// System.Diagnostics.EventLog(name, ".") — for remote machines this API
+/// is unreliable with bare IP addresses (requires NetBIOS resolution,
+/// easily hangs or silently returns 0 records). So here reads go through
+/// WMI (Win32_NTLogEvent) — the same ManagementScope/DCOM path.
 ///
-/// Захист від RPC-таймаутів: перед спробою читання WMI — швидкий
-/// ping-чек (макс. 1.5с). Якщо сервер не відповідає — одразу повертаємо
-/// порожній результат з причиною, не чекаючи 30-60 секунд на DCOM timeout.
+/// Protection against RPC timeouts: before attempting a WMI read — a quick
+/// ping check (max 1.5s). If the server doesn't respond, we immediately
+/// return an empty result with a reason, instead of waiting 30-60 seconds
+/// for a DCOM timeout.
 ///
-/// T4.7: перенесено без змін — жодної залежності на месенджер/mediator,
-/// on-demand результат повертається напряму викликачу (майбутній API-
-/// контролер, Фаза 6).
+/// T4.7: carried over unchanged — no dependency on the messenger/mediator,
+/// the on-demand result is returned directly to the caller (a future API
+/// controller, Phase 6).
 /// </summary>
 public sealed class RemoteEventLogService(ILogger<RemoteEventLogService> logger)
 {
@@ -151,7 +152,7 @@ public sealed class RemoteEventLogService(ILogger<RemoteEventLogService> logger)
         string eventId = mo["EventCode"]?.ToString() ?? "0";
 
         return new EventLogEntry(
-            Severity:      EventSeverity.Error, // запит вже відфільтрований по EventType=1
+            Severity:      EventSeverity.Error, // the query is already filtered to EventType=1
             Source:        source,
             Message:       message,
             EventId:       eventId,
@@ -159,9 +160,9 @@ public sealed class RemoteEventLogService(ILogger<RemoteEventLogService> logger)
     }
 
     /// <summary>
-    /// WMI повертає час у форматі DMTF: "yyyyMMddHHmmss.ffffff+UUU"
-    /// (UUU — зсув у хвилинах від UTC). ManagementDateTimeConverter
-    /// робить конвертацію офіційним способом замість ручного парсингу.
+    /// WMI returns time in DMTF format: "yyyyMMddHHmmss.ffffff+UUU"
+    /// (UUU — offset in minutes from UTC). ManagementDateTimeConverter
+    /// converts it the official way instead of manual parsing.
     /// </summary>
     private static DateTimeOffset ParseWmiDateTime(string dmtf)
     {
@@ -179,7 +180,7 @@ public sealed class RemoteEventLogService(ILogger<RemoteEventLogService> logger)
     }
 }
 
-/// <summary>Результат спроби читання віддаленого Event Log.</summary>
+/// <summary>Result of an attempt to read a remote Event Log.</summary>
 public sealed class RemoteEventLogResult
 {
     public bool                          IsReachable  { get; private init; }

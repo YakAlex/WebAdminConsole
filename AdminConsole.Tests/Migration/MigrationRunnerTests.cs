@@ -8,12 +8,12 @@ using Microsoft.Extensions.Logging;
 namespace AdminConsole.Tests.Migration;
 
 /// <summary>
-/// T2.7 — фікстурний тест AdminConsole.Migration. Дані нижче — вигадані/
-/// анонімізовані (не реальна інфраструктура), але за формою й ключами
-/// точно повторюють реальні uptime-*.json/backups.json/maintenance.json/
-/// user_settings.json, включно з навмисними дублікатами для перевірки
-/// дедуплікації (T2.6) і прострочене Maintenance-вікно для перевірки
-/// фільтра "To < now".
+/// T2.7 — fixture test for AdminConsole.Migration. The data below is
+/// made-up/anonymized (not real infrastructure), but matches the shape and
+/// keys of the real uptime-*.json/backups.json/maintenance.json/
+/// user_settings.json files exactly, including deliberate duplicates to
+/// verify deduplication (T2.6) and an expired Maintenance window to verify
+/// the "To < now" filter.
 /// </summary>
 public sealed class MigrationRunnerTests : IAsyncLifetime
 {
@@ -46,8 +46,9 @@ public sealed class MigrationRunnerTests : IAsyncLifetime
     public Task DisposeAsync()
     {
         _provider.Dispose();
-        // Windows тримає файл-хендл SQLite ще трохи після Dispose() пулу
-        // з'єднань — без цього видалення директорії може впасти з IOException.
+        // Windows holds the SQLite file handle for a bit after the
+        // connection pool's Dispose() — without this, deleting the directory
+        // can fail with an IOException.
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         if (Directory.Exists(_rootDir))
             Directory.Delete(_rootDir, recursive: true);
@@ -69,11 +70,11 @@ public sealed class MigrationRunnerTests : IAsyncLifetime
         var summary = await runner.RunAsync(Options);
 
         Assert.False(summary.AlreadyCompleted);
-        // 3 унікальних записи з двох файлів (1 дублікат ServerIp+FellAt між файлами прибрано).
+        // 3 unique records from two files (1 duplicate ServerIp+FellAt across files removed).
         Assert.Equal(3, summary.DowntimeRecords);
-        // 2 вікна у файлі, одне прострочене (To в минулому) — відфільтроване, лишається 1.
+        // 2 windows in the file, one expired (To in the past) — filtered out, 1 remains.
         Assert.Equal(1, summary.MaintenanceWindows);
-        // 3 сирих записи, 2 унікальних ключі (Name|Kind) — дублікат перезаписаний.
+        // 3 raw records, 2 unique keys (Name|Kind) — the duplicate is overwritten.
         Assert.Equal(2, summary.BackupCheckStates);
         Assert.True(summary.AppSettingsMigrated);
         Assert.Equal(2, summary.TelegramAllowedUsers);
@@ -123,7 +124,7 @@ public sealed class MigrationRunnerTests : IAsyncLifetime
 
     private void WriteFixtures()
     {
-        // ── uptime: два місячних файли, один запис-дублікат між ними ────────
+        // ── uptime: two monthly files, one duplicate record between them ────
         File.WriteAllText(Path.Combine(_logsDir, "uptime-2026-06.json"), """
         [
           { "ServerName": "Server1", "ServerIp": "10.0.0.1", "ServerGroup": "Core",
@@ -145,19 +146,19 @@ public sealed class MigrationRunnerTests : IAsyncLifetime
         ]
         """);
 
-        // ── maintenance: одне прострочене (відфільтроване), одне активне ────
+        // ── maintenance: one expired (filtered out), one active ─────────────
         File.WriteAllText(Path.Combine(_logsDir, "maintenance.json"), """
         [
           { "ServerIp": "10.0.0.4", "TargetGroup": null, "DisplayName": "Server4",
             "From": "2020-01-01T10:00:00+03:00", "To": "2020-01-01T12:00:00+03:00",
-            "Reason": "Прострочене", "CreatedAt": "2020-01-01T10:00:00+03:00" },
+            "Reason": "Expired", "CreatedAt": "2020-01-01T10:00:00+03:00" },
           { "ServerIp": "10.0.0.5", "TargetGroup": null, "DisplayName": "Server5",
             "From": "2026-01-01T10:00:00+03:00", "To": null,
-            "Reason": "Активне без обмеження часу", "CreatedAt": "2026-01-01T10:00:00+03:00" }
+            "Reason": "Active with no time limit", "CreatedAt": "2026-01-01T10:00:00+03:00" }
         ]
         """);
 
-        // ── backups: 3 сирих записи, дублікат ключа Server1|Full ────────────
+        // ── backups: 3 raw records, duplicate key Server1|Full ──────────────
         File.WriteAllText(Path.Combine(_logsDir, "backups.json"), """
         [
           { "Name": "Server1", "Host": "server1.local", "Kind": "Full", "Outcome": "Ok",
@@ -183,7 +184,7 @@ public sealed class MigrationRunnerTests : IAsyncLifetime
         ]
         """);
 
-        // ── user_settings: 2 дозволених telegram-користувачі ─────────────────
+        // ── user_settings: 2 allowed telegram users ──────────────────────────
         File.WriteAllText(_userSettingsPath, """
         {
           "CloseToTray": true,

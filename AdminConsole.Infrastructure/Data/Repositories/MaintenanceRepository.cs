@@ -10,7 +10,7 @@ public sealed class MaintenanceRepository(AdminConsoleDbContext context)
     public async Task<IReadOnlyList<MaintenanceWindow>> LoadAllAsync(CancellationToken ct = default) =>
         await Context.MaintenanceWindows.AsNoTracking().ToListAsync(ct);
 
-    /// <summary>Remove+Add за Key — дзеркалить старе "_windows[window.Key] = window" (ConcurrentDictionary, повна заміна значення).</summary>
+    /// <summary>Remove+Add by Key — mirrors the old "_windows[window.Key] = window" (ConcurrentDictionary, full value replacement).</summary>
     public async Task UpsertAsync(MaintenanceWindow window, CancellationToken ct = default)
     {
         var existing = await Context.MaintenanceWindows
@@ -19,10 +19,10 @@ public sealed class MaintenanceRepository(AdminConsoleDbContext context)
         if (existing is not null)
             Context.MaintenanceWindows.Remove(existing);
 
-        // Тіньова властивість "WindowKey" МАЄ отримати значення ДО переходу
-        // в стан Added — DbSet.Add() одразу вимагає непорожній ключ, щоб
-        // додати запис в internal identity map (на відміну від Detached,
-        // де довільні властивості можна виставляти без обмежень).
+        // The shadow property "WindowKey" MUST be assigned BEFORE transitioning
+        // to the Added state — DbSet.Add() immediately requires a non-empty key
+        // to add the record to the internal identity map (unlike Detached,
+        // where arbitrary properties can be set without restriction).
         var entry = Context.Entry(window);
         entry.Property("WindowKey").CurrentValue = window.Key;
         entry.State = EntityState.Added;

@@ -4,8 +4,8 @@ using MediatR;
 namespace AdminConsole.Domain.Events;
 
 /// <summary>
-/// Публікується UptimeTrackerService при кожній зміні списку інцидентів.
-/// Заміна UptimeUpdatedMessage.
+/// Published by UptimeTrackerService whenever the incident list changes.
+/// Replaces UptimeUpdatedMessage.
 /// </summary>
 public sealed record UptimeUpdatedOccurred(
     IReadOnlyList<DowntimeRecord> Snapshot

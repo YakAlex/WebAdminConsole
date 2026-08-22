@@ -17,28 +17,28 @@ using Telegram.Bot.Types.ReplyMarkups;
 namespace AdminConsole.Infrastructure.Telegram;
 
 /// <summary>
-/// Telegram-бот: read-only доступ до статусу інфраструктури через кнопки.
+/// Telegram bot: read-only access to infrastructure status via buttons.
 ///
-/// T5.3: IHostedService/BackgroundService у тому самому процесі (не окремий
-/// сервіс, не HTTP-клієнт до власного API) — команди викликають
-/// GetSnapshot()/GetActiveWindows() НАПРЯМУ з Singleton-сервісів Фази 4
+/// T5.3: IHostedService/BackgroundService in the same process (not a separate
+/// service, not an HTTP client to our own API) — commands call
+/// GetSnapshot()/GetActiveWindows() DIRECTLY on the Phase 4 Singleton services
 /// (PingMonitorService, RdpMonitorService, UptimeTrackerService,
-/// MaintenanceService), той самий принцип, що й у старому WPF.
+/// MaintenanceService), the same principle as in the old WPF app.
 ///
 /// IRecipient&lt;X&gt; (WeakReferenceMessenger) → INotificationHandler&lt;XOccurred&gt;
-/// (DI-резолв MediatR, реєстрація в Program.cs — той самий Singleton-
-/// forwarding патерн, що інші багаторольові Фаза-4-сервіси).
+/// (MediatR DI resolution, registered in Program.cs — the same Singleton
+/// forwarding pattern used by the other multi-role Phase 4 services).
 ///
-/// BackupMonitorService.GetSnapshot() більше не існує — BackupMonitorJob
-/// (Hangfire, Фаза 4) не тримає довгоживучий стан між запусками. Замінено
-/// на прямий IBackupStateRepository.LoadAllAsync() через IServiceScopeFactory
-/// (Singleton → Scoped, той самий патерн). UserSettingsService.Current →
-/// IAppSettingsRepository, той самий підхід.
+/// BackupMonitorService.GetSnapshot() no longer exists — BackupMonitorJob
+/// (Hangfire, Phase 4) doesn't hold long-lived state between runs. Replaced
+/// with a direct IBackupStateRepository.LoadAllAsync() call via IServiceScopeFactory
+/// (Singleton → Scoped, same pattern). UserSettingsService.Current →
+/// IAppSettingsRepository, same approach.
 /// </summary>
 
 /// <summary>
-/// Один "екран" пагінації: ключ екрану (щоб не плутати Офлайн з Інцидентами
-/// при stale callback) + вже побудовані сторінки.
+/// One pagination "screen": the screen key (so Offline isn't confused with
+/// Incidents on a stale callback) + the already-built pages.
 /// </summary>
 internal sealed record TelegramPagedScreen(string ScreenKey, IReadOnlyList<string> Pages);
 
@@ -74,7 +74,7 @@ public sealed class TelegramBotService(
     private const string LogSource = "TelegramBot";
     private bool IsSingleTerminalServer => _terminalServers.Count == 1;
 
-    // ── Push-кеші
+    // ── Push caches
     private readonly ConcurrentDictionary<string, PingStatus>       _pingCache = new();
     private readonly ConcurrentDictionary<string, RdpSessionsPayload> _rdpCache = new();
 
@@ -90,7 +90,7 @@ public sealed class TelegramBotService(
     private Task?                    _pollingTask;
     private CancellationToken        _hostToken;
 
-    // ── INotificationHandler — Push-кеші ────────────────────────────────────
+    // ── INotificationHandler — Push caches ────────────────────────────────────
 
     public Task Handle(PingBatchResultOccurred notification, CancellationToken ct)
     {
@@ -110,17 +110,17 @@ public sealed class TelegramBotService(
         if (notification.Target != CredentialTarget.Telegram) return Task.CompletedTask;
         if (notification.Action != CredentialAction.Saved) return Task.CompletedTask;
 
-        // Не awaited тут (Handle має лишатись швидким) — фоново, з власним лог-обробленням помилок.
+        // Not awaited here (Handle must stay fast) — run in the background, with its own error logging.
         _ = Task.Run(() => RestartPollingAsync(_hostToken));
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Єдине джерело push-сповіщень про інфраструктуру. Спрацьовує ЛИШЕ на
-    /// новий, ще не бачений відкритий інцидент (!IsResolved). Відновлення
-    /// сервера — НІКОЛИ не алертиться, лише мовчки прибирається з
-    /// _knownOpenIncidents, щоб той самий сервер міг знову згенерувати push
-    /// при наступному падінні.
+    /// Single source of infrastructure push notifications. Fires ONLY for a
+    /// new, not-yet-seen open incident (!IsResolved). A server recovering
+    /// is NEVER alerted on — it's just silently removed from
+    /// _knownOpenIncidents, so the same server can generate another push
+    /// the next time it goes down.
     /// </summary>
     public Task Handle(UptimeUpdatedOccurred notification, CancellationToken ct)
     {
@@ -145,9 +145,9 @@ public sealed class TelegramBotService(
     {
         if (_client is null) return;
 
-        string text = $"🔴 СЕРВЕР ОФЛАЙН\n" +
+        string text = $"🔴 SERVER OFFLINE\n" +
                       $"{record.ServerName} ({record.ServerIp})\n" +
-                      $"Початок інциденту: {record.FellAt:dd.MM HH:mm:ss}";
+                      $"Incident started: {record.FellAt:dd.MM HH:mm:ss}";
 
         var recipients = new List<long>();
         if (access.PrimaryAdminChatId is long adminId) recipients.Add(adminId);
@@ -161,7 +161,7 @@ public sealed class TelegramBotService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "TelegramBotService: не вдалось надіслати alert у chat_id={ChatId}", chatId);
+                logger.LogWarning(ex, "TelegramBotService: failed to send alert to chat_id={ChatId}", chatId);
             }
         }
     }
@@ -177,9 +177,9 @@ public sealed class TelegramBotService(
         if (_client is null) return;
 
         string icon = message.Current == BackupOutcome.Missing ? "🚫" : "⏰";
-        string text = $"{icon} БЕКАП {message.Current.ToString().ToUpperInvariant()}\n" +
+        string text = $"{icon} BACKUP {message.Current.ToString().ToUpperInvariant()}\n" +
                       $"{message.ServerName} ({message.Kind})\n" +
-                      $"Було: {message.Previous}";
+                      $"Was: {message.Previous}";
 
         var recipients = new List<long>();
         if (access.PrimaryAdminChatId is long adminId) recipients.Add(adminId);
@@ -193,7 +193,7 @@ public sealed class TelegramBotService(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "TelegramBotService: не вдалось надіслати backup alert у chat_id={ChatId}", chatId);
+                logger.LogWarning(ex, "TelegramBotService: failed to send backup alert to chat_id={ChatId}", chatId);
             }
         }
     }
@@ -204,11 +204,11 @@ public sealed class TelegramBotService(
     {
         _hostToken = stoppingToken;
 
-        // Аудит Зона 1 (2026-08-22): InitializeAsync/RestartPollingAsync раніше
-        // виконувались без жодного try/catch на цьому рівні — RestartPollingAsync
-        // усередині має try/finally (звільняє лок), АЛЕ без catch, тож виняток
-        // (напр. з credentials.HasTelegramCredentials/GetTelegramToken) летів
-        // далі необхопленим і клав увесь хост.
+        // Audit Zone 1 (2026-08-22): InitializeAsync/RestartPollingAsync previously
+        // ran with no try/catch at all at this level — RestartPollingAsync has a
+        // try/finally internally (releases the lock), BUT no catch, so an exception
+        // (e.g. from credentials.HasTelegramCredentials/GetTelegramToken) escaped
+        // uncaught and took down the whole host.
         try
         {
             await access.InitializeAsync(stoppingToken);
@@ -219,7 +219,7 @@ public sealed class TelegramBotService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "TelegramBotService: не вдалось завантажити токен.");
+                logger.LogError(ex, "TelegramBotService: failed to load the token.");
             }
 
             foreach (var r in uptimeTracker.GetSnapshot().Where(r => !r.IsResolved))
@@ -230,7 +230,7 @@ public sealed class TelegramBotService(
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "TelegramBotService: критична помилка старту — бот не запущено, застосунок продовжує працювати.");
+            logger.LogError(ex, "TelegramBotService: fatal startup error — bot not started, application continues running.");
         }
 
         try
@@ -247,7 +247,7 @@ public sealed class TelegramBotService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "TelegramBotService: помилка під час зупинки бота.");
+            logger.LogError(ex, "TelegramBotService: error while stopping the bot.");
         }
     }
 
@@ -261,7 +261,7 @@ public sealed class TelegramBotService(
             if (!credentials.HasTelegramCredentials)
             {
                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                    "Telegram bot token відсутній — бот не запущений."), hostToken);
+                    "Telegram bot token missing — bot not started."), hostToken);
                 return;
             }
 
@@ -272,12 +272,12 @@ public sealed class TelegramBotService(
             {
                 var me = await client.GetMe();
                 await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                    $"Telegram bot запущено: @{me.Username}"), hostToken);
+                    $"Telegram bot started: @{me.Username}"), hostToken);
             }
             catch (Exception ex)
             {
                 await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
-                    $"Не вдалося підключитись до Telegram API: {ex.Message}"), hostToken);
+                    $"Failed to connect to the Telegram API: {ex.Message}"), hostToken);
                 return;
             }
 
@@ -298,7 +298,7 @@ public sealed class TelegramBotService(
         _pollingCts.Cancel();
         try { if (_pollingTask is not null) await _pollingTask; }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { logger.LogWarning(ex, "TelegramBotService: помилка зупинки полінгу."); }
+        catch (Exception ex) { logger.LogWarning(ex, "TelegramBotService: error stopping the polling loop."); }
 
         _pollingCts.Dispose();
         _pollingCts  = null;
@@ -306,7 +306,7 @@ public sealed class TelegramBotService(
         _client      = null;
     }
 
-    // ── Ручний long-polling цикл ──────────────────────────────────────────────
+    // ── Manual long-polling loop ──────────────────────────────────────────────
 
     private async Task PollLoopAsync(ITelegramBotClient client, CancellationToken ct)
     {
@@ -321,7 +321,7 @@ public sealed class TelegramBotService(
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "TelegramBotService: помилка отримання updates.");
+                logger.LogWarning(ex, "TelegramBotService: error fetching updates.");
                 try { await Task.Delay(3000, ct); } catch (OperationCanceledException) { break; }
                 continue;
             }
@@ -332,7 +332,7 @@ public sealed class TelegramBotService(
                 try { await HandleUpdateAsync(client, update, ct); }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "TelegramBotService: помилка обробки update {Id}", update.Id);
+                    logger.LogError(ex, "TelegramBotService: error handling update {Id}", update.Id);
                 }
             }
         }
@@ -346,7 +346,7 @@ public sealed class TelegramBotService(
             await HandleCallbackQueryAsync(client, update.CallbackQuery, ct);
     }
 
-    // ── Текстові команди ──────────────────────────────────────────────────────
+    // ── Text commands ──────────────────────────────────────────────────────
 
     private async Task HandleMessageAsync(ITelegramBotClient client, Message message, CancellationToken ct)
     {
@@ -357,7 +357,7 @@ public sealed class TelegramBotService(
         if (!access.CheckRateLimit(chatId))
         {
             if (access.IsAllowed(chatId))
-                await client.SendMessage(chatId, "⏳ Забагато запитів, зачекайте хвилину.", cancellationToken: ct);
+                await client.SendMessage(chatId, "⏳ Too many requests, please wait a minute.", cancellationToken: ct);
             return;
         }
 
@@ -382,14 +382,14 @@ public sealed class TelegramBotService(
 
         switch (text)
         {
-            case "📊 Статус":            await SendStatusAsync(client, chatId, ct); return;
-            case "🔴 Офлайн":            await SendOfflineListAsync(client, chatId, ct); return;
-            case "⏱ Інциденти":          await SendIncidentsListAsync(client, chatId, ct); return;
+            case "📊 Status":            await SendStatusAsync(client, chatId, ct); return;
+            case "🔴 Offline":           await SendOfflineListAsync(client, chatId, ct); return;
+            case "⏱ Incidents":          await SendIncidentsListAsync(client, chatId, ct); return;
             case "🖥 RDP":               await SendRdpPickerAsync(client, chatId, ct); return;
-            case "🔧 Обслуговування":     await SendMaintenanceListAsync(client, chatId, ct); return;
-            case "🏓 Пінг":              await SendPingNowAsync(client, chatId, ct); return;
-            case "💾 Бекапи":            await SendBackupsListAsync(client, chatId, ct); return;
-            case "👥 Користувачі":
+            case "🔧 Maintenance":       await SendMaintenanceListAsync(client, chatId, ct); return;
+            case "🏓 Ping":              await SendPingNowAsync(client, chatId, ct); return;
+            case "💾 Backups":           await SendBackupsListAsync(client, chatId, ct); return;
+            case "👥 Users":
                 if (access.IsPrimaryAdmin(chatId)) await SendUsersListAsync(client, chatId, ct);
                 return;
         }
@@ -413,7 +413,7 @@ public sealed class TelegramBotService(
         await access.RefreshUsernameAsync(chatId, username, ct);
         if (access.IsAllowed(chatId))
         {
-            await client.SendMessage(chatId, "Ви вже маєте доступ. /help — список команд.",
+            await client.SendMessage(chatId, "You already have access. /help — list of commands.",
                 replyMarkup: BuildMainMenu(chatId), cancellationToken: ct);
             return;
         }
@@ -421,8 +421,8 @@ public sealed class TelegramBotService(
         if (!access.IsPrimaryAdminClaimed)
         {
             await client.SendMessage(chatId,
-                "Бот ще не має Primary Admin. Якщо це ви — введіть /claim_admin <код>, " +
-                "згенерований у розділі Налаштування → Telegram.",
+                "The bot doesn't have a Primary Admin yet. If that's you — enter /claim_admin <code>, " +
+                "generated in Settings → Telegram.",
                 cancellationToken: ct);
             return;
         }
@@ -435,20 +435,20 @@ public sealed class TelegramBotService(
             {
                 int minutesLeft = (int)Math.Ceiling(cooldown.TotalMinutes);
                 await client.SendMessage(chatId,
-                    $"⏳ Ваш попередній запит було відхилено. Спробуйте ще раз через {minutesLeft} хв.",
+                    $"⏳ Your previous request was denied. Try again in {minutesLeft} min.",
                     cancellationToken: ct);
             }
             else
             {
                 await client.SendMessage(chatId,
-                    "⏳ Забагато очікуючих запитів доступу зараз. Спробуйте пізніше.",
+                    "⏳ Too many pending access requests right now. Try again later.",
                     cancellationToken: ct);
             }
             return;
         }
 
         var request = result.Request;
-        await client.SendMessage(chatId, "Запит на доступ надіслано адміністратору. Очікуйте підтвердження.",
+        await client.SendMessage(chatId, "Access request sent to the administrator. Awaiting approval.",
             cancellationToken: ct);
 
         if (access.PrimaryAdminChatId is long adminId)
@@ -457,13 +457,13 @@ public sealed class TelegramBotService(
             {
                 new[]
                 {
-                    InlineKeyboardButton.WithCallbackData("✅ Дозволити", $"approve:{request.Id}"),
-                    InlineKeyboardButton.WithCallbackData("❌ Відхилити", $"deny:{request.Id}")
+                    InlineKeyboardButton.WithCallbackData("✅ Approve", $"approve:{request.Id}"),
+                    InlineKeyboardButton.WithCallbackData("❌ Deny", $"deny:{request.Id}")
                 }
             });
 
             await client.SendMessage(adminId,
-                $"🔔 Новий запит доступу: @{username} (chat_id={chatId})",
+                $"🔔 New access request: @{username} (chat_id={chatId})",
                 replyMarkup: keyboard, cancellationToken: ct);
         }
     }
@@ -473,38 +473,38 @@ public sealed class TelegramBotService(
         var parts = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 2)
         {
-            await client.SendMessage(chatId, "Використання: /claim_admin <код>", cancellationToken: ct);
+            await client.SendMessage(chatId, "Usage: /claim_admin <code>", cancellationToken: ct);
             return;
         }
 
         bool success = await access.TryClaimAdminAsync(parts[1], chatId, ct);
         await client.SendMessage(chatId,
             success
-                ? "✅ Ви прив'язані як Primary Admin. /help — список команд."
-                : "❌ Невірний або протермінований код.",
+                ? "✅ You are now bound as Primary Admin. /help — list of commands."
+                : "❌ Invalid or expired code.",
             replyMarkup: success ? BuildMainMenu(chatId) : null,
             cancellationToken: ct);
     }
 
-    // ── Inline callback (кнопки) ──────────────────────────────────────────────
+    // ── Inline callback (buttons) ──────────────────────────────────────────────
 
     private async Task HandleCallbackQueryAsync(ITelegramBotClient client, CallbackQuery query, CancellationToken ct)
     {
         if (query.Message is null)
         {
             logger.LogWarning(
-                "TelegramBotService: CallbackQuery без Message (id={QueryId}, data={Data}) — " +
-                "ймовірно, застаріле/видалене повідомлення.", query.Id, query.Data);
+                "TelegramBotService: CallbackQuery with no Message (id={QueryId}, data={Data}) — " +
+                "likely a stale/deleted message.", query.Id, query.Data);
 
             try
             {
                 await client.AnswerCallbackQuery(query.Id,
-                    "⚠️ Це повідомлення застаріло, відкрийте екран знову через меню.",
+                    "⚠️ This message is stale, reopen the screen from the menu.",
                     cancellationToken: ct);
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "TelegramBotService: не вдалось відповісти на застарілий callback.");
+                logger.LogWarning(ex, "TelegramBotService: failed to answer a stale callback.");
             }
 
             return;
@@ -516,7 +516,7 @@ public sealed class TelegramBotService(
 
         if (!access.CheckRateLimit(chatId))
         {
-            await client.AnswerCallbackQuery(query.Id, "Забагато запитів.", cancellationToken: ct);
+            await client.AnswerCallbackQuery(query.Id, "Too many requests.", cancellationToken: ct);
             return;
         }
 
@@ -524,7 +524,7 @@ public sealed class TelegramBotService(
         {
             if (!access.IsPrimaryAdmin(chatId))
             {
-                await client.AnswerCallbackQuery(query.Id, "Немає прав.", cancellationToken: ct);
+                await client.AnswerCallbackQuery(query.Id, "No permission.", cancellationToken: ct);
                 return;
             }
 
@@ -535,22 +535,22 @@ public sealed class TelegramBotService(
 
             if (!ok)
             {
-                await client.AnswerCallbackQuery(query.Id, "Запит вже неактуальний.", cancellationToken: ct);
-                await client.EditMessageText(chatId, messageId, "⚠️ Цей запит вже опрацьовано раніше.",
+                await client.AnswerCallbackQuery(query.Id, "This request is no longer valid.", cancellationToken: ct);
+                await client.EditMessageText(chatId, messageId, "⚠️ This request has already been handled.",
                     cancellationToken: ct);
                 return;
             }
 
             await client.AnswerCallbackQuery(query.Id,
-                isApprove ? "Дозволено ✅" : "Відхилено ❌", cancellationToken: ct);
+                isApprove ? "Approved ✅" : "Denied ❌", cancellationToken: ct);
             await client.EditMessageText(chatId, messageId,
-                isApprove ? "✅ Доступ дозволено." : "❌ Доступ відхилено.", cancellationToken: ct);
+                isApprove ? "✅ Access approved." : "❌ Access denied.", cancellationToken: ct);
             return;
         }
 
         if (!access.IsAllowed(chatId))
         {
-            await client.AnswerCallbackQuery(query.Id, "Немає доступу.", cancellationToken: ct);
+            await client.AnswerCallbackQuery(query.Id, "No access.", cancellationToken: ct);
             return;
         }
 
@@ -562,7 +562,7 @@ public sealed class TelegramBotService(
             string? ip      = _serverPicker.Resolve(shortId);
             if (ip is null)
             {
-                await client.EditMessageText(chatId, messageId, "⚠️ Список застарів, відкрийте /rdp знову.", cancellationToken: ct);
+                await client.EditMessageText(chatId, messageId, "⚠️ List is stale, reopen /rdp.", cancellationToken: ct);
                 return;
             }
             await EditWithRdpSessionsAsync(client, chatId, messageId, ip, ct);
@@ -583,7 +583,7 @@ public sealed class TelegramBotService(
             if (!access.IsPrimaryAdmin(chatId)) return;
             long targetChatId = long.Parse(data.Split(':')[1]);
             await access.RevokeAsync(targetChatId, ct);
-            await client.EditMessageText(chatId, messageId, $"🚫 Доступ для chat_id={targetChatId} відкликано.", cancellationToken: ct);
+            await client.EditMessageText(chatId, messageId, $"🚫 Access for chat_id={targetChatId} revoked.", cancellationToken: ct);
         }
         else if (data.StartsWith("page:"))
         {
@@ -594,7 +594,7 @@ public sealed class TelegramBotService(
             if (!_pagedScreens.TryGetValue(chatId, out var screen) || screen.ScreenKey != screenKey)
             {
                 await client.EditMessageText(chatId, messageId,
-                    "⚠️ Список застарів, відкрийте екран знову через меню.", cancellationToken: ct);
+                    "⚠️ List is stale, reopen the screen from the menu.", cancellationToken: ct);
                 return;
             }
 
@@ -605,33 +605,33 @@ public sealed class TelegramBotService(
         }
     }
 
-    // ── Побудова відповідей ───────────────────────────────────────────────────
+    // ── Building responses ───────────────────────────────────────────────────
 
     private ReplyKeyboardMarkup BuildMainMenu(long chatId)
     {
         var rows = new List<KeyboardButton[]>
         {
-            new KeyboardButton[] { "📊 Статус", "🔴 Офлайн" },
-            new KeyboardButton[] { "⏱ Інциденти", "🖥 RDP" },
-            new KeyboardButton[] { "🔧 Обслуговування", "🏓 Пінг" }
+            new KeyboardButton[] { "📊 Status", "🔴 Offline" },
+            new KeyboardButton[] { "⏱ Incidents", "🖥 RDP" },
+            new KeyboardButton[] { "🔧 Maintenance", "🏓 Ping" }
         };
 
         rows.Add(access.IsPrimaryAdmin(chatId)
-            ? new KeyboardButton[] { "💾 Бекапи", "👥 Користувачі" }
-            : new KeyboardButton[] { "💾 Бекапи" });
+            ? new KeyboardButton[] { "💾 Backups", "👥 Users" }
+            : new KeyboardButton[] { "💾 Backups" });
 
         return new ReplyKeyboardMarkup(rows) { ResizeKeyboard = true };
     }
 
     private async Task SendHelpAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
-        string help = "Доступні команди:\n" +
-                      "/status — загальний огляд\n" +
-                      "/rdp — RDP-сесії по серверах\n" +
-                      "/ping — пінгувати всі сервери прямо зараз (реальний час)\n" +
-                      "/backups — статус перевірок бекапів (Full/Diff)\n";
+        string help = "Available commands:\n" +
+                      "/status — overall overview\n" +
+                      "/rdp — RDP sessions per server\n" +
+                      "/ping — ping all servers right now (real time)\n" +
+                      "/backups — backup check status (Full/Diff)\n";
         if (access.IsPrimaryAdmin(chatId))
-            help += "/users — керування доступом (тільки Primary Admin)\n";
+            help += "/users — manage access (Primary Admin only)\n";
 
         await client.SendMessage(chatId, help, replyMarkup: BuildMainMenu(chatId), cancellationToken: ct);
     }
@@ -646,19 +646,19 @@ public sealed class TelegramBotService(
         => await client.EditMessageText(chatId, messageId, await BuildStatusTextAsync(ct),
             replyMarkup: BuildStatusKeyboard(), cancellationToken: ct);
 
-    // ── /ping — пряме опитування всіх серверів у реальному часі ──────────────
+    // ── /ping — direct real-time poll of all servers ──────────────
 
     private async Task SendPingNowAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
         if (!access.TryConsumePingCooldown(chatId, out var remaining))
         {
             await client.SendMessage(chatId,
-                $"⏳ Зачекайте ще {Math.Ceiling(remaining.TotalSeconds)}с перед наступним пінгом.",
+                $"⏳ Please wait {Math.Ceiling(remaining.TotalSeconds)}s before the next ping.",
                 cancellationToken: ct);
             return;
         }
 
-        var placeholder = await client.SendMessage(chatId, "🏓 Пінгую всі сервери…", cancellationToken: ct);
+        var placeholder = await client.SendMessage(chatId, "🏓 Pinging all servers…", cancellationToken: ct);
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         IReadOnlyList<PingResult> results;
@@ -668,9 +668,9 @@ public sealed class TelegramBotService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "TelegramBotService: помилка виконання /ping.");
+            logger.LogWarning(ex, "TelegramBotService: error running /ping.");
             await client.EditMessageText(chatId, placeholder.MessageId,
-                "❌ Помилка під час пінгування серверів.", cancellationToken: ct);
+                "❌ Error while pinging servers.", cancellationToken: ct);
             return;
         }
         sw.Stop();
@@ -684,7 +684,7 @@ public sealed class TelegramBotService(
         int online  = results.Count(r => r.Status == PingStatus.Online);
         int offline = results.Count(r => r.Status == PingStatus.Offline);
 
-        string header = $"🏓 Результат пінгу ({results.Count} серв., {sw.Elapsed.TotalSeconds:F1}с)\n" +
+        string header = $"🏓 Ping results ({results.Count} servers, {sw.Elapsed.TotalSeconds:F1}s)\n" +
                          $"✅ {online} online   🔴 {offline} offline\n\n";
 
         var pages = TelegramTextChunker.BuildPages(lines, header);
@@ -707,7 +707,7 @@ public sealed class TelegramBotService(
                 _                  => "⏳"
             };
             string latency = r.Status == PingStatus.Online && r.LatencyMs is not null
-                ? $" — {r.LatencyMs} мс"
+                ? $" — {r.LatencyMs} ms"
                 : string.Empty;
 
             yield return $"{icon} {r.Name} ({r.IP}){latency}";
@@ -722,24 +722,24 @@ public sealed class TelegramBotService(
 
         int openIncidents = uptimeTracker.GetSnapshot().Count(r => !r.IsResolved);
 
-        // Аудит-фікс п.4/п.5: раніше рахувалось напряму з rdpMonitor.GetSnapshot()
-        // без перевірки тумблера — /status показував останню відому (застарілу)
-        // кількість RDP-сесій навіть після вимкнення RDP-моніторингу в Settings.
-        // Той самий клас бага, що на Overview для Zabbix — тут же той самий
-        // патерн перевірки, що вже є в SendRdpPickerAsync/SendBackupsListAsync.
+        // Audit fix items 4/5: this used to be counted directly from rdpMonitor.GetSnapshot()
+        // without checking the toggle — /status showed the last known (stale)
+        // RDP session count even after RDP monitoring was disabled in Settings.
+        // Same class of bug as on Overview for Zabbix — same check
+        // pattern already used in SendRdpPickerAsync/SendBackupsListAsync.
         bool rdpEnabled = (await GetAppSettingsAsync(ct)).RdpMonitoringEnabled;
         string rdpLine = rdpEnabled
-            ? $"🖥 RDP-сесій (активних): {rdpMonitor.GetSnapshot().Values.Sum(list => list.Count(s => s.State == RdpSessionState.Active))}"
-            : "🖥 RDP-сесій: моніторинг вимкнено в Settings";
+            ? $"🖥 RDP sessions (active): {rdpMonitor.GetSnapshot().Values.Sum(list => list.Count(s => s.State == RdpSessionState.Active))}"
+            : "🖥 RDP sessions: monitoring disabled in Settings";
 
         int activeMaintenance = maintenance.GetActiveWindows().Count;
 
-        return $"📊 Статус інфраструктури\n" +
-               $"✅ Онлайн: {online}\n" +
-               $"🔴 Офлайн: {offline}\n" +
-               $"⏱ Відкритих інцидентів: {openIncidents}\n" +
+        return $"📊 Infrastructure status\n" +
+               $"✅ Online: {online}\n" +
+               $"🔴 Offline: {offline}\n" +
+               $"⏱ Open incidents: {openIncidents}\n" +
                $"{rdpLine}\n" +
-               $"🔧 Активних вікон обслуговування: {activeMaintenance}";
+               $"🔧 Active maintenance windows: {activeMaintenance}";
     }
 
     private static InlineKeyboardMarkup BuildStatusKeyboard() =>
@@ -749,7 +749,7 @@ public sealed class TelegramBotService(
     {
         if (!(await GetAppSettingsAsync(ct)).RdpMonitoringEnabled)
         {
-            await client.SendMessage(chatId, "🖥 Моніторинг RDP-сесій зараз вимкнено в Settings.\n", cancellationToken: ct);
+            await client.SendMessage(chatId, "🖥 RDP session monitoring is currently disabled in Settings.\n", cancellationToken: ct);
             return;
         }
 
@@ -759,7 +759,7 @@ public sealed class TelegramBotService(
             return;
         }
 
-        await client.SendMessage(chatId, "Оберіть сервер:",
+        await client.SendMessage(chatId, "Choose a server:",
             replyMarkup: BuildRdpPickerKeyboard(), cancellationToken: ct);
     }
 
@@ -770,10 +770,10 @@ public sealed class TelegramBotService(
         var sessions = snapshot.TryGetValue(serverIp, out var list) ? list : [];
 
         var lines = sessions.Count == 0
-            ? new List<string> { "Немає активних сесій." }
+            ? new List<string> { "No active sessions." }
             : sessions.Select(s => $"{s.Username} — {s.State} (logon: {s.LogonTime})").ToList();
 
-        var pages = TelegramTextChunker.BuildPages(lines, header: "🖥 Сесії:\n");
+        var pages = TelegramTextChunker.BuildPages(lines, header: "🖥 Sessions:\n");
         _pagedScreens[chatId] = new TelegramPagedScreen("rdp_direct", pages);
 
         await client.SendMessage(chatId, pages[0],
@@ -786,11 +786,11 @@ public sealed class TelegramBotService(
         if (!(await GetAppSettingsAsync(ct)).RdpMonitoringEnabled)
         {
             await client.EditMessageText(chatId, messageId,
-                "🖥 Моніторинг RDP-сесій зараз вимкнено в Settings.", cancellationToken: ct);
+                "🖥 RDP session monitoring is currently disabled in Settings.", cancellationToken: ct);
             return;
         }
 
-        await client.EditMessageText(chatId, messageId, "Оберіть сервер:",
+        await client.EditMessageText(chatId, messageId, "Choose a server:",
             replyMarkup: BuildRdpPickerKeyboard(), cancellationToken: ct);
     }
 
@@ -813,7 +813,7 @@ public sealed class TelegramBotService(
         if (!(await GetAppSettingsAsync(ct)).RdpMonitoringEnabled)
         {
             await client.EditMessageText(chatId, messageId,
-                "🖥 Моніторинг RDP-сесій зараз вимкнено в Settings.", cancellationToken: ct);
+                "🖥 RDP session monitoring is currently disabled in Settings.", cancellationToken: ct);
             return;
         }
 
@@ -821,16 +821,16 @@ public sealed class TelegramBotService(
         var sessions = snapshot.TryGetValue(serverIp, out var list) ? list : [];
 
         var lines = sessions.Count == 0
-            ? new List<string> { "Немає активних сесій." }
+            ? new List<string> { "No active sessions." }
             : sessions.Select(s => $"{s.Username} — {s.State} (logon: {s.LogonTime})").ToList();
 
-        var pages = TelegramTextChunker.BuildPages(lines, header: "🖥 Сесії:\n");
+        var pages = TelegramTextChunker.BuildPages(lines, header: "🖥 Sessions:\n");
 
         var keyboard = IsSingleTerminalServer
             ? null
             : new InlineKeyboardMarkup(new[]
             {
-                new[] { InlineKeyboardButton.WithCallbackData("◀ Назад", "back:rdp_picker") }
+                new[] { InlineKeyboardButton.WithCallbackData("◀ Back", "back:rdp_picker") }
             });
 
         await client.EditMessageText(chatId, messageId, pages[0], replyMarkup: keyboard, cancellationToken: ct);
@@ -842,7 +842,7 @@ public sealed class TelegramBotService(
 
         if (users.Count == 0)
         {
-            await client.SendMessage(chatId, "👥 Дозволених користувачів немає.", cancellationToken: ct);
+            await client.SendMessage(chatId, "👥 No allowed users.", cancellationToken: ct);
             return;
         }
 
@@ -851,11 +851,11 @@ public sealed class TelegramBotService(
                 $"🚫 @{u.Username} ({u.ChatId})", $"revoke:{u.ChatId}") })
             .ToArray();
 
-        await client.SendMessage(chatId, "👥 Дозволені користувачі:",
+        await client.SendMessage(chatId, "👥 Allowed users:",
             replyMarkup: new InlineKeyboardMarkup(rows), cancellationToken: ct);
     }
 
-    // ── Офлайн / Інциденти / Обслуговування (з пагінацією) ──────────────────
+    // ── Offline / Incidents / Maintenance (with pagination) ──────────────────
 
     private async Task SendOfflineListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
@@ -866,9 +866,9 @@ public sealed class TelegramBotService(
             .Select(s => $"🔴 {s.Name} ({s.IP}) — {s.Group}")
             .ToList();
 
-        if (lines.Count == 0) lines.Add("Немає офлайн-серверів. ✅");
+        if (lines.Count == 0) lines.Add("No offline servers. ✅");
 
-        await SendPagedScreenAsync(client, chatId, "offline", "🔴 Офлайн-сервери:\n", lines, ct);
+        await SendPagedScreenAsync(client, chatId, "offline", "🔴 Offline servers:\n", lines, ct);
     }
 
     private async Task SendIncidentsListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
@@ -879,12 +879,12 @@ public sealed class TelegramBotService(
             .ToList();
 
         var lines = openIncidents
-            .Select(r => $"⏱ {r.ServerName} ({r.ServerIp})\n   Впав: {r.FellAt:dd.MM HH:mm} — триває {r.DurationDisplay}")
+            .Select(r => $"⏱ {r.ServerName} ({r.ServerIp})\n   Went down: {r.FellAt:dd.MM HH:mm} — ongoing for {r.DurationDisplay}")
             .ToList();
 
-        if (lines.Count == 0) lines.Add("Відкритих інцидентів немає. ✅");
+        if (lines.Count == 0) lines.Add("No open incidents. ✅");
 
-        await SendPagedScreenAsync(client, chatId, "incidents", "⏱ Відкриті інциденти:\n", lines, ct);
+        await SendPagedScreenAsync(client, chatId, "incidents", "⏱ Open incidents:\n", lines, ct);
     }
 
     private async Task SendMaintenanceListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
@@ -895,26 +895,26 @@ public sealed class TelegramBotService(
 
         var lines = windows
             .Select(w => $"- {w.DisplayName}\n" +
-                         $"   {(string.IsNullOrWhiteSpace(w.Reason) ? "Без причини" : w.Reason)}\n" +
-                         $"   {(w.To is { } to ? $"До {to.ToLocalTime():dd.MM HH:mm}." : "без обмеження часу.")}")
+                         $"   {(string.IsNullOrWhiteSpace(w.Reason) ? "No reason given" : w.Reason)}\n" +
+                         $"   {(w.To is { } to ? $"Until {to.ToLocalTime():dd.MM HH:mm}." : "no time limit.")}")
             .ToList();
 
-        if (lines.Count == 0) lines.Add("Активних вікон обслуговування немає.");
+        if (lines.Count == 0) lines.Add("No active maintenance windows.");
 
-        await SendPagedScreenAsync(client, chatId, "maintenance", "🔧 Обслуговування:\n", lines, ct);
+        await SendPagedScreenAsync(client, chatId, "maintenance", "🔧 Maintenance:\n", lines, ct);
     }
 
     /// <summary>
-    /// Backup Verification: живий знімок напряму з IBackupStateRepository
-    /// (не GetSnapshot() — BackupMonitorJob, Hangfire, не тримає стан між
-    /// запусками; дані ті самі, просто джерело — БД, а не in-memory кеш).
+    /// Backup Verification: a live snapshot straight from IBackupStateRepository
+    /// (not GetSnapshot() — BackupMonitorJob, Hangfire, doesn't hold state between
+    /// runs; the data is the same, just the source is the DB rather than an in-memory cache).
     /// </summary>
     private async Task SendBackupsListAsync(ITelegramBotClient client, long chatId, CancellationToken ct)
     {
         if (!(await GetAppSettingsAsync(ct)).BackupMonitoringEnabled)
         {
             await client.SendMessage(chatId,
-                "💾 Backup-моніторинг зараз вимкнено в Settings.\nДані про стан бекапів не оновлюються.",
+                "💾 Backup monitoring is currently disabled in Settings.\nBackup status data is not being updated.",
                 cancellationToken: ct);
             return;
         }
@@ -936,7 +936,7 @@ public sealed class TelegramBotService(
                 string maintenanceText  = underMaintenance ? "\n            [Maintenance]" : string.Empty;
 
                 string statusDisplay = s.Outcome == BackupOutcome.Ok
-                    ? (s.LastConfirmedAt is { } at ? at.ToLocalTime().ToString("dd.MM HH:mm") : "Невідомо")
+                    ? (s.LastConfirmedAt is { } at ? at.ToLocalTime().ToString("dd.MM HH:mm") : "Unknown")
                     : s.Outcome.ToString().ToUpper();
 
                 string kindTag = s.Kind == BackupKind.Diff ? " [Diff]" : string.Empty;
@@ -946,9 +946,9 @@ public sealed class TelegramBotService(
             .ToList();
 
         if (lines.Count == 0)
-            lines.Add("Перевірки бекапів не сконфігуровано (BackupChecks у appsettings.json).");
+            lines.Add("No backup checks configured (BackupChecks in appsettings.json).");
 
-        await SendPagedScreenAsync(client, chatId, "backups", "💾 Статус бекапів:\n", lines, ct);
+        await SendPagedScreenAsync(client, chatId, "backups", "💾 Backup status:\n", lines, ct);
     }
 
     private static string BackupIcon(BackupOutcome outcome) => outcome switch
@@ -980,15 +980,15 @@ public sealed class TelegramBotService(
         var row = new List<InlineKeyboardButton>();
 
         if (pageIndex > 0)
-            row.Add(InlineKeyboardButton.WithCallbackData("◀ Назад", $"page:{screenKey}:{pageIndex - 1}"));
+            row.Add(InlineKeyboardButton.WithCallbackData("◀ Back", $"page:{screenKey}:{pageIndex - 1}"));
 
         if (pageIndex < pageCount - 1)
-            row.Add(InlineKeyboardButton.WithCallbackData("Далі ▶", $"page:{screenKey}:{pageIndex + 1}"));
+            row.Add(InlineKeyboardButton.WithCallbackData("Next ▶", $"page:{screenKey}:{pageIndex + 1}"));
 
         return new InlineKeyboardMarkup(new[] { row.ToArray() });
     }
 
-    // ── Scoped-доступ до Phase 2 репозиторіїв (Singleton → Scoped) ──────────
+    // ── Scoped access to Phase 2 repositories (Singleton → Scoped) ──────────
 
     private async Task<AppSettings> GetAppSettingsAsync(CancellationToken ct)
     {

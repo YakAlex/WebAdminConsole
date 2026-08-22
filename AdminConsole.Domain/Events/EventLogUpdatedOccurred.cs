@@ -4,9 +4,9 @@ using MediatR;
 namespace AdminConsole.Domain.Events;
 
 /// <summary>
-/// Публікується EventLogService після кожного зчитування нових записів.
-/// Несе повний список заміни — підписник очищає і наповнює наново.
-/// Заміна EventLogUpdatedMessage.
+/// Published by EventLogService after every read of new entries.
+/// Carries a full replacement list — the subscriber clears and repopulates.
+/// Replaces EventLogUpdatedMessage.
 /// </summary>
 public sealed record EventLogUpdatedOccurred(
     IReadOnlyList<EventLogEntry> Entries

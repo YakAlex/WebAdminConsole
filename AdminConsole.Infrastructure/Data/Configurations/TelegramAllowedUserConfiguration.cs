@@ -11,9 +11,9 @@ public sealed class TelegramAllowedUserConfiguration : IEntityTypeConfiguration<
         builder.ToTable("TelegramAllowedUsers");
         builder.HasKey(u => u.ChatId);
 
-        // ChatId приходить ЗЗОВНІ від Telegram (не сурогатний ключ) — без
-        // цього EF Core за конвенцією позначив би єдиний integer PK як
-        // autoincrement і намагався б генерувати власні значення.
+        // ChatId comes from OUTSIDE, from Telegram (not a surrogate key) — without
+        // this, EF Core would by convention mark the sole integer PK as
+        // autoincrement and try to generate its own values.
         builder.Property(u => u.ChatId).ValueGeneratedNever();
     }
 }

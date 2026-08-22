@@ -6,9 +6,9 @@ namespace AdminConsole.Api.Controllers;
 
 /// <summary>
 /// GET /api/logs?take=1000&amp;before={ts}&amp;after={ts}&amp;search={text} —
-/// сторінка AppLogEntries, найновіші перші. Заміна "хвоста найновішого
-/// app-*.log" — просто ORDER BY Timestamp DESC LIMIT :take в SQL (T3.9,
-/// T4.13). before/after/search — Крок 6 (#10): діапазон дат + пошук.
+/// paginated AppLogEntries, newest first. Replaces "tailing the newest
+/// app-*.log" — just an ORDER BY Timestamp DESC LIMIT :take in SQL (T3.9,
+/// T4.13). before/after/search — Step 6 (#10): date range + search.
 /// </summary>
 public sealed class LogsController(IAppLogRepository repository) : AdminConsoleControllerBase
 {

@@ -10,12 +10,13 @@ using Microsoft.Extensions.Options;
 namespace AdminConsole.Tests.Monitoring;
 
 /// <summary>
-/// T4.15 — юніт-тести анти-флапінгу BackupMonitorJob. Женемо джобу через
-/// кілька реальних циклів проти файлів у тимчасовій теці (BackupCheckEvaluator
-/// не має інтерфейсу для мокання — Stage A/B зроблений як реальна файлова
-/// перевірка, тому це найпряміший спосіб перевірити саме анти-флапінг-логіку
-/// джоби, а не сам файловий Stage A/B, який уже покритий власною логікою
-/// в BackupCheckEvaluator).
+/// T4.15 — unit tests for BackupMonitorJob's anti-flapping logic. Runs the
+/// job through several real cycles against files in a temp directory
+/// (BackupCheckEvaluator has no mockable interface — Stage A/B is
+/// implemented as a real file check, so this is the most direct way to test
+/// the job's anti-flapping logic specifically, as opposed to the file Stage
+/// A/B itself, which is already covered by its own tests in
+/// BackupCheckEvaluator).
 /// </summary>
 public sealed class BackupMonitorJobTests : IAsyncLifetime
 {
@@ -35,7 +36,7 @@ public sealed class BackupMonitorJobTests : IAsyncLifetime
 
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddAdminConsoleDb($"Data Source={_dbPath}"); // вже реєструє IMaintenanceRepository/IBackupStateRepository/IAppSettingsRepository (Scoped)
+        services.AddAdminConsoleDb($"Data Source={_dbPath}"); // already registers IMaintenanceRepository/IBackupStateRepository/IAppSettingsRepository (Scoped)
         services.AddSingleton<BackupCheckEvaluator>();
 
         _provider = services.BuildServiceProvider();
@@ -55,11 +56,12 @@ public sealed class BackupMonitorJobTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Створює свіжий job-екземпляр і одразу проганяє RunAsync В МЕЖАХ ТОГО
-    /// САМОГО DI-scope — так само, як реально робить Hangfire (новий scope
-    /// на кожен запуск, з власним AdminConsoleDbContext, що живе рівно на
-    /// час одного виконання). Scope НЕ можна закрити до завершення RunAsync,
-    /// інакше репозиторії всередині job лишаються з disposed DbContext.
+    /// Creates a fresh job instance and immediately runs RunAsync WITHIN THAT
+    /// SAME DI scope — the same way Hangfire actually does it (a new scope
+    /// per run, with its own AdminConsoleDbContext that lives for exactly the
+    /// duration of one execution). The scope must NOT be closed before
+    /// RunAsync finishes, or the repositories inside the job end up with a
+    /// disposed DbContext.
     /// </summary>
     private async Task RunJobOnceAsync(int minConsecutiveForAlert)
     {
@@ -75,7 +77,7 @@ public sealed class BackupMonitorJobTests : IAsyncLifetime
             DiffPattern             = string.Empty,
             MaxAgeHoursFull         = 26,
             MinConsecutiveForAlert  = minConsecutiveForAlert,
-            MinSamplesForBaseline   = 100 // вимикаємо SizeWarning-гілку — тестуємо лише вік/анти-флапінг
+            MinSamplesForBaseline   = 100 // disables the SizeWarning branch — we're only testing age/anti-flapping
         };
 
         var job = new BackupMonitorJob(
@@ -106,7 +108,7 @@ public sealed class BackupMonitorJobTests : IAsyncLifetime
     private void MakeAllBackupFilesStale()
     {
         foreach (var file in Directory.EnumerateFiles(_backupDir, FilePattern))
-            File.SetLastWriteTime(file, DateTime.Now.AddHours(-48)); // старше MaxAgeHoursFull=26
+            File.SetLastWriteTime(file, DateTime.Now.AddHours(-48)); // older than MaxAgeHoursFull=26
     }
 
     private async Task<BackupCheckState> GetPersistedStateAsync()
@@ -132,13 +134,13 @@ public sealed class BackupMonitorJobTests : IAsyncLifetime
     [Fact]
     public async Task SingleStaleReading_DoesNotFlipConfirmedOutcome_AntiFlapping()
     {
-        // Цикл 1: свіжий бекап → підтверджено Ok (перше підтвердження, миттєво).
+        // Cycle 1: fresh backup → confirmed Ok (first confirmation, instant).
         WriteFreshBackupFile();
         await RunJobOnceAsync(minConsecutiveForAlert: 2);
         Assert.Equal(BackupOutcome.Ok, (await GetPersistedStateAsync()).Outcome);
 
-        // Цикл 2: файл застарів → "сирий" Stale, але лише 1 раз поспіль
-        // (MinConsecutiveForAlert=2) — підтверджений стан МАЄ лишитись Ok.
+        // Cycle 2: file went stale → a "raw" Stale reading, but only once in a
+        // row (MinConsecutiveForAlert=2) — the confirmed state MUST stay Ok.
         MakeAllBackupFilesStale();
         await RunJobOnceAsync(minConsecutiveForAlert: 2);
 
@@ -146,8 +148,8 @@ public sealed class BackupMonitorJobTests : IAsyncLifetime
         Assert.Equal(BackupOutcome.Ok, afterOneStaleReading.Outcome);
         Assert.Equal(1, afterOneStaleReading.ConsecutiveBadCount);
 
-        // Цикл 3: другий Stale поспіль → досягнуто порогу → підтверджений
-        // перехід Ok → Stale, лічильник скинуто.
+        // Cycle 3: second Stale reading in a row → threshold reached →
+        // confirmed transition Ok → Stale, counter reset.
         await RunJobOnceAsync(minConsecutiveForAlert: 2);
 
         var afterTwoStaleReadings = await GetPersistedStateAsync();
@@ -156,7 +158,7 @@ public sealed class BackupMonitorJobTests : IAsyncLifetime
     }
 }
 
-/// <summary>Мінімальний no-op IMediator для тестів, де публікація подій не перевіряється — лише кінцевий персистентний стан.</summary>
+/// <summary>Minimal no-op IMediator for tests where event publication isn't checked — only the final persisted state.</summary>
 file sealed class NullMediator : MediatR.IMediator
 {
     public static readonly NullMediator Instance = new();

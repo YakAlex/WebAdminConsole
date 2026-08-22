@@ -5,10 +5,10 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace AdminConsole.Infrastructure.Data.Configurations;
 
 /// <summary>
-/// Природний ключ (ServerIp, FellAt) — той самий, яким UptimeTrackerService
-/// уже користується для дедуплікації/пошуку (LoadFromDisk, DeleteRecord).
-/// Жодного синтетичного Id — групування по місяцю файлів було суто
-/// файловим обмеженням старої JSON-персистентності, не бізнес-правилом.
+/// Natural key (ServerIp, FellAt) — the same one UptimeTrackerService already
+/// uses for deduplication/lookup (LoadFromDisk, DeleteRecord). No synthetic
+/// Id — the old monthly file grouping was purely a limitation of the old
+/// JSON-based persistence, not a business rule.
 /// </summary>
 public sealed class DowntimeRecordConfiguration : IEntityTypeConfiguration<DowntimeRecord>
 {
@@ -21,7 +21,7 @@ public sealed class DowntimeRecordConfiguration : IEntityTypeConfiguration<Downt
         builder.Property(r => r.ServerIp).IsRequired();
         builder.Property(r => r.ServerGroup).IsRequired();
 
-        // Обчислювані [JsonIgnore]-властивості без сеттера — не мапляться.
+        // Computed [JsonIgnore] properties with no setter — not mapped.
         builder.Ignore(r => r.Duration);
         builder.Ignore(r => r.IsResolved);
         builder.Ignore(r => r.DurationDisplay);

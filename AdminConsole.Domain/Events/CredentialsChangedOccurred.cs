@@ -6,17 +6,17 @@ public enum CredentialTarget { Zabbix, Telegram }
 public enum CredentialAction { Saved, Cleared }
 
 /// <summary>
-/// Публікується після збереження/очищення credentials через Settings.
-/// ZabbixPollerService підписується і негайно переривають Task.Delay щоб
-/// застосувати нові credentials без очікування. Сервіс реагує тільки на
-/// Action = Saved — при Cleared нічого не робить.
+/// Published after credentials are saved/cleared via Settings.
+/// ZabbixPollerService subscribes and immediately breaks out of its
+/// Task.Delay to apply the new credentials without waiting. The service
+/// only reacts to Action = Saved — Cleared is a no-op for it.
 ///
-/// Rdp прибрано з CredentialTarget: бекенд-служба тепер працює під
-/// виділеним доменним акаунтом (DOMAIN\svc_adminconsole), quser.exe
-/// відпрацьовує через Kerberos у контексті процесу — RDP credentials
-/// більше не існує як концепція.
+/// Rdp was removed from CredentialTarget: the backend service now runs
+/// under a dedicated domain account (DOMAIN\svc_adminconsole), and
+/// quser.exe authenticates via Kerberos in the process context — RDP
+/// credentials no longer exist as a concept.
 ///
-/// Заміна CredentialsChangedMessage.
+/// Replaces CredentialsChangedMessage.
 /// </summary>
 public sealed record CredentialsChangedOccurred(
     CredentialTarget Target,

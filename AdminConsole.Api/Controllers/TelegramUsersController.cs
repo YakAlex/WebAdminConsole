@@ -11,20 +11,22 @@ public sealed record TelegramPendingStatusResponse(
     bool                                  IsPrimaryAdminClaimed);
 
 /// <summary>
-/// T6.2 п.3 (Settings → Telegram Users) — CRUD для списку дозволених
-/// користувачів Telegram-бота. Працює через TelegramAccessControlService,
-/// а НЕ напряму через IAppSettingsRepository: сервіс тримає in-memory кеш
-/// AllowedUsers, який TelegramBotService.IsAllowed() читає на кожне вхідне
-/// повідомлення — обхід сервісу лишив би кеш застарілим до рестарту процесу.
+/// T6.2 item 3 (Settings → Telegram Users) — CRUD for the list of allowed
+/// Telegram bot users. Goes through TelegramAccessControlService rather than
+/// IAppSettingsRepository directly: the service keeps an in-memory
+/// AllowedUsers cache that TelegramBotService.IsAllowed() reads on every
+/// incoming message — bypassing the service would leave the cache stale
+/// until the next process restart.
 ///
-/// Аудит-фікс (2026-08-22, п.2 звіту про прогалини міграції): claim-code +
-/// pending-запити — той самий принцип, що й Maintenance (п.1): сервісний
-/// шар (GenerateClaimCode/GetAllPending/ApproveAsync/DenyAsync) уже існував
-/// і використовувався ботом, просто без REST-шару над ним. На відміну від
-/// WPF (де десктопні Settings мали лише Deny, Approve — тільки inline-кнопки
-/// в самому Telegram), тут навмисно додано ОБОХ — узгоджено з користувачем:
-/// весь веб-застосунок і так за тим самим Windows AD-group гейтом, що
-/// й довіра до Telegram-схвалення.
+/// Audit fix (2026-08-22, item 2 of the migration gap report): claim code +
+/// pending requests follow the same principle as Maintenance (item 1): the
+/// service layer (GenerateClaimCode/GetAllPending/ApproveAsync/DenyAsync)
+/// already existed and was used by the bot, it just had no REST layer over
+/// it. Unlike WPF (where the desktop Settings only had Deny — Approve was
+/// only available via inline buttons in Telegram itself), both are
+/// deliberately exposed here — agreed with the user: the entire web app
+/// already sits behind the same Windows AD-group gate that Telegram
+/// approval already trusts.
 /// </summary>
 public sealed class TelegramUsersController(TelegramAccessControlService accessControl) : AdminConsoleControllerBase
 {
@@ -36,7 +38,7 @@ public sealed class TelegramUsersController(TelegramAccessControlService accessC
     public async Task<IActionResult> Add([FromBody] AddTelegramUserRequest request, CancellationToken ct)
     {
         if (request.ChatId == 0)
-            return BadRequest(new { error = "ChatId обов'язковий." });
+            return BadRequest(new { error = "ChatId is required." });
 
         await accessControl.AddAllowedUserAsync(request.ChatId, request.Username, ct);
         return NoContent();
@@ -50,15 +52,15 @@ public sealed class TelegramUsersController(TelegramAccessControlService accessC
     }
 
     /// <summary>
-    /// Адмін і далі сам надсилає /claim_admin &lt;код&gt; в Telegram — ця
-    /// частина флоу не змінюється, тут лише генерація коду, яку раніше
-    /// міг зробити тільки WPF.
+    /// The admin still sends /claim_admin &lt;code&gt; in Telegram themselves —
+    /// that part of the flow doesn't change; this only generates the code,
+    /// which previously only WPF could do.
     /// </summary>
     [HttpPost("claim-code")]
     public ActionResult<ClaimCodeResponse> GenerateClaimCode()
     {
         if (accessControl.IsPrimaryAdminClaimed)
-            return BadRequest(new { error = "Primary Admin уже прив'язано." });
+            return BadRequest(new { error = "Primary Admin is already claimed." });
 
         var (code, expiresAt) = accessControl.GenerateClaimCode();
         return Ok(new ClaimCodeResponse(code, expiresAt));
@@ -72,13 +74,13 @@ public sealed class TelegramUsersController(TelegramAccessControlService accessC
     public async Task<IActionResult> ApprovePending(int id, CancellationToken ct)
     {
         bool approved = await accessControl.ApproveAsync(id, ct);
-        return approved ? NoContent() : NotFound(new { error = $"Pending-запит #{id} не знайдено (можливо, вже оброблено)." });
+        return approved ? NoContent() : NotFound(new { error = $"Pending request #{id} not found (may already have been processed)." });
     }
 
     [HttpPost("pending/{id:int}/deny")]
     public async Task<IActionResult> DenyPending(int id, CancellationToken ct)
     {
         bool denied = await accessControl.DenyAsync(id, ct);
-        return denied ? NoContent() : NotFound(new { error = $"Pending-запит #{id} не знайдено (можливо, вже оброблено)." });
+        return denied ? NoContent() : NotFound(new { error = $"Pending request #{id} not found (may already have been processed)." });
     }
 }

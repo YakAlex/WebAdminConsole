@@ -1,9 +1,9 @@
 namespace AdminConsole.Domain.Models;
 
 /// <summary>
-/// Один зафіксований розмір бекапу в rolling-історії. Зберігає сирі
-/// дані (не лише агреговане середнє) навмисно — щоб перехід на
-/// медіану/MAD у майбутньому не вимагав міграції формату файлу.
+/// A single recorded backup size in the rolling history. Stores raw data
+/// (not just an aggregated average) deliberately — so a future move to a
+/// median/MAD approach won't require a file-format migration.
 /// </summary>
 public sealed class BackupSample
 {

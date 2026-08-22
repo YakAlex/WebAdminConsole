@@ -4,9 +4,9 @@ using MediatR;
 namespace AdminConsole.Domain.Events;
 
 /// <summary>
-/// Публікується ZabbixPollerService після кожного успішного чи невдалого
-/// опитування. При невдачі Problems порожній, а ErrorMessage заповнений.
-/// Заміна ZabbixProblemsUpdatedMessage.
+/// Published by ZabbixPollerService after every successful or failed poll.
+/// On failure, Problems is empty and ErrorMessage is populated.
+/// Replaces ZabbixProblemsUpdatedMessage.
 /// </summary>
 public sealed record ZabbixProblemsUpdatedOccurred(ZabbixProblemsPayload Payload) : INotification;
 

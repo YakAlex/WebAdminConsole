@@ -11,21 +11,23 @@ using Microsoft.Extensions.Options;
 namespace AdminConsole.Infrastructure.Monitoring;
 
 /// <summary>
-/// Відслідковує переходи Online↔Offline для кожного сервера.
-/// Обробляє PingBatchResultOccurred (MediatR notification замість
-/// IRecipient&lt;PingBatchResultMessage&gt;). Зберігає інциденти через
-/// IDowntimeRepository (EF Core, Фаза 2). Публікує UptimeUpdatedOccurred
-/// при кожній зміні.
+/// Tracks Online↔Offline transitions for each server.
+/// Handles PingBatchResultOccurred (MediatR notification instead of
+/// IRecipient&lt;PingBatchResultMessage&gt;). Persists incidents via
+/// IDowntimeRepository (EF Core, Phase 2). Publishes UptimeUpdatedOccurred
+/// on every change.
 ///
-/// T4.3: анти-флапінг (Pending→Confirmed) і reconciliation-логіка перенесені
-/// БЕЗ ЗМІН. Debounced ScheduleSave()/dirty-months (файлове оптимізаційне
-/// накопичення перед File.Move) прибрано — з EF Core кожна зміна пишеться
-/// одразу окремим await UpsertAsync/DeleteAsync одразу ПІСЛЯ виходу з-під
-/// _lock (сам lock лишається 1:1 навколо in-memory мутацій, як і раніше;
-/// різниця лише в тому, що робиться ПІСЛЯ lock — раніше debounced Task.Run,
-/// тепер прямий await). Це заразом усуває весь клас "втрачено останні 500мс
-/// перед закриттям" — final-flush StopAsync більше не потрібен, кожна зміна
-/// вже на диску (у БД) в момент мутації.
+/// T4.3: anti-flapping (Pending→Confirmed) and reconciliation logic carried
+/// over UNCHANGED. Debounced ScheduleSave()/dirty-months (the file-based
+/// optimization that batched writes before File.Move) has been removed —
+/// with EF Core every change is written immediately via its own
+/// await UpsertAsync/DeleteAsync call right AFTER leaving the _lock (the
+/// lock itself still wraps the in-memory mutations 1:1, as before; the only
+/// difference is that the write now happens AFTER the lock — previously a
+/// debounced Task.Run, now a direct await). This also eliminates the whole
+/// "lost the last 500ms before shutdown" class of bugs — a final-flush
+/// StopAsync is no longer needed, every change is already on disk (in the
+/// DB) at the moment it's made.
 /// </summary>
 public sealed class UptimeTrackerService(
     IMediator                     mediator,
@@ -41,8 +43,8 @@ public sealed class UptimeTrackerService(
     private readonly IReadOnlyList<ServerEntry> _servers  = servers.Value.AsReadOnly();
     private readonly MonitoringSettings         _settings = settings.Value;
 
-    // IServiceScopeFactory замість прямої ін'єкції IDowntimeRepository —
-    // репозиторій Scoped, сервіс Singleton (той самий патерн, що MaintenanceService).
+    // IServiceScopeFactory instead of injecting IDowntimeRepository directly —
+    // the repository is Scoped, the service is Singleton (same pattern as MaintenanceService).
     private async Task<T> WithRepositoryAsync<T>(Func<IDowntimeRepository, Task<T>> action)
     {
         using var scope = scopeFactory.CreateScope();
@@ -52,31 +54,31 @@ public sealed class UptimeTrackerService(
     private Task WithRepositoryAsync(Func<IDowntimeRepository, Task> action) =>
         WithRepositoryAsync(async r => { await action(r); return true; });
 
-    /// Поточний статус кожного IP (для визначення переходів)
+    /// Current status of each IP (used to detect transitions)
     private readonly Dictionary<string, PingStatus> _lastStatus = new();
 
     /// <summary>
-    /// IP-адреси, для яких уже прийшов ПЕРШИЙ реальний (не Checking/Unknown)
-    /// результат пінгу цієї сесії. Потрібно для reconciliation при старті:
-    /// одразу після рестарту _lastStatus порожній, тому звичайна перевірка
-    /// "prev == Offline" ніколи не спрацює для сервера, що відновився, поки
-    /// застосунок був вимкнений — доводиться один раз (саме один, далі
-    /// нормальна логіка prev==Offline вже коректно працює) звірити напряму
-    /// з персистентним _records, чи немає там "осиротілого" відкритого
-    /// інциденту для цього IP.
+    /// IPs for which the FIRST real (not Checking/Unknown) ping result of
+    /// this session has already arrived. Needed for reconciliation at
+    /// startup: right after a restart _lastStatus is empty, so the usual
+    /// "prev == Offline" check never fires for a server that recovered
+    /// while the app was down — we have to check once (just once, after
+    /// that the normal prev==Offline logic already works correctly)
+    /// directly against the persisted _records for an "orphaned" open
+    /// incident for this IP.
     /// </summary>
     private readonly HashSet<string> _reconciledIps = new();
 
-    // Всі інциденти в пам'яті (поточна сесія + завантажені з БД)
+    // All incidents in memory (current session + loaded from DB)
     private readonly List<DowntimeRecord> _records = new();
     private readonly object               _lock    = new();
 
     /// <summary>
-    /// Сервери, які зараз Offline, але ще не "визріли" до MinIncidentDurationSeconds.
-    /// Живе виключно в пам'яті — жодного DowntimeRecord, жодного upsert,
-    /// жодного PublishSnapshot, поки інцидент не підтвердиться і не буде
-    /// перенесений у _records. Дозволяє повністю уникнути зайвого I/O та
-    /// UI-мерехтіння для коротких мережевих "миготінь".
+    /// Servers that are currently Offline but haven't "matured" to
+    /// MinIncidentDurationSeconds yet. Lives purely in memory — no
+    /// DowntimeRecord, no upsert, no PublishSnapshot until the incident is
+    /// confirmed and moved into _records. Lets us avoid unnecessary I/O
+    /// and UI flicker entirely for short network "blips".
     /// </summary>
     private readonly Dictionary<string, PendingOffline> _pendingOffline = new();
 
@@ -85,7 +87,7 @@ public sealed class UptimeTrackerService(
 
     private const string LogSource = "UptimeTracker";
 
-    // ── Lifecycle: гарантоване завантаження ДО старту наступних сервісів ───
+    // ── Lifecycle: guaranteed load BEFORE the next services start ───────────
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -95,22 +97,23 @@ public sealed class UptimeTrackerService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Аудит Зона 1 (2026-08-22): раніше без жодного try/catch — якщо
-        // PublishSnapshotAsync кине виняток (напр. проблема БД), застосунок
-        // взагалі не піднявся б (BackgroundServiceExceptionBehavior). Сам
-        // трекінг переходів (Handle(PingBatchResultOccurred)) не постраждає —
-        // це окремий шлях виклику через MediatR, не ExecuteAsync.
+        // Audit Zone 1 (2026-08-22): previously this had NO try/catch at
+        // all — if PublishSnapshotAsync threw (e.g. a DB problem), the app
+        // wouldn't come up at all (BackgroundServiceExceptionBehavior).
+        // Transition tracking itself (Handle(PingBatchResultOccurred)) is
+        // unaffected — that's a separate call path through MediatR, not
+        // ExecuteAsync.
         try
         {
             await PublishSnapshotAsync(stoppingToken);
             logger.LogInformation("UptimeTrackerService started.");
             await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                "Uptime tracker started — відстеження переходів Online/Offline запущено."), stoppingToken);
+                "Uptime tracker started — tracking Online/Offline transitions."), stoppingToken);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "UptimeTrackerService: помилка старту — початковий знімок не опубліковано.");
+            logger.LogError(ex, "UptimeTrackerService: startup error — initial snapshot not published.");
         }
     }
 
@@ -172,22 +175,24 @@ public sealed class UptimeTrackerService(
         await PublishSnapshotAsync(ct);
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Відкриті інциденти для {window.DisplayName} закрито через Maintenance Mode."), ct);
+            $"Open incidents for {window.DisplayName} closed due to Maintenance Mode."), ct);
     }
 
     /// <summary>
-    /// ФІКС (перенесено без змін): без цього _lastStatus[ip] лишався Offline
-    /// назавжди, якщо сервер не піднявся до кінця вікна — жоден наступний
-    /// Offline-пінг більше не сприймався як "новий перехід" (prev вже
-    /// дорівнював Offline), тому DowntimeRecord ніколи не створювався для
-    /// періоду ПІСЛЯ вікна.
+    /// FIX (carried over unchanged): without this, _lastStatus[ip] stayed
+    /// Offline forever if the server didn't come back up by the end of the
+    /// window — no subsequent Offline ping was ever treated as a "new
+    /// transition" (prev already equaled Offline), so a DowntimeRecord was
+    /// never created for the period AFTER the window.
     ///
-    /// Скидаємо саме на Online (а не Unknown, як у PingMonitorService) —
-    /// перехід Unknown/Checking → Offline у ЦЬОМУ сервісі навмисно не створює
-    /// _pendingOffline (фільтр "стартового шуму"), тому Unknown відтворив би
-    /// той самий баг. Online → Offline — звичайна, вже перевірена гілка:
-    /// наступний реальний Offline-пінг коректно "падає" в _pendingOffline
-    /// з FellAt = момент виявлення. Якщо сервер вже онлайн — безпечний no-op.
+    /// We reset specifically to Online (not Unknown, as in
+    /// PingMonitorService) — in THIS service a Unknown/Checking → Offline
+    /// transition intentionally does not create a _pendingOffline entry
+    /// (the "startup noise" filter), so Unknown would reproduce the same
+    /// bug. Online → Offline is the normal, already-tested branch: the
+    /// next real Offline ping correctly "falls" into _pendingOffline with
+    /// FellAt = the moment it was detected. If the server is already
+    /// online — this is a safe no-op.
     /// </summary>
     private void HandleMaintenanceEnded(MaintenanceWindow window)
     {
@@ -226,9 +231,10 @@ public sealed class UptimeTrackerService(
 
                 _lastStatus.TryGetValue(result.IP, out var prev);
 
-                // Add() повертає true, якщо цей IP бачимо ВПЕРШЕ з реальним
-                // (не Checking/Unknown) статусом цієї сесії — саме цей момент
-                // потребує звірки з БД (див. гілку Online нижче).
+                // Add() returns true if this is the FIRST time we're seeing
+                // this IP with a real (not Checking/Unknown) status this
+                // session — this is exactly the moment that needs
+                // reconciliation against the DB (see the Online branch below).
                 bool isFirstRealStatusThisSession = _reconciledIps.Add(result.IP);
 
                 if (result.Status == PingStatus.Offline)
@@ -239,23 +245,24 @@ public sealed class UptimeTrackerService(
                         && prev is not PingStatus.Unknown and not PingStatus.Checking
                         && !underMaintenance)
                     {
-                        // Свіже падіння — НЕ пишемо DowntimeRecord одразу.
-                        // Кладемо в pending і чекаємо MinIncidentDurationSeconds,
-                        // перш ніж це стане "офіційним" інцидентом.
+                        // Fresh drop — do NOT write a DowntimeRecord right away.
+                        // Put it in pending and wait MinIncidentDurationSeconds
+                        // before it becomes an "official" incident.
                         _pendingOffline[result.IP] =
                             new PendingOffline(DateTimeOffset.Now, result.Name, result.Group);
                     }
                     else if (!underMaintenance &&
                              _pendingOffline.TryGetValue(result.IP, out var pending))
                     {
-                        // Сервер досі Offline — перевіряємо чи вже минув поріг.
+                        // Server is still Offline — check whether the threshold has passed.
                         var elapsed = DateTimeOffset.Now - pending.FellAt;
                         if (_settings.MinIncidentDurationSeconds <= 0
                             || elapsed.TotalSeconds >= _settings.MinIncidentDurationSeconds)
                         {
-                            // Інцидент "визрів" — тільки тепер створюємо запис,
-                            // пишемо в БД і показуємо в UI. FellAt лишається
-                            // справжнім часом падіння, а не моментом промоції.
+                            // The incident has "matured" — only now do we
+                            // create the record, write it to the DB, and
+                            // show it in the UI. FellAt stays the real drop
+                            // time, not the moment of promotion.
                             var record = new DowntimeRecord
                             {
                                 ServerName  = pending.ServerName,
@@ -274,9 +281,10 @@ public sealed class UptimeTrackerService(
                 {
                     if (prev == PingStatus.Offline)
                     {
-                        // Звичайний, уже перевірений часом шлях: сервер впав і
-                        // піднявся, поки застосунок ПРАЦЮВАВ — _lastStatus
-                        // коректно відстежив обидва переходи цієї сесії.
+                        // Normal, already time-tested path: the server went
+                        // down and came back up while the app was RUNNING —
+                        // _lastStatus correctly tracked both transitions
+                        // this session.
                         if (!_pendingOffline.Remove(result.IP))
                         {
                             var open = _records.FirstOrDefault(
@@ -292,13 +300,14 @@ public sealed class UptimeTrackerService(
                     }
                     else if (isFirstRealStatusThisSession)
                     {
-                        // ФІКС: перший реальний пінг цього IP цієї сесії, і при
-                        // цьому prev НЕ Offline (бо _lastStatus щойно після
-                        // рестарту порожній — звичайна перевірка вище ніколи
-                        // б не спрацювала). Звіряємось напряму з БД (уже
-                        // завантаженою в _records при старті): якщо там лежить
-                        // незакритий інцидент для цього IP — сервер явно
-                        // відновився, поки застосунок був вимкнений.
+                        // FIX: the first real ping for this IP this
+                        // session, where prev is NOT Offline (because
+                        // _lastStatus is empty right after a restart — the
+                        // usual check above would never fire). We
+                        // reconcile directly against the DB (already
+                        // loaded into _records at startup): if there's an
+                        // open incident there for this IP, the server
+                        // clearly recovered while the app was down.
                         var open = _records.FirstOrDefault(
                             r => r.ServerIp == result.IP && !r.IsResolved);
 
@@ -326,24 +335,25 @@ public sealed class UptimeTrackerService(
 
         foreach (var (name, ip, fellAt) in reconciledLogs)
             await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                $"{name} ({ip}) уже ONLINE після перезапуску " +
-                $"застосунку — закрито інцидент, що почався {fellAt:dd.MM HH:mm}."), ct);
+                $"{name} ({ip}) is already ONLINE after the app restarted — " +
+                $"closed the incident that started at {fellAt:dd.MM HH:mm}."), ct);
 
         if (!changed) return;
 
         await PublishSnapshotAsync(ct);
     }
 
-    // ── Public API для UptimeViewModel/React (Фаза 6) ───────────────────────
+    // ── Public API for UptimeViewModel/React (Phase 6) ───────────────────────
 
     /// <summary>
-    /// ФІКС (перенесено без змін): повертає ГЛИБОКІ копії, а не референси на
-    /// живі об'єкти з _records. DowntimeRecord.RecoveredAt/ClosedByMaintenance
-    /// мутуються з фонового потоку в Handle(PingBatchResultOccurred) без
-    /// зв'язку з тим, хто читає знімок ззовні _lock. SlaReportService.Generate()
-    /// читає той самий запис (ClippedDuration) кілька разів незалежно — без
-    /// заморожування знімка ці виклики можуть побачити різні значення для
-    /// одного інциденту в межах одного звіту.
+    /// FIX (carried over unchanged): returns DEEP copies, not references to
+    /// the live objects in _records. DowntimeRecord.RecoveredAt/
+    /// ClosedByMaintenance are mutated from a background thread in
+    /// Handle(PingBatchResultOccurred) with no coordination with whoever
+    /// reads the snapshot outside of _lock. SlaReportService.Generate()
+    /// reads the same record's ClippedDuration multiple times independently
+    /// — without freezing a snapshot, these calls could see different
+    /// values for the same incident within a single report.
     /// </summary>
     public IReadOnlyList<DowntimeRecord> GetSnapshot()
     {
@@ -361,10 +371,10 @@ public sealed class UptimeTrackerService(
     };
 
     /// <summary>
-    /// Видаляє один запис з пам'яті та БД.
-    /// Якщо запис активний (!IsResolved) — скидає _lastStatus[IP] на Online,
-    /// щоб трекер коректно відстежував наступний перехід для цього сервера.
-    /// Викликається з майбутнього Uptime API-контролера (Фаза 6).
+    /// Removes a single record from memory and the DB.
+    /// If the record is active (!IsResolved) — resets _lastStatus[IP] to
+    /// Online, so the tracker correctly tracks the next transition for this
+    /// server. Called from the future Uptime API controller (Phase 6).
     /// </summary>
     public async Task DeleteRecordAsync(DowntimeRecord record, CancellationToken ct = default)
     {
@@ -378,7 +388,7 @@ public sealed class UptimeTrackerService(
             if (target is null)
             {
                 logger.LogWarning(
-                    "DeleteRecord: запис {Server} ({Ip}) / {FellAt} не знайдено — можливо, вже видалено.",
+                    "DeleteRecord: record {Server} ({Ip}) / {FellAt} not found — may already be deleted.",
                     record.ServerName, record.ServerIp, record.FellAt);
                 return;
             }
@@ -393,8 +403,8 @@ public sealed class UptimeTrackerService(
         await PublishSnapshotAsync(ct);
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Інцидент видалено вручну: {record.ServerName} ({record.ServerIp}), " +
-            $"впав {record.FellAt:dd.MM HH:mm:ss}."), ct);
+            $"Incident deleted manually: {record.ServerName} ({record.ServerIp}), " +
+            $"fell at {record.FellAt:dd.MM HH:mm:ss}."), ct);
     }
 
     public async Task ClearAllResolvedAsync(CancellationToken ct = default)
@@ -411,7 +421,7 @@ public sealed class UptimeTrackerService(
         await PublishSnapshotAsync(ct);
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Очищено {removed} завершених інцидентів з історії."), ct);
+            $"Cleared {removed} resolved incident(s) from history."), ct);
     }
 
     // ── Persistence ───────────────────────────────────────────────────────────
@@ -429,11 +439,11 @@ public sealed class UptimeTrackerService(
             }
 
             logger.LogInformation(
-                "UptimeTrackerService: завантажено {Count} записів.", loaded.Count);
+                "UptimeTrackerService: loaded {Count} record(s).", loaded.Count);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "UptimeTrackerService: помилка завантаження з БД.");
+            logger.LogError(ex, "UptimeTrackerService: error loading from DB.");
         }
     }
 

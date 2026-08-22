@@ -12,18 +12,19 @@ public sealed record RdpSnapshotPayload(
     DateTimeOffset?               LastLogoutAt);
 
 /// <summary>
-/// GET /api/rdp-sessions — живий знімок RDP-сесій ЗАРАЗ (реально опитує
-/// termінальні сервери через quser в момент запиту) — для початкового
-/// завантаження сторінки RDP Sessions (Фаза 10, Крок 11.2 аудиту).
+/// GET /api/rdp-sessions — a live snapshot of RDP sessions RIGHT NOW
+/// (actually polls the terminal servers via quser at request time) — for the
+/// initial load of the RDP Sessions page (Phase 10, audit step 11.2).
 ///
-/// Контрольна перевірка (2026-08-21): базовий [Route("api/[controller]")]
-/// з AdminConsoleControllerBase резолвить [controller] буквально в
-/// "RdpSessions" (без дефіса) — реальний маршрут був /api/RdpSessions,
-/// тоді як фронтенд (endpoints.ts) завжди звертався на /api/rdp-sessions.
-/// Це давало 404 на КОЖЕН запит ще ДО апаратно-мережевого рівня — найбільш
-/// ймовірна першопричина "HTTP 0/unknown error" з Пункту 1 (справжній 404
-/// перехоплювався б як ApiError(404, ...), але саме ця розбіжність шляхів
-/// підтверджена живим запитом до застосунку — виправлено явним [Route].
+/// Sanity check (2026-08-21): the base [Route("api/[controller]")] from
+/// AdminConsoleControllerBase resolves [controller] literally to
+/// "RdpSessions" (no hyphen) — the real route was /api/RdpSessions, while
+/// the frontend (endpoints.ts) always requested /api/rdp-sessions. That
+/// produced a 404 on EVERY request, before even reaching the network layer
+/// — the most likely root cause of the "HTTP 0/unknown error" from item 1
+/// (a genuine 404 would have been caught as ApiError(404, ...), but this
+/// exact path mismatch was confirmed with a live request against the app —
+/// fixed with an explicit [Route].
 /// </summary>
 [Route("api/rdp-sessions")]
 public sealed class RdpSessionsController(RdpMonitorService rdpMonitor) : AdminConsoleControllerBase

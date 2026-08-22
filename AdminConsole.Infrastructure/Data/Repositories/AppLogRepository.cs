@@ -28,9 +28,9 @@ public sealed class AppLogRepository(AdminConsoleDbContext context)
         if (after is not null)
             query = query.Where(e => e.Timestamp >= after.Value);
 
-        // Крок 6 (#10): пошук по Source/Message. EF Core SQLite транслює
-        // Contains() у звичайний LIKE — на відміну від ORDER BY DateTimeOffset
-        // (Крок "SQLite fix"), тут жодних обмежень провайдера немає.
+        // Step 6 (#10): search over Source/Message. EF Core SQLite translates
+        // Contains() into a plain LIKE — unlike ORDER BY DateTimeOffset
+        // (see the "SQLite fix" step), there are no provider limitations here.
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(e => e.Message.Contains(search) || e.Source.Contains(search));
 

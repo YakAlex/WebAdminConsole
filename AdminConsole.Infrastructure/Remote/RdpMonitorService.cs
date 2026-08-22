@@ -16,23 +16,24 @@ using Microsoft.Extensions.Options;
 namespace AdminConsole.Infrastructure.Remote;
 
 /// <summary>
-/// Опитує термінальні сервери через "quser /server:HOSTNAME".
+/// Polls terminal servers via "quser /server:HOSTNAME".
 ///
-/// ВАЖЛИВО: використовуємо доменне ім'я (ServerEntry.Name), а НЕ IP.
-/// quser /server:TSVR3 — працює через Named Pipes / NetBIOS.
-/// quser /server:192.168.x.x — не працює (RPC over TCP, зазвичай заблоковано).
+/// IMPORTANT: we use the domain name (ServerEntry.Name), NOT the IP.
+/// quser /server:TSVR3 — works over Named Pipes / NetBIOS.
+/// quser /server:192.168.x.x — doesn't work (RPC over TCP, usually blocked).
 ///
-/// Авторизація: бекенд-служба працює під виділеним доменним акаунтом
-/// (DOMAIN\svc_adminconsole) з правами на цільових серверах — quser.exe
-/// відпрацьовує в контексті самого процесу через Kerberos, без окремих
-/// RDP credentials і без CredWrite/CredRead навколо кожного виклику.
+/// Authorization: the backend service runs under a dedicated domain
+/// account (DOMAIN\svc_adminconsole) with rights on the target servers —
+/// quser.exe runs in the process's own context via Kerberos, without
+/// separate RDP credentials and without CredWrite/CredRead around every
+/// call.
 ///
-/// T4.8: BackgroundService, тісний цикл — без Hangfire.
+/// T4.8: BackgroundService, a tight loop — no Hangfire.
 ///
 /// IRecipient&lt;MonitoringToggledMessage&gt;
-/// (WeakReferenceMessenger.Default.Register у конструкторі) →
+/// (WeakReferenceMessenger.Default.Register in the constructor) →
 /// INotificationHandler&lt;MonitoringToggledOccurred&gt;
-/// (DI-резолв MediatR).
+/// (resolved via DI by MediatR).
 /// </summary>
 public sealed class RdpMonitorService(
     IMediator                    mediator,
@@ -52,31 +53,33 @@ public sealed class RdpMonitorService(
     private const string LogSource = "RdpMonitor";
     private const int    TimeoutMs = 30_000;
 
-    // Крок 1 (аудит "HTTP 0"): REST-знімок (GetSnapshotNowAsync) викликається
-    // синхронно з браузера, що чекає на HTTP-відповідь — 30с/сервер (TimeoutMs)
-    // із фонового циклу тут занадто довго й ризикує вперлись у зовнішній
-    // таймаут проксі/браузера. Для REST-шляху ставимо явну, коротшу стелю.
+    // Step 1 ("HTTP 0" audit): the REST snapshot (GetSnapshotNowAsync) is
+    // called synchronously from a browser that's waiting for the HTTP
+    // response — 30s/server (TimeoutMs) from the background loop is too
+    // long here and risks hitting an external proxy/browser timeout first.
+    // For the REST path we use an explicit, shorter ceiling.
     private const int    SnapshotTimeoutMs = 15_000;
     private CancellationTokenSource? _wakeUpCts;
 
-    // Аудит-фікс (2026-08-22): троттлінг on-demand REST-знімку — вікно те
-    // саме, що й фоновий цикл (RdpPollIntervalSeconds). Без цього кожен
-    // захід на сторінку RDP Sessions незалежно запускав quser.exe проти
-    // термінального сервера, незалежно від налаштованого інтервалу.
+    // Audit fix (2026-08-22): throttling for the on-demand REST snapshot —
+    // the window matches the background loop (RdpPollIntervalSeconds).
+    // Without this, every visit to the RDP Sessions page independently
+    // triggered quser.exe against a terminal server, regardless of the
+    // configured interval.
     private readonly OnDemandSnapshotThrottle<(IReadOnlyList<RdpSessionInfo> Sessions, int GlobalDailyPeak,
         string? LastLogoutUsername, string? LastLogoutServer, DateTimeOffset? LastLogoutAt)> _onDemandThrottle
         = new(TimeSpan.FromSeconds(settings.Value.RdpPollIntervalSeconds));
 
-    // Кеш попереднього стану toggle (null = ще не перевіряли жодного разу).
-    // Дозволяє логувати і слати MonitoringToggledOccurred лише на РЕАЛЬНІЙ
-    // зміні стану, а не на кожному циклі опитування (anti-spam, edge-case #2).
+    // Cache of the previous toggle state (null = never checked yet).
+    // Lets us log and send MonitoringToggledOccurred only on an ACTUAL
+    // state change, not on every poll cycle (anti-spam, edge case #2).
     private bool? _monitoringWasEnabled;
 
     private readonly ConcurrentDictionary<string, Dictionary<int, RdpSessionInfo>>
         _previousSessions = new();
     private readonly ConcurrentDictionary<string, bool> _firstPollDone = new();
 
-    // ── Глобальний стан для Overview
+    // ── Global state for Overview
     private int             _globalDailyPeak;
     private DateTime        _peakResetDate;
     private string?         _lastLogoutUsername;
@@ -85,7 +88,7 @@ public sealed class RdpMonitorService(
     private readonly object _stateLock = new();
 
     // ── Regex ────────────────────────────────────────────────────────────────
-    // Формат WS2008R2 / WS2012+:
+    // WS2008R2 / WS2012+ format:
     //  USERNAME         SESSIONNAME    ID  STATE   IDLE TIME  LOGON TIME
     //  oleynikz         rdp-tcp#0      14  Active          .  11.06.2026 10:24
     //  yakymenko        rdp-tcp#1      15  Active          .  11.06.2026 10:29
@@ -104,11 +107,11 @@ public sealed class RdpMonitorService(
     // ── INotificationHandler ────────────────────────────────────────────────
 
     /// <summary>
-    /// Реагує на перемикання RDP-моніторингу в Settings.
-    /// НЕ довіряє полю Enabled з повідомлення — це лише сигнал "прокинься
-    /// і перевір джерело істини самостійно" (Pull, edge-case #2).
-    /// Слугує для миттєвого відновлення опитування одразу після увімкнення,
-    /// замість очікування до RdpPollIntervalSeconds.
+    /// Reacts to the RDP monitoring toggle in Settings.
+    /// Does NOT trust the Enabled field on the notification — it's only a
+    /// signal to "wake up and check the source of truth yourself" (Pull,
+    /// edge case #2). Used to resume polling immediately after monitoring
+    /// is enabled, instead of waiting up to RdpPollIntervalSeconds.
     /// </summary>
     public Task Handle(MonitoringToggledOccurred notification, CancellationToken ct)
     {
@@ -127,16 +130,18 @@ public sealed class RdpMonitorService(
     }
 
     /// <summary>
-    /// Перевіряє поточний стан RdpMonitoringEnabled (Pull з IAppSettingsRepository,
-    /// джерело істини — AppSettings-рядок у БД) і, лише при РЕАЛЬНІЙ зміні
-    /// відносно попередньої перевірки, логує подію та шле
-    /// MonitoringToggledOccurred для синхронізації UI (edge-case #2 і #3).
-    /// Виклик — щоразу перед credential-логікою (edge-case #1).
+    /// Checks the current RdpMonitoringEnabled state (Pull from
+    /// IAppSettingsRepository, the source of truth — the AppSettings row in
+    /// the DB) and, only on an ACTUAL change relative to the previous
+    /// check, logs an event and sends MonitoringToggledOccurred to sync the
+    /// UI (edge cases #2 and #3). Called every time, before the credential
+    /// logic (edge case #1).
     /// </summary>
     private async Task<bool> EvaluateMonitoringToggleAsync(CancellationToken ct)
     {
-        // IServiceScopeFactory замість прямої ін'єкції IAppSettingsRepository
-        // (Scoped) — цей сервіс Singleton, той самий патерн, що MaintenanceService.
+        // IServiceScopeFactory instead of injecting IAppSettingsRepository
+        // directly (Scoped) — this service is Singleton, same pattern as
+        // MaintenanceService.
         AppSettings current;
         using (var scope = scopeFactory.CreateScope())
             current = await scope.ServiceProvider.GetRequiredService<IAppSettingsRepository>().GetAsync(ct);
@@ -144,18 +149,20 @@ public sealed class RdpMonitorService(
         bool enabled = current.RdpMonitoringEnabled;
 
         if (_monitoringWasEnabled == enabled)
-            return enabled; // стан не змінився — тиша, без спаму логів
+            return enabled; // state unchanged — stay quiet, no log spam
 
         bool isColdStart = _monitoringWasEnabled is null;
         _monitoringWasEnabled = enabled;
 
         if (isColdStart)
         {
-            // Аудит-фікс (2026-08-22, "Peak today: 0"): _globalDailyPeak — лише
-            // в пам'яті, рестарт сервісу (деплой/перезавантаження) стирав його
-            // до 0, навіть якщо сесія була активна й від'єдналась РАНІШЕ того ж
-            // дня — до наступного рестарту ніхто вже не був онлайн, щоб пік
-            // перерахувався заново. Відновлюємо з БД, якщо запис ще за сьогодні.
+            // Audit fix (2026-08-22, "Peak today: 0"): _globalDailyPeak
+            // only lives in memory — a service restart (deploy/reboot) used
+            // to reset it to 0, even if a session had been active and
+            // disconnected EARLIER the same day — nobody was online
+            // between then and the next restart for the peak to be
+            // recalculated. Restore it from the DB if the record is still
+            // for today.
             lock (_stateLock)
             {
                 var today = DateTime.Now.Date;
@@ -170,13 +177,13 @@ public sealed class RdpMonitorService(
         if (!enabled)
         {
             await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                "RDP моніторинг вимкнено в Settings."), ct);
+                "RDP monitoring disabled in Settings."), ct);
             await mediator.Publish(new MonitoringToggledOccurred(MonitoredService.Rdp, false), ct);
         }
         else if (!isColdStart)
         {
             await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                "RDP моніторинг увімкнено — відновлюємо опитування."), ct);
+                "RDP monitoring enabled — resuming polling."), ct);
             await mediator.Publish(new MonitoringToggledOccurred(MonitoredService.Rdp, true), ct);
         }
 
@@ -187,15 +194,15 @@ public sealed class RdpMonitorService(
     {
         if (_terminalServers.Count == 0)
         {
-            // Раніше — лише ILogger (невидимо в UI Logs). Той самий клас
-            // "тихої смерті", що й був у ZabbixPollerService (Крок 2, #5):
-            // якщо жоден сервер у Servers не має Group == "Terminal Servers"
-            // (типо/розбіжність при міграції appsettings.json), RDP-моніторинг
-            // мовчки не запускається взагалі, назавжди.
-            logger.LogInformation("RdpMonitorService: немає Terminal Servers — idle.");
+            // Previously only an ILogger call (invisible in the UI Logs).
+            // The same class of "silent death" that ZabbixPollerService had
+            // (Step 2, #5): if no server in Servers has Group == "Terminal
+            // Servers" (typo/mismatch during appsettings.json migration),
+            // RDP monitoring silently never starts at all.
+            logger.LogInformation("RdpMonitorService: no Terminal Servers — idle.");
             await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                "RDP: жоден сервер у Servers не має Group=\"Terminal Servers\" — моніторинг не запущено. " +
-                "Перевір appsettings.json."), stoppingToken);
+                "RDP: no server in Servers has Group=\"Terminal Servers\" — monitoring not started. " +
+                "Check appsettings.json."), stoppingToken);
             return;
         }
 
@@ -204,20 +211,21 @@ public sealed class RdpMonitorService(
             if (System.Net.IPAddress.TryParse(server.Name, out _))
             {
                 logger.LogWarning(
-                    "RdpMonitorService: сервер '{Name}' має IP-адресу замість доменного імені.",
+                    "RdpMonitorService: server '{Name}' has an IP address instead of a domain name.",
                     server.Name);
                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                    $"Конфігурація: '{server.Name}' — це IP, а не ім'я. " +
-                    $"quser може не працювати. Виправ Name у appsettings.json."), stoppingToken);
+                    $"Configuration: '{server.Name}' is an IP, not a name. " +
+                    $"quser may not work. Fix Name in appsettings.json."), stoppingToken);
             }
         }
 
-        // Аудит Зона 1 (2026-08-22): усе тіло методу — під одним try/catch.
-        // Раніше EvaluateMonitoringToggleAsync/PollAllServersAsync виконувались
-        // ДО try-блоку (взагалі без захисту), а сам try ловив лише
-        // OperationCanceledException — будь-який транзієнтний виняток БД
-        // (напр. SQLITE_BUSY з IAppSettingsRepository.GetAsync) вилітав
-        // необхопленим і клав увесь хост (BackgroundServiceExceptionBehavior).
+        // Audit Zone 1 (2026-08-22): the entire method body is now under a
+        // single try/catch. Previously EvaluateMonitoringToggleAsync/
+        // PollAllServersAsync ran BEFORE the try block (completely
+        // unprotected), and the try only caught OperationCanceledException —
+        // any transient DB exception (e.g. SQLITE_BUSY from
+        // IAppSettingsRepository.GetAsync) used to bubble up unhandled and
+        // take down the whole host (BackgroundServiceExceptionBehavior).
         try
         {
             bool rdpMonitoringEnabled = await EvaluateMonitoringToggleAsync(stoppingToken);
@@ -225,8 +233,8 @@ public sealed class RdpMonitorService(
             if (rdpMonitoringEnabled)
             {
                 await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                    $"RDP monitor запущено — {_terminalServers.Count} сервер(ів). " +
-                    $"Використовуємо доменні імена для quser."), stoppingToken);
+                    $"RDP monitor started — {_terminalServers.Count} server(s). " +
+                    $"Using domain names for quser."), stoppingToken);
             }
 
             await PollAllServersAsync(stoppingToken);
@@ -247,10 +255,10 @@ public sealed class RdpMonitorService(
                 catch (OperationCanceledException)
                     when (!stoppingToken.IsCancellationRequested)
                 {
-                    // Пробудження від MonitoringToggledOccurred (edge-case #2) —
-                    // миттєвий позачерговий poll одразу після увімкнення моніторингу.
+                    // Woken up by MonitoringToggledOccurred (edge case #2) —
+                    // an immediate out-of-band poll right after monitoring is enabled.
                     await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                        "RDP: отримано сигнал пробудження — запускаємо позачерговий poll."), stoppingToken);
+                        "RDP: wake-up signal received — running an out-of-band poll."), stoppingToken);
                 }
 
                 Interlocked.Exchange(ref _wakeUpCts, null);
@@ -263,13 +271,13 @@ public sealed class RdpMonitorService(
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "RdpMonitorService: критична помилка циклу — моніторинг зупинено, застосунок продовжує працювати.");
+            logger.LogError(ex, "RdpMonitorService: critical loop error — monitoring stopped, app continues running.");
             try
             {
                 await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
-                    $"RDP monitor: критична помилка, моніторинг зупинено: {ex.GetType().Name}: {ex.Message}"), CancellationToken.None);
+                    $"RDP monitor: critical error, monitoring stopped: {ex.GetType().Name}: {ex.Message}"), CancellationToken.None);
             }
-            catch { /* навіть аварійний лог не пройшов — ILogger вище вже зафіксував головне */ }
+            catch { /* even the emergency log failed — the ILogger call above already recorded what matters */ }
         }
         finally
         {
@@ -277,12 +285,12 @@ public sealed class RdpMonitorService(
         }
     }
 
-    // ── Координація опитування ───────────────────────────────────────────────
+    // ── Poll coordination ───────────────────────────────────────────────
 
     private async Task PollAllServersAsync(CancellationToken ct)
     {
-        // Перевірка toggle — НАЙПЕРШИЙ рядок. Якщо RDP-моніторинг вимкнено —
-        // жодного зайвого виклику quser.exe.
+        // Toggle check — the VERY FIRST line. If RDP monitoring is
+        // disabled — no quser.exe call at all.
         if (!await EvaluateMonitoringToggleAsync(ct))
             return;
 
@@ -290,7 +298,7 @@ public sealed class RdpMonitorService(
         await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
-    // ── Опитування одного сервера ────────────────────────────────────────────
+    // ── Polling a single server ────────────────────────────────────────────
 
     private Task PollServerAsync(ServerEntry server, CancellationToken ct)
         => PollServerOnceAsync(server, ct);
@@ -301,9 +309,9 @@ public sealed class RdpMonitorService(
 
         try
         {
-            // quser.exe відпрацьовує в контексті самого процесу (сервіс
-            // працює під DOMAIN\svc_adminconsole через Kerberos) — жодної
-            // реєстрації credentials перед викликом не потрібно.
+            // quser.exe runs in the process's own context (the service runs
+            // as DOMAIN\svc_adminconsole via Kerberos) — no credential
+            // registration is needed before the call.
             var (output, error, exitCode) = await RunQuserAsync(hostname, ct).ConfigureAwait(false);
 
             string allText = (output + error).ToLowerInvariant();
@@ -314,9 +322,9 @@ public sealed class RdpMonitorService(
                 await LogSessionChangesAsync(server, [], ct);
                 _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                    $"{hostname}: помилка автентифікації сервісного акаунту — перевірте права DOMAIN\\svc_adminconsole на цьому сервері."), ct);
+                    $"{hostname}: service account authentication failure — check DOMAIN\\svc_adminconsole permissions on this server."), ct);
                 await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
-                    server.Name, server.IP, [], "Помилка автентифікації сервісного акаунту", ct)), ct);
+                    server.Name, server.IP, [], "Service account authentication failure", ct)), ct);
                 return;
             }
 
@@ -325,18 +333,18 @@ public sealed class RdpMonitorService(
                 await LogSessionChangesAsync(server, [], ct);
                 _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                    $"{hostname}: Access Denied — перевірте права DOMAIN\\svc_adminconsole на цьому сервері."), ct);
+                    $"{hostname}: Access Denied — check DOMAIN\\svc_adminconsole permissions on this server."), ct);
                 await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
-                    server.Name, server.IP, [], "Access Denied — перевірте права сервісного акаунту", ct)), ct);
+                    server.Name, server.IP, [], "Access Denied — check the service account permissions", ct)), ct);
                 return;
             }
 
             if (allText.Contains("rpc server is unavailable") || allText.Contains("1722") || allText.Contains("0x000006ba"))
             {
                 await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
-                    $"{hostname}: RPC недоступний. Переконайся що в appsettings.json вказано доменне ім'я (не IP)."), ct);
+                    $"{hostname}: RPC unavailable. Make sure appsettings.json has a domain name (not an IP)."), ct);
                 await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
-                    server.Name, server.IP, [], "RPC недоступний — перевір ім'я сервера", ct)), ct);
+                    server.Name, server.IP, [], "RPC unavailable — check the server name", ct)), ct);
                 return;
             }
 
@@ -348,7 +356,7 @@ public sealed class RdpMonitorService(
                 _previousSessions[server.IP] = [];
 
                 await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
-                    server.Name, server.IP, [], noUsers ? null : $"Порожня відповідь (exit {exitCode})", ct)), ct);
+                    server.Name, server.IP, [], noUsers ? null : $"Empty response (exit {exitCode})", ct)), ct);
                 return;
             }
 
@@ -369,7 +377,7 @@ public sealed class RdpMonitorService(
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "RdpMonitorService: помилка при опитуванні {Server}", hostname);
+            logger.LogWarning(ex, "RdpMonitorService: error polling {Server}", hostname);
             await mediator.Publish(AppLogEntryOccurred.Error(LogSource, $"{hostname}: {ex.GetType().Name}: {ex.Message}"), ct);
             await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
                 server.Name, server.IP, [], ex.Message, ct)), ct);
@@ -379,13 +387,14 @@ public sealed class RdpMonitorService(
     // ── State Diffing ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Порівнює поточний список сесій з попереднім знімком і логує тільки зміни.
-    /// При першому poll для сервера — мовчки заповнює словник без логування,
-    /// щоб не спамити "підключився" для вже існуючих сесій при старті програми.
+    /// Compares the current session list against the previous snapshot and
+    /// logs only the changes. On the first poll for a server — silently
+    /// populates the dictionary without logging, so we don't spam
+    /// "connected" for sessions that already existed when the app started.
     /// </summary>
     private async Task LogSessionChangesAsync(ServerEntry server, List<RdpSessionInfo> currentSessions, CancellationToken ct)
     {
-        // Будуємо поточний знімок з валідними int SessionId
+        // Build the current snapshot with valid int SessionIds
         var currentSnapshot = new Dictionary<int, RdpSessionInfo>();
         foreach (var s in currentSessions)
         {
@@ -416,13 +425,15 @@ public sealed class RdpMonitorService(
                     $"{current.Username} → session went idle on {server.Name} " +
                     $"(Active → Disconnected, logon: {current.LogonTime})"), ct);
 
-                // Аудит-фікс (2026-08-22, "Last logout: —"): раніше _lastLogoutUsername
-                // оновлювався ЛИШЕ коли сесія повністю зникала з виводу quser (справжній
-                // logoff). У реальному використанні набагато частіше користувач просто
-                // закриває RDP-клієнт БЕЗ виходу — сесія лишається на сервері у стані
-                // Disconnected (як і видно в таблиці SESSIONS), а "Last logout"/картка
-                // Overview так і не дізнавались про це. Active → Disconnected — це саме
-                // те, що звичайний користувач і мав на увазі під "logout".
+                // Audit fix (2026-08-22, "Last logout: —"): previously
+                // _lastLogoutUsername was only updated when a session fully
+                // disappeared from quser's output (a real logoff). In
+                // practice, users much more often simply close the RDP
+                // client WITHOUT logging out — the session stays on the
+                // server in the Disconnected state (as seen in the SESSIONS
+                // table), and "Last logout"/the Overview card never learned
+                // about it. Active → Disconnected is exactly what a regular
+                // user means by "logout".
                 lock (_stateLock)
                 {
                     _lastLogoutUsername = current.Username;
@@ -461,9 +472,9 @@ public sealed class RdpMonitorService(
     }
 
     /// <summary>
-    /// Намагається розрахувати тривалість сесії з рядка LogonTime від quser.
-    /// quser повертає формат "dd.MM.yyyy HH:mm" або "MM/dd/yyyy h:mm AM/PM".
-    /// Повертає порожній рядок якщо розпарсити не вдалось.
+    /// Attempts to calculate session duration from quser's LogonTime string.
+    /// quser returns the format "dd.MM.yyyy HH:mm" or "MM/dd/yyyy h:mm AM/PM".
+    /// Returns an empty string if parsing fails.
     /// </summary>
     private static string TryCalculateDuration(string logonTime)
     {
@@ -548,11 +559,11 @@ public sealed class RdpMonitorService(
             try { p.Kill(entireProcessTree: true); } catch { }
             string partial = "";
             try { partial = await outputTask.ConfigureAwait(false); } catch { }
-            return (partial, "Timeout: сервер не відповів за 30 секунд", -1);
+            return (partial, "Timeout: server did not respond within 30 seconds", -1);
         }
     }
 
-    // ── Парсер виводу quser ──────────────────────────────────────────────────
+    // ── quser output parser ──────────────────────────────────────────────────
 
     private List<RdpSessionInfo> ParseQuserOutput(
         string raw, string serverName, string serverIp)
@@ -611,13 +622,14 @@ public sealed class RdpMonitorService(
         return results;
     }
 
-    // ── Public API для TelegramBotService (Фаза 5)
+    // ── Public API for TelegramBotService (Phase 5)
 
     /// <summary>
-    /// Живий знімок поточних RDP-сесій по кожному terminal-серверу (ключ — IP).
-    /// _previousSessions вже ConcurrentDictionary — безпечно читати з будь-якого
-    /// потоку. Значення копіюємо (.ToList()) щоб викликач не тримав посилання
-    /// на внутрішній Dictionary, який поллер може оновити паралельно.
+    /// A live snapshot of current RDP sessions for each terminal server
+    /// (keyed by IP). _previousSessions is already a ConcurrentDictionary —
+    /// safe to read from any thread. Values are copied (.ToList()) so the
+    /// caller doesn't hold a reference to the internal Dictionary, which
+    /// the poller can update concurrently.
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<RdpSessionInfo>> GetSnapshot()
         => _previousSessions.ToDictionary(
@@ -625,17 +637,18 @@ public sealed class RdpMonitorService(
             kv => (IReadOnlyList<RdpSessionInfo>)kv.Value.Values.ToList());
 
     /// <summary>
-    /// Живий опит усіх terminal-серверів (quser) ЗАРАЗ + агрегований знімок —
-    /// для початкового REST-завантаження сторінки RDP Sessions (Фаза 10,
-    /// Крок 11.2 аудиту — раніше сторінка мала лише SignalR-потік). Той самий
-    /// виклик PollAllServersAsync, що й фоновий цикл — публікує ті самі
-    /// RdpSessionsUpdatedOccurred-події (клієнт, що ініціював запит, побачить
-    /// дані і з відповіді, і з SignalR), і так само поважає RdpMonitoringEnabled.
+    /// Live poll of all terminal servers (quser) RIGHT NOW + an aggregated
+    /// snapshot — for the initial REST load of the RDP Sessions page
+    /// (Phase 10, audit Step 11.2 — previously the page only had a SignalR
+    /// stream). The same PollAllServersAsync call as the background loop —
+    /// publishes the same RdpSessionsUpdatedOccurred events (the client
+    /// that triggered the request will see the data both in the response
+    /// and via SignalR), and equally respects RdpMonitoringEnabled.
     ///
-    /// Аудит-фікс (2026-08-22): _onDemandThrottle обмежує ЧАСТОТУ викликів
-    /// до RdpPollIntervalSeconds — повторний запит у межах вікна (F5,
-    /// декілька відкритих вкладок) повертає щойно отриманий знімок замість
-    /// нового quser.exe проти сервера.
+    /// Audit fix (2026-08-22): _onDemandThrottle caps the FREQUENCY of
+    /// calls to RdpPollIntervalSeconds — a repeated request within the
+    /// window (F5, several open tabs) returns the just-obtained snapshot
+    /// instead of a new quser.exe call against the server.
     /// </summary>
     public Task<(IReadOnlyList<RdpSessionInfo> Sessions, int GlobalDailyPeak,
         string? LastLogoutUsername, string? LastLogoutServer, DateTimeOffset? LastLogoutAt)>
@@ -648,8 +661,8 @@ public sealed class RdpMonitorService(
     {
         var sw = Stopwatch.StartNew();
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"RDP: REST-знімок запит отримано — опитуємо {_terminalServers.Count} сервер(ів) " +
-            $"(ліміт {SnapshotTimeoutMs / 1000}с)."), ct);
+            $"RDP: REST snapshot request received — polling {_terminalServers.Count} server(s) " +
+            $"(limit {SnapshotTimeoutMs / 1000}s)."), ct);
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(SnapshotTimeoutMs);
@@ -660,13 +673,13 @@ public sealed class RdpMonitorService(
         if (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
         {
             await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                $"RDP: REST-знімок перевищив ліміт {SnapshotTimeoutMs / 1000}с ({sw.ElapsedMilliseconds}мс) — " +
-                "частина серверів могла не встигнути відповісти, повертаємо останні відомі дані."), ct);
+                $"RDP: REST snapshot exceeded the {SnapshotTimeoutMs / 1000}s limit ({sw.ElapsedMilliseconds}ms) — " +
+                "some servers may not have responded in time; returning the last known data."), ct);
         }
         else
         {
             await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                $"RDP: REST-знімок завершено за {sw.ElapsedMilliseconds}мс."), ct);
+                $"RDP: REST snapshot completed in {sw.ElapsedMilliseconds}ms."), ct);
         }
 
         var sessions = _previousSessions.Values.SelectMany(d => d.Values).ToList();
@@ -676,21 +689,22 @@ public sealed class RdpMonitorService(
         }
     }
 
-    // Аудит Зона 1, Знахідка №8 (2026-08-22): раніше обчислення нового піку
-    // (під _stateLock) і його персистенція (await PersistDailyPeakAsync, ПОЗА
-    // _stateLock — lock не може огортати await) були двома окремими кроками.
-    // Якщо кілька серверів опитуються паралельно (Task.WhenAll у
-    // PollAllServersAsync) і їхні асинхронні DB-записи завершуються не в
-    // тому порядку, в якому обчислювались — новіший (більший) пік теоретично
-    // міг бути затертий старішим значенням, записаним пізніше. _peakGate
-    // серіалізує ВЕСЬ "обчисли+збережи" ланцюжок як одну атомарну одиницю —
-    // жодні два виклики більше не можуть перекластись у неправильному порядку.
+    // Audit Zone 1, Finding #8 (2026-08-22): previously, computing the new
+    // peak (under _stateLock) and persisting it (await PersistDailyPeakAsync,
+    // OUTSIDE _stateLock — a lock can't wrap an await) were two separate
+    // steps. If several servers are polled in parallel (Task.WhenAll in
+    // PollAllServersAsync) and their async DB writes complete in a
+    // different order than they were computed in, a newer (higher) peak
+    // could theoretically be overwritten by an older value written later.
+    // _peakGate serializes the ENTIRE "compute + save" chain as one atomic
+    // unit — no two calls can interleave out of order anymore.
     private readonly SemaphoreSlim _peakGate = new(1, 1);
 
     /// <summary>
-    /// Розраховує глобальний пік і формує Payload. Це гарантує, що клієнт
-    /// отримає консистентні історичні дані, а "Peak today" переживе рестарт
-    /// сервісу протягом тієї ж доби (див. EvaluateMonitoringToggleAsync).
+    /// Computes the global peak and builds the Payload. This guarantees the
+    /// client gets consistent historical data, and "Peak today" survives a
+    /// service restart within the same day (see
+    /// EvaluateMonitoringToggleAsync).
     /// </summary>
     private async Task<RdpSessionsPayload> CreatePayloadAsync(
         string serverName, string serverIp, IReadOnlyList<RdpSessionInfo> sessions, string? errorMessage,
@@ -750,15 +764,16 @@ public sealed class RdpMonitorService(
         {
             using var scope = scopeFactory.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IAppSettingsRepository>();
-            // Аудит Зона 2 (2026-08-22): точкове оновлення лише двох полів —
-            // не GetAsync+SaveAsync повного об'єкта, щоб паралельний запис
-            // (напр. користувач зберігає monitoring-перемикачі в Settings
-            // саме в цю мить) не міг затерти пік своєю застарілою копією.
+            // Audit Zone 2 (2026-08-22): a targeted update of just two
+            // fields — not GetAsync+SaveAsync of the full object, so a
+            // concurrent write (e.g. a user saving the monitoring toggles
+            // in Settings at that exact moment) can't overwrite the peak
+            // with its own stale copy.
             await repo.UpdateRdpDailyPeakAsync(peak, date, ct);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "RdpMonitorService: не вдалось зберегти RdpDailyPeak у AppSettings.");
+            logger.LogWarning(ex, "RdpMonitorService: failed to save RdpDailyPeak to AppSettings.");
         }
     }
 }

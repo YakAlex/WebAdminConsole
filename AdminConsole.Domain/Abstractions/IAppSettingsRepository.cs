@@ -3,44 +3,44 @@ using AdminConsole.Domain.Models;
 namespace AdminConsole.Domain.Abstractions;
 
 /// <summary>
-/// Персистентність для AppSettings (single-row) і списку дозволених
-/// Telegram-користувачів. Дзеркалить UserSettingsService.Current/Save/
-/// MutateTelegramState/ReadTelegramState (Фаза 2, T2.3), декомпозоване
-/// у конкретні асинхронні операції замість Action&lt;T&gt;-делегата —
-/// природніше для EF Core, ніж синхронний lock навколо мутації in-memory
-/// об'єкта.
+/// Persistence for AppSettings (single-row) and the list of allowed
+/// Telegram users. Mirrors UserSettingsService.Current/Save/
+/// MutateTelegramState/ReadTelegramState (Phase 2, T2.3), decomposed
+/// into concrete async operations instead of an Action&lt;T&gt; delegate —
+/// a more natural fit for EF Core than a synchronous lock around mutating
+/// an in-memory object.
 /// </summary>
 public interface IAppSettingsRepository
 {
-    /// <summary>Повертає єдиний рядок налаштувань (створює дефолтний, якщо БД ще порожня).</summary>
+    /// <summary>Returns the single settings row (creates a default one if the DB is still empty).</summary>
     Task<AppSettings> GetAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Повний перезапис рядка — ЛИШЕ для одноразового первинного запису
-    /// (AdminConsole.Migration, перенесення з legacy WPF UserSettings), де
-    /// конкурентних викликачів немає. Для будь-якого поточного оновлення
-    /// окремого поля використовуйте вузькі Update*Async нижче — SaveAsync
-    /// читає й перезаписує ВСІ поля разом, тож викликач із застарілою
-    /// копією об'єкта ризикує затерти те, що хтось інший щойно змінив
-    /// (Аудит Зона 2, Знахідка №2, 2026-08-22).
+    /// Full row overwrite — ONLY for a one-time initial write
+    /// (AdminConsole.Migration, migrating from the legacy WPF UserSettings),
+    /// where there are no concurrent callers. For any ongoing update of a
+    /// single field, use the narrow Update*Async methods below — SaveAsync
+    /// reads and rewrites ALL fields together, so a caller holding a stale
+    /// copy of the object risks clobbering something another caller just
+    /// changed (Zone 2 audit, Finding #2, 2026-08-22).
     /// </summary>
     Task SaveAsync(AppSettings settings, CancellationToken ct = default);
 
-    /// <summary>Точкове оновлення лише трьох monitoring-перемикачів (Settings UI).</summary>
+    /// <summary>Targeted update of just the three monitoring toggles (Settings UI).</summary>
     Task UpdateMonitoringTogglesAsync(
         bool rdpEnabled, bool zabbixEnabled, bool backupEnabled, CancellationToken ct = default);
 
-    /// <summary>Точкове оновлення лише RDP daily peak (RdpMonitorService).</summary>
+    /// <summary>Targeted update of just the RDP daily peak (RdpMonitorService).</summary>
     Task UpdateRdpDailyPeakAsync(int peak, DateTime date, CancellationToken ct = default);
 
-    /// <summary>Точкове оновлення лише Telegram Primary Admin chat_id (claim-admin).</summary>
+    /// <summary>Targeted update of just the Telegram Primary Admin chat_id (claim-admin).</summary>
     Task UpdateTelegramPrimaryAdminAsync(long chatId, CancellationToken ct = default);
 
     Task<IReadOnlyList<TelegramAllowedUser>> GetTelegramAllowedUsersAsync(CancellationToken ct = default);
 
-    /// <summary>Insert або update за ChatId (approve нового користувача / оновлення username при повторному /start).</summary>
+    /// <summary>Insert or update by ChatId (approving a new user / refreshing the username on a repeat /start).</summary>
     Task UpsertTelegramAllowedUserAsync(long chatId, string? username, CancellationToken ct = default);
 
-    /// <summary>Revoke — видаляє користувача зі списку дозволених.</summary>
+    /// <summary>Revoke — removes the user from the allowed list.</summary>
     Task RemoveTelegramAllowedUserAsync(long chatId, CancellationToken ct = default);
 }

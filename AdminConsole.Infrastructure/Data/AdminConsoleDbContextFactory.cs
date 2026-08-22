@@ -4,10 +4,10 @@ using Microsoft.EntityFrameworkCore.Design;
 namespace AdminConsole.Infrastructure.Data;
 
 /// <summary>
-/// Дозволяє `dotnet ef migrations add` працювати без повністю піднятого
-/// Api-хоста (Program.cs ще не налаштований у Фазі 2 — DI-графа для
-/// AddDbContext з'явиться лише у Фазі 3). Design-time-only підключення,
-/// ніколи не використовується в реальному рантаймі застосунку.
+/// Allows `dotnet ef migrations add` to work without a fully bootstrapped
+/// Api host (Program.cs isn't configured yet in Phase 2 — the DI graph for
+/// AddDbContext won't appear until Phase 3). Design-time-only wiring,
+/// never used at the application's actual runtime.
 /// </summary>
 public sealed class AdminConsoleDbContextFactory : IDesignTimeDbContextFactory<AdminConsoleDbContext>
 {

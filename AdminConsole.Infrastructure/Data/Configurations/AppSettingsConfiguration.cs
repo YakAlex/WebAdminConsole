@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace AdminConsole.Infrastructure.Data.Configurations;
 
-/// <summary>Single-row таблиця — сурогатний Id, репозиторій завжди читає/пише перший (і єдиний) рядок.</summary>
+/// <summary>Single-row table — surrogate Id, the repository always reads/writes the first (and only) row.</summary>
 public sealed class AppSettingsConfiguration : IEntityTypeConfiguration<AppSettings>
 {
     public void Configure(EntityTypeBuilder<AppSettings> builder)

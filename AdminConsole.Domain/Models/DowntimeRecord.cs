@@ -10,10 +10,10 @@ public sealed class DowntimeRecord
     public DateTimeOffset? RecoveredAt  { get; set;  }
 
     /// <summary>
-    /// true — інцидент закрито не тому що сервер реально відновився,
-    /// а тому що адміністратор увімкнув Maintenance Mode поки інцидент
-    /// був відкритий. Дозволяє відрізняти "справжні" даунтайми від
-    /// перерваних вручну при розрахунку SLA-звітів.
+    /// true — the incident was closed not because the server actually
+    /// recovered, but because the administrator turned on Maintenance Mode
+    /// while the incident was still open. Lets SLA report calculations
+    /// distinguish "genuine" downtime from downtime interrupted manually.
     /// </summary>
     public bool ClosedByMaintenance { get; set; }
 
@@ -32,10 +32,10 @@ public sealed class DowntimeRecord
         {
             var d = Duration;
             string baseText = d.TotalHours >= 1
-                ? $"{(int)d.TotalHours}г {d.Minutes:D2}хв"
+                ? $"{(int)d.TotalHours}h {d.Minutes:D2}m"
                 : d.TotalMinutes >= 1
-                    ? $"{(int)d.TotalMinutes}хв {d.Seconds:D2}с"
-                    : $"{d.Seconds}с";
+                    ? $"{(int)d.TotalMinutes}m {d.Seconds:D2}s"
+                    : $"{d.Seconds}s";
 
             return ClosedByMaintenance ? $"{baseText} (maintenance)" : baseText;
         }

@@ -19,14 +19,14 @@ public sealed record MigrationSummary(
     int  TelegramAllowedUsers);
 
 /// <summary>
-/// Одноразовий перенос JSON-даних старого WPF AdminConsole у SQLite (Фаза 2,
-/// T2.6). Ідемпотентний — MigrationMarker блокує повторний запуск від
-/// дублювання даних. Дедуплікація всередині кожного джерела повторює ключі,
-/// якими вже користуються відповідні WPF-сервіси:
-///   - uptime-*.json   → (ServerIp, FellAt), як UptimeTrackerService.LoadFromDisk
-///   - backups.json    → (Name, Kind) = "Name|Kind", як BackupMonitorService.LoadFromDisk
-///   - maintenance.json→ Key (ServerIp / "group:X"), як MaintenanceService.LoadFromDisk
-///     (+ той самий фільтр прострочених "To < now", що й оригінал)
+/// One-time transfer of the old WPF AdminConsole's JSON data into SQLite
+/// (Phase 2, T2.6). Idempotent — MigrationMarker blocks a re-run from
+/// duplicating data. Deduplication within each source mirrors the keys
+/// already used by the corresponding WPF services:
+///   - uptime-*.json    → (ServerIp, FellAt), same as UptimeTrackerService.LoadFromDisk
+///   - backups.json     → (Name, Kind) = "Name|Kind", same as BackupMonitorService.LoadFromDisk
+///   - maintenance.json → Key (ServerIp / "group:X"), same as MaintenanceService.LoadFromDisk
+///     (+ the same expired-window filter "To < now" as the original)
 /// </summary>
 public sealed class MigrationRunner(
     AdminConsoleDbContext    db,
@@ -44,7 +44,7 @@ public sealed class MigrationRunner(
         if (marker?.CompletedAtUtc is not null)
         {
             logger.LogInformation(
-                "Міграція вже виконана {CompletedAt} — повторний запуск нічого не робить.",
+                "Migration was already completed at {CompletedAt} — re-running does nothing.",
                 marker.CompletedAtUtc);
             return new MigrationSummary(true, 0, 0, 0, false, 0);
         }
@@ -60,14 +60,14 @@ public sealed class MigrationRunner(
         await db.SaveChangesAsync(ct);
 
         logger.LogInformation(
-            "Міграція завершена: {Downtime} downtime, {Maintenance} maintenance, {Backups} backup-станів, " +
-            "settings={Settings}, {Telegram} telegram-користувач(ів).",
+            "Migration completed: {Downtime} downtime, {Maintenance} maintenance, {Backups} backup state(s), " +
+            "settings={Settings}, {Telegram} telegram user(s).",
             downtimeCount, maintenanceCount, backupCount, settingsMigrated, telegramCount);
 
         return new MigrationSummary(false, downtimeCount, maintenanceCount, backupCount, settingsMigrated, telegramCount);
     }
 
-    // ── DowntimeRecord: злиття всіх uptime-*.json, дедуп за (ServerIp, FellAt) ──
+    // ── DowntimeRecord: merges all uptime-*.json files, dedup by (ServerIp, FellAt) ──
 
     private async Task<int> MigrateDowntimeAsync(string logsDir, CancellationToken ct)
     {
@@ -88,7 +88,7 @@ public sealed class MigrationRunner(
         return records.Count;
     }
 
-    // ── MaintenanceWindow: фільтр прострочених (як LoadFromDisk), дедуп за Key ──
+    // ── MaintenanceWindow: filters out expired windows (same as LoadFromDisk), dedup by Key ──
 
     private async Task<int> MigrateMaintenanceAsync(string logsDir, CancellationToken ct)
     {
@@ -101,7 +101,7 @@ public sealed class MigrationRunner(
         var byKey = new Dictionary<string, MaintenanceWindow>();
         foreach (var w in loaded ?? [])
             if (w.To is null || w.To >= now)
-                byKey[w.Key] = w; // останній перемагає — той самий підхід, що LoadFromDisk
+                byKey[w.Key] = w; // last one wins — same approach as LoadFromDisk
 
         foreach (var w in byKey.Values)
             await maintenance.UpsertAsync(w, ct);
@@ -109,7 +109,7 @@ public sealed class MigrationRunner(
         return byKey.Count;
     }
 
-    // ── BackupCheckState: дедуп за (Name, Kind) ──────────────────────────────
+    // ── BackupCheckState: dedup by (Name, Kind) ──────────────────────────────
 
     private async Task<int> MigrateBackupsAsync(string logsDir, CancellationToken ct)
     {
@@ -122,7 +122,7 @@ public sealed class MigrationRunner(
 
         var byKey = new Dictionary<string, BackupCheckState>();
         foreach (var s in loaded ?? [])
-            byKey[$"{s.Name}|{s.Kind}"] = s; // останній перемагає — той самий підхід, що LoadFromDisk
+            byKey[$"{s.Name}|{s.Kind}"] = s; // last one wins — same approach as LoadFromDisk
 
         foreach (var s in byKey.Values)
             await backups.UpsertAsync(s, ct);
@@ -130,7 +130,7 @@ public sealed class MigrationRunner(
         return byKey.Count;
     }
 
-    // ── UserSettings → AppSettings (мінус CloseToTray) + TelegramAllowedUsers ──
+    // ── UserSettings → AppSettings (minus CloseToTray) + TelegramAllowedUsers ──
 
     private async Task<(bool Migrated, int TelegramUsers)> MigrateUserSettingsAsync(string path, CancellationToken ct)
     {
@@ -168,7 +168,7 @@ public sealed class MigrationRunner(
         }
         catch (JsonException ex)
         {
-            logger.LogError(ex, "Migration: не вдалось прочитати {Path}", path);
+            logger.LogError(ex, "Migration: failed to read {Path}", path);
             return default;
         }
     }

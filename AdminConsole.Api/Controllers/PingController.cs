@@ -5,18 +5,17 @@ using Microsoft.AspNetCore.Mvc;
 namespace AdminConsole.Api.Controllers;
 
 /// <summary>
-/// GET /api/ping — початковий live-знімок ping-статусів для сторінок, що
-/// монтуються ПІСЛЯ старту сервісу (Overview/Ping). Раніше єдиним джерелом
-/// був SignalR PingBatchResultOccurred, тож картки лишались порожніми до
-/// наступного циклу опитування (до PingIntervalSeconds, за замовчуванням
-/// 30с) — фронтенд не мав звідки взяти "останній відомий стан" при
-/// монтуванні.
+/// GET /api/ping — an initial live snapshot of ping statuses for pages that
+/// mount AFTER the service has started (Overview/Ping). Previously the only
+/// source was SignalR's PingBatchResultOccurred, so cards stayed empty until
+/// the next poll cycle (up to PingIntervalSeconds, 30s by default) — the
+/// frontend had no way to get the "last known state" on mount.
 ///
-/// Перевикористовує PingMonitorService.PingAllNowAsync — той самий метод,
-/// яким уже користується команда /ping Telegram-бота (Фаза 5): реально
-/// пінгує всі сервери ЗАРАЗ і публікує PingBatchResultOccurred (інші
-/// підключені клієнти теж побачать оновлення через SignalR), а не просто
-/// повертає застарілий кеш зі старого циклу.
+/// Reuses PingMonitorService.PingAllNowAsync — the same method already used
+/// by the Telegram bot's /ping command (Phase 5): it actually pings all
+/// servers RIGHT NOW and publishes PingBatchResultOccurred (other connected
+/// clients also see the update via SignalR), rather than just returning a
+/// stale cache from the previous cycle.
 /// </summary>
 public sealed class PingController(PingMonitorService pingMonitor) : AdminConsoleControllerBase
 {

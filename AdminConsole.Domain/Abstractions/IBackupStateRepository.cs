@@ -3,23 +3,24 @@ using AdminConsole.Domain.Models;
 namespace AdminConsole.Domain.Abstractions;
 
 /// <summary>
-/// Персистентність для BackupCheckState (+ вкладена History з BackupSample).
-/// Дзеркалить LoadFromDisk/SaveToDisk/GetSnapshot з WPF BackupMonitorService
-/// (Фаза 2, T2.3). Ключ запису — (Name, Kind), той самий StateKey, що вже
-/// використовує сервіс для дедуплікації/пошуку.
+/// Persistence for BackupCheckState (+ its nested History of BackupSample).
+/// Mirrors LoadFromDisk/SaveToDisk/GetSnapshot from the WPF BackupMonitorService
+/// (Phase 2, T2.3). The record key is (Name, Kind), the same StateKey the
+/// service already uses for deduplication/lookup.
 ///
-/// Реалізація в Infrastructure відповідає за коректне збереження вкладеної
-/// History (1→N, FK BackupCheckStateId, з обрізанням до MaxHistorySamples —
-/// ця межа лишається відповідальністю сервіса-споживача, не репозиторію).
+/// The Infrastructure implementation is responsible for correctly persisting
+/// the nested History (1→N, FK BackupCheckStateId, trimmed to MaxHistorySamples —
+/// that limit remains the consuming service's responsibility, not the
+/// repository's).
 /// </summary>
 public interface IBackupStateRepository
 {
-    /// <summary>Завантажує всі стани перевірок бекапів.</summary>
+    /// <summary>Loads all backup check states.</summary>
     Task<IReadOnlyList<BackupCheckState>> LoadAllAsync(CancellationToken ct = default);
 
-    /// <summary>Insert або update за ключем (Name, Kind), включно з History.</summary>
+    /// <summary>Insert or update by key (Name, Kind), including History.</summary>
     Task UpsertAsync(BackupCheckState state, CancellationToken ct = default);
 
-    /// <summary>Видаляє застарілі записи, ключі яких більше не входять у поточну конфігурацію BackupChecks.</summary>
+    /// <summary>Deletes stale records whose keys are no longer part of the current BackupChecks configuration.</summary>
     Task<int> DeleteWhereKeyNotInAsync(IReadOnlySet<string> validKeys, CancellationToken ct = default);
 }

@@ -12,17 +12,17 @@ public sealed record UpdateMonitoringTogglesRequest(
     bool RdpMonitoringEnabled, bool ZabbixMonitoringEnabled, bool BackupMonitoringEnabled);
 
 /// <summary>
-/// Крок 4 (#7): вмикачі фонових сервісів у Settings — той самий підхід, що
-/// був у WPF (RdpMonitoringEnabled/ZabbixMonitoringEnabled/BackupMonitoringEnabled
-/// у UserSettings), лише REST-ендпоінт замість прямого запису в файл.
+/// Step 4 (#7): background-service toggles in Settings — the same approach
+/// used in WPF (RdpMonitoringEnabled/ZabbixMonitoringEnabled/BackupMonitoringEnabled
+/// in UserSettings), just a REST endpoint instead of writing directly to a file.
 ///
-/// Пуш після Save — MonitoringToggledOccurred (Rdp/Zabbix): ZabbixPollerService
-/// і RdpMonitorService вже слухають цю подію (Фаза 4) і скасовують поточний
-/// Task.Delay, щоб зміна подіяла негайно, а не чекала наступного інтервалу
-/// опитування. BackupMonitorJob — Hangfire recurring job (не довгоживучий
-/// singleton), toggle читається Pull-ом на початку кожного запуску — окремий
-/// wake-up не потрібен, наступний запланований запуск і так підхопить нове
-/// значення.
+/// Push after Save — MonitoringToggledOccurred (Rdp/Zabbix): ZabbixPollerService
+/// and RdpMonitorService already listen for this event (Phase 4) and cancel
+/// their current Task.Delay so the change takes effect immediately instead
+/// of waiting for the next poll interval. BackupMonitorJob is a Hangfire
+/// recurring job (not a long-lived singleton) — the toggle is read via Pull
+/// at the start of each run, so no separate wake-up is needed; the next
+/// scheduled run picks up the new value on its own.
 /// </summary>
 public sealed class MonitoringController(IAppSettingsRepository repository, IMediator mediator) : AdminConsoleControllerBase
 {
@@ -44,14 +44,15 @@ public sealed class MonitoringController(IAppSettingsRepository repository, IMed
         bool zabbixChanged = settings.ZabbixMonitoringEnabled != request.ZabbixMonitoringEnabled;
         bool backupChanged = settings.BackupMonitoringEnabled != request.BackupMonitoringEnabled;
 
-        // Зберігаємо ПЕРЕД публікацією MonitoringToggledOccurred — поллери,
-        // прокинувшись, одразу перечитують IAppSettingsRepository.GetAsync()
-        // (Pull, edge-case #2 з їхніх власних коментарів), тож нове значення
-        // мусить вже лежати в БД до того, як вони прокинуться.
+        // Save BEFORE publishing MonitoringToggledOccurred — once woken up,
+        // the pollers immediately re-read IAppSettingsRepository.GetAsync()
+        // (Pull, edge case #2 from their own comments), so the new value
+        // must already be in the DB before they wake up.
         //
-        // Аудит Зона 2 (2026-08-22): точкове оновлення лише трьох перемикачів
-        // (не GetAsync+SaveAsync повного об'єкта) — щоб паралельний запис
-        // RdpMonitorService.UpdateRdpDailyPeakAsync не міг затерти й навпаки.
+        // Audit Zone 2 (2026-08-22): a targeted update of just the three
+        // toggles (not GetAsync+SaveAsync on the full object) — so a
+        // concurrent write from RdpMonitorService.UpdateRdpDailyPeakAsync
+        // can't clobber it, or vice versa.
         await repository.UpdateMonitoringTogglesAsync(
             request.RdpMonitoringEnabled, request.ZabbixMonitoringEnabled, request.BackupMonitoringEnabled, ct);
 

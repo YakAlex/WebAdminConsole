@@ -12,14 +12,14 @@ using Microsoft.Extensions.Options;
 namespace AdminConsole.Infrastructure.Zabbix;
 
 /// <summary>
-/// T4.11: BackgroundService, тісний цикл (60с) — без Hangfire.
+/// T4.11: BackgroundService, tight loop (60s) — no Hangfire.
 ///
-/// ICredentialPrompt (T4.14, видалено) — headless-сервіс не показує
-/// діалог вводу токена; якщо credentials відсутні, просто чекає на
-/// CredentialsChangedOccurred (майбутній Settings API, Фаза 5).
+/// ICredentialPrompt (T4.14, removed) — the headless service doesn't show
+/// a token-entry dialog; if credentials are missing, it just waits for
+/// CredentialsChangedOccurred (future Settings API, Phase 5).
 ///
 /// IRecipient&lt;CredentialsChangedMessage&gt;/&lt;MonitoringToggledMessage&gt; →
-/// INotificationHandler&lt;...&gt; (DI-резолв MediatR).
+/// INotificationHandler&lt;...&gt; (MediatR DI resolution).
 /// </summary>
 public sealed class ZabbixPollerService(
     IMediator                     mediator,
@@ -40,11 +40,11 @@ public sealed class ZabbixPollerService(
     private CancellationTokenSource? _wakeUpCts;
     private bool _hasLoggedStart;
 
-    // Кеш попереднього стану toggle (null = ще не перевіряли жодного разу).
+    // Cache of the previous toggle state (null = never checked yet).
     private bool? _monitoringWasEnabled;
 
-    // Аудит-фікс (2026-08-22): троттлінг on-demand REST-знімку — вікно те
-    // саме, що й фоновий цикл (ZabbixPollIntervalSeconds).
+    // Audit fix (2026-08-22): throttling for the on-demand REST snapshot — same
+    // window as the background loop (ZabbixPollIntervalSeconds).
     private readonly OnDemandSnapshotThrottle<ZabbixProblemsPayload> _onDemandThrottle =
         new(TimeSpan.FromSeconds(settings.Value.ZabbixPollIntervalSeconds));
 
@@ -56,7 +56,7 @@ public sealed class ZabbixPollerService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "ZabbixPollerService: не вдалось завантажити credentials.");
+            logger.LogError(ex, "ZabbixPollerService: failed to load credentials.");
         }
 
         await base.StartAsync(cancellationToken);
@@ -88,15 +88,15 @@ public sealed class ZabbixPollerService(
     }
 
     /// <summary>
-    /// Перевіряє поточний стан ZabbixMonitoringEnabled (Pull з
-    /// IAppSettingsRepository) і, лише при РЕАЛЬНІЙ зміні, логує подію
-    /// та шле MonitoringToggledOccurred для синхронізації UI.
-    /// Виклик — щоразу перед credential-логікою (edge-case #1).
+    /// Checks the current ZabbixMonitoringEnabled state (pulled from
+    /// IAppSettingsRepository) and, only on an ACTUAL change, logs the event
+    /// and publishes MonitoringToggledOccurred to sync the UI.
+    /// Called every time, before the credential logic (edge case #1).
     /// </summary>
     private async Task<bool> EvaluateMonitoringToggleAsync(CancellationToken ct)
     {
-        // IServiceScopeFactory замість прямої ін'єкції IAppSettingsRepository
-        // (Scoped) — цей сервіс Singleton, той самий патерн, що MaintenanceService.
+        // IServiceScopeFactory instead of directly injecting IAppSettingsRepository
+        // (Scoped) — this service is a Singleton, same pattern as MaintenanceService.
         AdminConsole.Domain.Models.AppSettings current;
         using (var scope = scopeFactory.CreateScope())
             current = await scope.ServiceProvider.GetRequiredService<IAppSettingsRepository>().GetAsync(ct);
@@ -104,7 +104,7 @@ public sealed class ZabbixPollerService(
         bool enabled = current.ZabbixMonitoringEnabled;
 
         if (_monitoringWasEnabled == enabled)
-            return enabled; // стан не змінився — тиша, без спаму логів
+            return enabled; // state unchanged — stay quiet, don't spam the logs
 
         bool isColdStart = _monitoringWasEnabled is null;
         _monitoringWasEnabled = enabled;
@@ -112,13 +112,13 @@ public sealed class ZabbixPollerService(
         if (!enabled)
         {
             await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                "Zabbix моніторинг вимкнено в Settings."), ct);
+                "Zabbix monitoring disabled in Settings."), ct);
             await mediator.Publish(new MonitoringToggledOccurred(MonitoredService.Zabbix, false), ct);
         }
         else if (!isColdStart)
         {
             await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                "Zabbix моніторинг увімкнено — відновлюємо опитування."), ct);
+                "Zabbix monitoring enabled — resuming polling."), ct);
             await mediator.Publish(new MonitoringToggledOccurred(MonitoredService.Zabbix, true), ct);
         }
 
@@ -131,21 +131,21 @@ public sealed class ZabbixPollerService(
     {
         if (string.IsNullOrWhiteSpace(_settings.ZabbixUrl))
         {
-            // Раніше це логувалось лише через ILogger — невидимо в UI Logs
-            // (#5 UX-беклогу: "у логах нуль інформації"). Публікуємо і сюди,
-            // бо це саме той випадок, коли адмін реально нічого не побачить.
-            logger.LogInformation("ZabbixPollerService: ZabbixUrl не налаштований — idle.");
+            // Previously this was only logged via ILogger — invisible in the UI Logs
+            // (UX backlog #5: "zero information in the logs"). Publishing here too,
+            // because this is exactly the case where the admin would see nothing at all.
+            logger.LogInformation("ZabbixPollerService: ZabbixUrl is not configured — idle.");
             await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                "Zabbix: Monitoring:ZabbixUrl не налаштований у appsettings.json — поллер не запущено."), stoppingToken);
+                "Zabbix: Monitoring:ZabbixUrl is not configured in appsettings.json — poller not started."), stoppingToken);
             return;
         }
 
-        // Аудит Зона 1 (2026-08-22): усе тіло методу — під одним try/catch.
-        // Раніше EvaluateMonitoringToggleAsync/AuthenticateAsync/PollAsync
-        // виконувались ДО try-блоку (взагалі без захисту), а сам try ловив
-        // лише OperationCanceledException — будь-який транзієнтний виняток
-        // БД (напр. SQLITE_BUSY з IAppSettingsRepository.GetAsync) вилітав
-        // необхопленим і клав увесь хост (BackgroundServiceExceptionBehavior).
+        // Audit Zone 1 (2026-08-22): the entire method body is now under a single
+        // try/catch. Previously EvaluateMonitoringToggleAsync/AuthenticateAsync/PollAsync
+        // ran BEFORE the try block (with no protection at all), and the try itself only
+        // caught OperationCanceledException — any transient DB exception (e.g.
+        // SQLITE_BUSY from IAppSettingsRepository.GetAsync) escaped uncaught and took
+        // down the whole host (BackgroundServiceExceptionBehavior).
         try
         {
             bool zabbixMonitoringEnabled = await EvaluateMonitoringToggleAsync(stoppingToken);
@@ -153,10 +153,10 @@ public sealed class ZabbixPollerService(
             if (zabbixMonitoringEnabled && !credentials.HasZabbixCredentials)
             {
                 await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                    "Zabbix: credentials відсутні — очікуємо збереження через Settings API."), stoppingToken);
+                    "Zabbix: credentials missing — waiting for them to be saved via the Settings API."), stoppingToken);
             }
 
-            // Credentials є і моніторинг увімкнено — запускаємось повноцінно
+            // Credentials are present and monitoring is enabled — start up fully
             if (zabbixMonitoringEnabled && credentials.HasZabbixCredentials)
             {
                 await LogStartedAsync(stoppingToken);
@@ -188,31 +188,31 @@ public sealed class ZabbixPollerService(
                     when (!stoppingToken.IsCancellationRequested)
                 {
                     await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                        "Zabbix: отримано сигнал пробудження — запускаємо позачерговий poll."), stoppingToken);
+                        "Zabbix: wake-up signal received — running an out-of-cycle poll."), stoppingToken);
                 }
 
                 Interlocked.Exchange(ref _wakeUpCts, null);
 
                 if (stoppingToken.IsCancellationRequested) break;
 
-                // EDGE-CASE #1: перевірка toggle — НАЙПЕРША дія на кожній ітерації,
-                // ЩЕ ДО перевірки HasZabbixCredentials.
+                // EDGE CASE #1: toggle check — the VERY FIRST thing on every iteration,
+                // BEFORE checking HasZabbixCredentials.
                 if (!await EvaluateMonitoringToggleAsync(stoppingToken))
                     continue;
 
                 if (!credentials.HasZabbixCredentials)
                 {
                     await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                        "Zabbix: credentials відсутні — poll пропущено."), stoppingToken);
+                        "Zabbix: credentials missing — poll skipped."), stoppingToken);
                     continue;
                 }
 
-                // Перший успішний wake-up після старту без credentials — логуємо
-                // запуск РАЗ (незалежно від auth-режиму: раніше цей виклик був
-                // гейтований `!ZabbixUsesApiToken`, тож при API-token auth — саме
-                // тим режимом, яким реально користується адмін — після збереження
-                // токена через Settings у логах не з'являлось НІЧОГО аж до першого
-                // успішного/невдалого poll'у. #5 UX-беклогу.
+                // First successful wake-up after starting without credentials — log
+                // the startup ONCE (regardless of auth mode: previously this call was
+                // gated behind `!ZabbixUsesApiToken`, so with API-token auth — the very
+                // mode the admin actually uses — after saving the token via Settings
+                // NOTHING appeared in the logs until the first successful/failed poll.
+                // UX backlog #5.
                 if (!_hasLoggedStart)
                 {
                     await LogStartedAsync(stoppingToken);
@@ -230,17 +230,17 @@ public sealed class ZabbixPollerService(
         }
         catch (OperationCanceledException)
         {
-            // Нормальне завершення при StopAsync — ігноруємо.
+            // Normal shutdown on StopAsync — ignore.
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "ZabbixPollerService: критична помилка циклу — моніторинг зупинено, застосунок продовжує працювати.");
+            logger.LogError(ex, "ZabbixPollerService: fatal loop error — monitoring stopped, application continues running.");
             try
             {
                 await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
-                    $"Zabbix poller: критична помилка, моніторинг зупинено: {ex.GetType().Name}: {ex.Message}"), CancellationToken.None);
+                    $"Zabbix poller: fatal error, monitoring stopped: {ex.GetType().Name}: {ex.Message}"), CancellationToken.None);
             }
-            catch { /* навіть аварійний лог не пройшов — ILogger вище вже зафіксував головне */ }
+            catch { /* even the fallback log failed — ILogger above already captured the essentials */ }
         }
         finally
         {
@@ -262,7 +262,7 @@ public sealed class ZabbixPollerService(
             if (_sessionToken is null)
             {
                 await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
-                    "Zabbix login failed — credentials видалено."), ct);
+                    "Zabbix login failed — credentials removed."), ct);
             }
             else
             {
@@ -283,10 +283,10 @@ public sealed class ZabbixPollerService(
     private const int MaxAuthRetries = 3;
     private int _consecutiveAuthFailures;
 
-    // null = жодного poll'у ще не було. #5 UX-беклогу: успішні цикли раніше
-    // взагалі нічого не писали в AppLogEntries — тиша виглядала ідентично і
-    // при "все ок, просто 0 High/Disaster проблем", і при "інтеграція мертва".
-    // Логуємо Success лише на ПЕРЕХОДІ у робочий стан (не щоцикл — 180с спам).
+    // null = no poll has happened yet. UX backlog #5: successful cycles used to
+    // write nothing to AppLogEntries at all — silence looked identical whether
+    // "everything's fine, just 0 High/Disaster problems" or "the integration is dead".
+    // Log Success only on the TRANSITION into a working state (not every cycle — 180s spam).
     private bool? _lastPollSucceeded;
 
     private async Task PollAsync(CancellationToken ct)
@@ -307,7 +307,7 @@ public sealed class ZabbixPollerService(
             if (_lastPollSucceeded != true)
             {
                 await mediator.Publish(AppLogEntryOccurred.Success(LogSource,
-                    $"Zabbix: з'єднання працює, знайдено {problems.Count} активних проблем (severity High/Disaster)."), ct);
+                    $"Zabbix: connection working, found {problems.Count} active problems (severity High/Disaster)."), ct);
             }
             _lastPollSucceeded = true;
 
@@ -331,33 +331,33 @@ public sealed class ZabbixPollerService(
                 && currentTokenInVault != tokenUsedForRequest)
             {
                 logger.LogInformation(
-                    "Zabbix: токен оновлено під час запиту — ігноруємо помилку старого токена.");
+                    "Zabbix: token was updated during the request — ignoring the stale-token error.");
                 _consecutiveAuthFailures = 0;
                 return;
             }
 
-            // НЕ видаляємо токен — фоновий сервіс не має права стирати credentials.
-            // Тільки юзер може видалити токен через Settings.
+            // Do NOT delete the token — the background service has no right to erase
+            // credentials. Only the user can remove the token via Settings.
             _sessionToken = null;
             _consecutiveAuthFailures++;
             _lastPollSucceeded = false;
 
             await mediator.Publish(new ZabbixProblemsUpdatedOccurred(new ZabbixProblemsPayload(
                 Problems: [],
-                ErrorMessage: $"Токен відхилено Zabbix: {ex.Message}",
+                ErrorMessage: $"Zabbix rejected the token: {ex.Message}",
                 FetchedAt: DateTimeOffset.Now)), ct);
 
             if (_consecutiveAuthFailures >= MaxAuthRetries)
             {
                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                    $"Zabbix: {MaxAuthRetries} послідовні цикли опитування з невалідним токеном. " +
-                    $"Причина: {ex.Message} Оновіть токен у Settings."), ct);
+                    $"Zabbix: {MaxAuthRetries} consecutive poll cycles with an invalid token. " +
+                    $"Reason: {ex.Message} Update the token in Settings."), ct);
             }
             else
             {
                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                    $"Zabbix: токен відхилено (цикл {_consecutiveAuthFailures}/{MaxAuthRetries}). " +
-                    $"Причина: {ex.Message} Оновіть токен у Settings."), ct);
+                    $"Zabbix: token rejected (cycle {_consecutiveAuthFailures}/{MaxAuthRetries}). " +
+                    $"Reason: {ex.Message} Update the token in Settings."), ct);
             }
             return;
         }
@@ -370,7 +370,7 @@ public sealed class ZabbixPollerService(
 
             await mediator.Publish(new ZabbixProblemsUpdatedOccurred(new ZabbixProblemsPayload(
                 Problems: null,
-                ErrorMessage: $"Помилка зв'язку: {ex.Message}",
+                ErrorMessage: $"Connection error: {ex.Message}",
                 FetchedAt: DateTimeOffset.Now)), ct);
 
             if (!useApiToken && ex is not HttpRequestException)
@@ -383,34 +383,35 @@ public sealed class ZabbixPollerService(
     // ── On-demand (REST) ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Живий опит Zabbix ЗАРАЗ, для початкового REST-знімка сторінки Zabbix
-    /// Alerts (T6.2/Крок 11.1) — той самий принцип, що вже є в
-    /// PingMonitorService.PingAllNowAsync. Навмисно НЕ чіпає
-    /// _consecutiveAuthFailures/_lastPollSucceeded — це бухгалтерія фонового
-    /// циклу опитування, окремий REST-запит не повинен впливати на її стан.
+    /// Live poll of Zabbix RIGHT NOW, for the initial REST snapshot of the Zabbix
+    /// Alerts page (T6.2/Step 11.1) — same principle already used by
+    /// PingMonitorService.PingAllNowAsync. Deliberately does NOT touch
+    /// _consecutiveAuthFailures/_lastPollSucceeded — that's the bookkeeping of the
+    /// background poll loop, and a one-off REST request shouldn't affect its state.
     ///
-    /// Аудит-фікс (2026-08-22): _onDemandThrottle обмежує ЧАСТОТУ викликів
-    /// до ZabbixPollIntervalSeconds — повторний запит у межах вікна повертає
-    /// щойно отриманий знімок замість нового живого запиту в Zabbix API.
+    /// Audit fix (2026-08-22): _onDemandThrottle caps the call FREQUENCY to
+    /// ZabbixPollIntervalSeconds — a repeat request within the window returns the
+    /// just-fetched snapshot instead of firing a new live request against the
+    /// Zabbix API.
     /// </summary>
     public Task<ZabbixProblemsPayload> GetActiveProblemsNowAsync(CancellationToken ct) =>
         _onDemandThrottle.GetOrRunAsync(GetActiveProblemsNowInternalAsync, ct);
 
     private async Task<ZabbixProblemsPayload> GetActiveProblemsNowInternalAsync(CancellationToken ct)
     {
-        // Аудит-фікс п.4: раніше цей метод ІГНОРУВАВ ZabbixMonitoringEnabled
-        // повністю — навіть після вимкнення тумблера в Settings, кожен захід
-        // на Overview/Zabbix Alerts все одно бив живим запитом у реальний
-        // Zabbix API. Той самий Pull-патерн, що вже в RdpMonitorService.
-        // PollAllServersAsync — перевірка НАЙПЕРШИМ рядком.
+        // Audit fix item 4: previously this method IGNORED ZabbixMonitoringEnabled
+        // entirely — even after the toggle was switched off in Settings, every visit
+        // to Overview/Zabbix Alerts still fired a live request against the real
+        // Zabbix API. Same Pull pattern already used in RdpMonitorService.
+        // PollAllServersAsync — check is the VERY FIRST line.
         if (!await EvaluateMonitoringToggleAsync(ct))
-            return new ZabbixProblemsPayload(null, "Zabbix моніторинг вимкнено в Settings.", DateTimeOffset.Now);
+            return new ZabbixProblemsPayload(null, "Zabbix monitoring is disabled in Settings.", DateTimeOffset.Now);
 
         if (string.IsNullOrWhiteSpace(_settings.ZabbixUrl))
-            return new ZabbixProblemsPayload(null, "Monitoring:ZabbixUrl не налаштований.", DateTimeOffset.Now);
+            return new ZabbixProblemsPayload(null, "Monitoring:ZabbixUrl is not configured.", DateTimeOffset.Now);
 
         if (!credentials.HasZabbixCredentials)
-            return new ZabbixProblemsPayload(null, "Credentials не збережені (Settings → Zabbix Token).", DateTimeOffset.Now);
+            return new ZabbixProblemsPayload(null, "Credentials are not saved (Settings → Zabbix Token).", DateTimeOffset.Now);
 
         bool useApiToken = credentials.ZabbixUsesApiToken;
         var (username, secret) = credentials.GetZabbix();
@@ -420,7 +421,7 @@ public sealed class ZabbixPollerService(
         {
             auth = await client.LoginAsync(_settings.ZabbixUrl, username, secret, ct).ConfigureAwait(false) ?? string.Empty;
             if (string.IsNullOrEmpty(auth))
-                return new ZabbixProblemsPayload(null, "Не вдалося авторизуватись у Zabbix.", DateTimeOffset.Now);
+                return new ZabbixProblemsPayload(null, "Failed to authenticate with Zabbix.", DateTimeOffset.Now);
         }
 
         try
@@ -429,21 +430,21 @@ public sealed class ZabbixPollerService(
                 _settings.ZabbixUrl, auth, useApiToken, WatchedSeverities, ct).ConfigureAwait(false);
             return new ZabbixProblemsPayload(problems, null, DateTimeOffset.Now);
         }
-        // Аудит-фікс (2026-08-22, троттлінг on-demand): catch (Exception) нижче
-        // ловив і OperationCanceledException — скасування запиту (клієнт
-        // відключився) перетворювалось на фальшивий payload "Помилка зв'язку",
-        // який потім _onDemandThrottle кешував на ZabbixPollIntervalSeconds для
-        // ВСІХ наступних викликів, включно з тими, чий ct і не думав скасовуватись.
-        // Пропускаємо далі (без кешування), якщо скасування — справді від ct
-        // цього виклику; інакше (реальний таймаут HttpClient/помилка Zabbix) —
-        // як і раніше, повертаємо повідомлення про помилку.
+        // Audit fix (2026-08-22, on-demand throttling): the catch (Exception) below
+        // used to also catch OperationCanceledException — a cancelled request (client
+        // disconnected) turned into a fake "Connection error" payload, which
+        // _onDemandThrottle then cached for ZabbixPollIntervalSeconds for ALL
+        // subsequent calls, including ones whose ct was never going to be cancelled.
+        // Rethrow (without caching) when the cancellation genuinely comes from this
+        // call's own ct; otherwise (a real HttpClient timeout/Zabbix error) — as
+        // before, return an error message.
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
         }
         catch (Exception ex)
         {
-            return new ZabbixProblemsPayload(null, $"Помилка зв'язку: {ex.Message}", DateTimeOffset.Now);
+            return new ZabbixProblemsPayload(null, $"Connection error: {ex.Message}", DateTimeOffset.Now);
         }
     }
 

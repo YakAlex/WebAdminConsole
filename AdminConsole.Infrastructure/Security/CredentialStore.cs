@@ -8,24 +8,25 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AdminConsole.Infrastructure.Security;
 
 /// <summary>
-/// T5.1: переписано під ASP.NET Core Data Protection API. Win32 Credential
-/// Manager (CredWrite/CredRead/CredDelete) як backing store ПОВНІСТЮ
-/// видалено — паролі/токени зберігаються в таблиці StoredCredentials
-/// (SQLite, Фаза 2), зашифровані через IDataProtector. Ключі шифрування —
-/// ті самі, що налаштовані в Program.cs (T3.3): PersistKeysToFileSystem +
+/// T5.1: rewritten on top of the ASP.NET Core Data Protection API. The Win32
+/// Credential Manager (CredWrite/CredRead/CredDelete) backing store has been
+/// FULLY removed — passwords/tokens are stored in the StoredCredentials
+/// table (SQLite, Phase 2), encrypted via IDataProtector. Encryption keys are
+/// the same ones configured in Program.cs (T3.3): PersistKeysToFileSystem +
 /// ProtectKeysWithDpapiNG().
 ///
-/// RDP-секрети прибрано повністю (архітектурне рішення: бекенд-служба
-/// тепер працює під виділеним доменним акаунтом DOMAIN\svc_adminconsole з
-/// правами на цільових серверах — quser.exe відпрацьовує в контексті
-/// самого процесу через Kerberos, без CredWrite/CredRead і без окремих
-/// RDP-облікових даних узагалі). Лишились лише Zabbix і Telegram.
+/// RDP secrets have been removed entirely (architectural decision: the
+/// backend service now runs under a dedicated domain account
+/// DOMAIN\svc_adminconsole with rights on the target servers — quser.exe
+/// runs in the context of the process itself via Kerberos, with no
+/// CredWrite/CredRead and no separate RDP credentials at all). Only Zabbix
+/// and Telegram remain.
 ///
-/// Публічний контракт (сигнатури методів) лишається максимально близьким
-/// до оригіналу — лише Load/Store/Clear стали async (репозиторій вимагає
-/// цього), решта (Has*/Get*/масковані токени) лишаються синхронними
-/// читаннями з in-memory кешу, як і раніше — Pull-читання на гарячому
-/// шляху (ZabbixPollerService опитує щоцикл) не повинне бити в БД щоразу.
+/// The public contract (method signatures) stays as close to the original as
+/// possible — only Load/Store/Clear became async (the repository requires
+/// it); the rest (Has*/Get*/masked tokens) remain synchronous reads from the
+/// in-memory cache, as before — a Pull read on the hot path
+/// (ZabbixPollerService polls every cycle) shouldn't hit the DB every time.
 /// </summary>
 public sealed class CredentialStore
 {
@@ -130,7 +131,7 @@ public sealed class CredentialStore
 
     public void MarkZabbixCancelled() => _userCancelledZabbixPrompt = true;
 
-    /// <summary>Замаскований токен для Settings: "••••••••ab3f".</summary>
+    /// <summary>Masked token for Settings: "••••••••ab3f".</summary>
     public string GetZabbixTokenMasked()
     {
         lock (_lock) return Mask(_zabbixToken);
@@ -175,7 +176,7 @@ public sealed class CredentialStore
         await WithRepositoryAsync(r => r.DeleteAsync(TelegramTarget, ct));
     }
 
-    /// <summary>Маскований токен для показу в Settings — той самий підхід, що й Zabbix.</summary>
+    /// <summary>Masked token for display in Settings — same approach as Zabbix.</summary>
     public string GetTelegramTokenMasked()
     {
         lock (_lock) return Mask(_telegramToken);
@@ -184,12 +185,12 @@ public sealed class CredentialStore
     // ── Data Protection ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// Аудит Зона 4, Знахідка №2 (2026-08-22): на відміну від Unprotect()
-    /// нижче (яка вже роками коректно деградує до "секрет недоступний" при
-    /// зламаному/ротованому key ring), запис раніше НЕ мав жодного захисту —
-    /// CryptographicException летів неспійманим аж до голого HTTP 500 без
-    /// пояснення. Найімовірніший реальний сценарій — саме той момент, коли
-    /// адмін намагається "полагодити" ситуацію, зберігаючи токен наново.
+    /// Audit Zone 4, Finding #2 (2026-08-22): unlike Unprotect() below (which
+    /// has correctly degraded to "secret unavailable" on a broken/rotated key
+    /// ring for years), writes previously had NO protection at all —
+    /// CryptographicException flew uncaught all the way to a bare HTTP 500 with
+    /// no explanation. The most likely real-world scenario is exactly the
+    /// moment the admin tries to "fix" the situation by re-saving the token.
     /// </summary>
     private byte[] Protect(string plaintext)
     {
@@ -200,18 +201,18 @@ public sealed class CredentialStore
         catch (CryptographicException ex)
         {
             throw new CredentialProtectionException(
-                "Не вдалося зашифрувати секрет — ключі шифрування (DPAPI-NG) недоступні або " +
-                "пошкоджені. Можливо, службу переналаштовано на інший обліковий запис, або тека " +
-                "ключів шифрування втрачена. Зверніться до адміністратора.", ex);
+                "Failed to encrypt the secret — the encryption keys (DPAPI-NG) are unavailable or " +
+                "corrupted. The service may have been reconfigured to run under a different account, or the " +
+                "encryption key folder was lost. Contact your administrator.", ex);
         }
     }
 
     /// <summary>
-    /// Ротація/втрата ключів шифрування — цілком реальний сценарій (напр.
-    /// відновлення сервісу на новій машині без перенесеної key-ring теки) —
-    /// трактується як "секрет недоступний", а не як фатальна помилка старту:
-    /// повертаємо порожній рядок, HasXCredentials коректно стане false,
-    /// поллер попросить користувача зберегти credentials знову через Settings.
+    /// Encryption key rotation/loss is an entirely realistic scenario (e.g.
+    /// restoring the service on a new machine without migrating the key-ring
+    /// folder) — treated as "secret unavailable", not as a fatal startup
+    /// error: we return an empty string, HasXCredentials correctly becomes
+    /// false, and the poller will ask the user to save credentials again via Settings.
     /// </summary>
     private string Unprotect(byte[] blob)
     {
@@ -233,7 +234,7 @@ public sealed class CredentialStore
             : $"••••••••{secret[^4..]}";
     }
 
-    // ── Scoped repository access (Singleton → Scoped, T2.3/Фаза4-патерн) ────
+    // ── Scoped repository access (Singleton → Scoped, T2.3/Phase-4 pattern) ────
 
     private async Task<T> WithRepositoryAsync<T>(Func<ICredentialRepository, Task<T>> action)
     {

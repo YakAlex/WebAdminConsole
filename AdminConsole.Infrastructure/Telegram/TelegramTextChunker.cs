@@ -1,21 +1,21 @@
 namespace AdminConsole.Infrastructure.Telegram;
 
 /// <summary>
-/// Розбиває список готових текстових рядків на "сторінки" під ліміт
-/// Telegram sendMessage/editMessageText (4096 символів). Використовуємо
-/// запас (maxChars = 3500) — заголовок сторінки + emoji займають місце,
-/// краще мати запас, ніж зловити BadRequest від API.
+/// Splits a list of ready-made text lines into "pages" under the Telegram
+/// sendMessage/editMessageText limit (4096 characters). We keep a safety
+/// margin (maxChars = 3500) — the page header + emoji take up space, better
+/// to have headroom than hit a BadRequest from the API.
 ///
-/// Перенесено без змін (T5.3).
+/// Carried over unchanged (T5.3).
 /// </summary>
 public static class TelegramTextChunker
 {
     private const int DefaultMaxChars = 3500;
 
     /// <summary>
-    /// Об'єднує рядки в сторінки так, щоб жодна сторінка не перевищила
-    /// maxChars. Один рядок ніколи не розбивається навпіл — якщо один
-    /// рядок сам по собі довший за maxChars, він обрізається з "…".
+    /// Combines lines into pages so that no page exceeds maxChars. A single
+    /// line is never split in half — if a line by itself is longer than
+    /// maxChars, it's truncated with "…".
     /// </summary>
     public static List<string> BuildPages(
         IReadOnlyList<string> lines,
@@ -32,7 +32,7 @@ public static class TelegramTextChunker
                 ? rawLine[..(maxChars - 1)] + "…"
                 : rawLine;
 
-            // +1 за \n
+            // +1 for \n
             if (current.Length + line.Length + 1 > maxChars && current.Length > header.Length)
             {
                 pages.Add(current.ToString().TrimEnd());

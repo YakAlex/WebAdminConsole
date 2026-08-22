@@ -10,30 +10,32 @@ using Microsoft.Extensions.Logging;
 namespace AdminConsole.Infrastructure.Monitoring;
 
 /// <summary>
-/// Керує вікнами планового обслуговування (Maintenance Windows).
+/// Manages planned Maintenance Windows.
 ///
-/// Гібридна модель Pull + Push:
-///   - Pull: поллери (Ping, RDP) синхронно викликають IsUnderMaintenance
-///     перед відправкою Warning/Error повідомлень — без затримки MediatR.
-///   - Push: StartMaintenance / автозавершення в ExecuteAsync шлють
-///     MaintenanceChangedOccurred — UptimeTracker закриває інциденти,
-///     PingMonitor перегенеровує алерти, SignalR оновлює UI миттєво.
+/// Hybrid Pull + Push model:
+///   - Pull: pollers (Ping, RDP) synchronously call IsUnderMaintenance
+///     before sending a Warning/Error notification — no MediatR delay.
+///   - Push: StartMaintenance / auto-completion in ExecuteAsync send
+///     MaintenanceChangedOccurred — UptimeTracker closes incidents,
+///     PingMonitor regenerates alerts, SignalR updates the UI instantly.
 ///
-/// Сховище — ConcurrentDictionary, бо читається одночасно з кількох
-/// фонових потоків (Ping/RDP поллери на кожному циклі) і пишеться
-/// з майбутнього Settings API (UI) та з власного фонового циклу автозавершення.
+/// Storage — ConcurrentDictionary, because it's read concurrently from
+/// several background threads (Ping/RDP pollers on every cycle) and
+/// written from the future Settings API (UI) and from its own background
+/// auto-completion loop.
 ///
-/// T4.1: мігрується ПЕРШИМ серед stateful-сервісів — PingMonitorService і
-/// UptimeTrackerService залежать від нього. Заміна LoadFromDisk() у
-/// конструкторі (синхронний виклик, більше неможливий з async-репозиторієм)
-/// на await у StartAsync, який Generic Host гарантовано await'ить ДО того,
-/// як стартує наступний зареєстрований IHostedService.
+/// T4.1: migrated FIRST among the stateful services — PingMonitorService
+/// and UptimeTrackerService depend on it. Replacing LoadFromDisk() in the
+/// constructor (a synchronous call, no longer possible with an async
+/// repository) with an await in StartAsync, which the Generic Host is
+/// guaranteed to await BEFORE the next registered IHostedService starts.
 ///
-/// IServiceScopeFactory замість прямої ін'єкції IMaintenanceRepository:
-/// репозиторій — Scoped (прив'язаний до Scoped AdminConsoleDbContext), а
-/// цей сервіс — Singleton. DI забороняє Singleton напряму тримати Scoped-
-/// залежність (лише через фабрику скоупів) — стандартний, задокументований
-/// Microsoft патерн для BackgroundService, якому потрібен EF Core.
+/// IServiceScopeFactory instead of injecting IMaintenanceRepository
+/// directly: the repository is Scoped (bound to the Scoped
+/// AdminConsoleDbContext), while this service is Singleton. DI forbids a
+/// Singleton from holding a Scoped dependency directly (only through a
+/// scope factory) — the standard, documented Microsoft pattern for a
+/// BackgroundService that needs EF Core.
 /// </summary>
 public sealed class MaintenanceService(
     IMediator                    mediator,
@@ -55,7 +57,7 @@ public sealed class MaintenanceService(
     private Task WithRepositoryAsync(Func<IMaintenanceRepository, Task> action) =>
         WithRepositoryAsync(async r => { await action(r); return true; });
 
-    // ── Lifecycle: гарантоване завантаження ДО старту будь-якого іншого сервісу ──
+    // ── Lifecycle: guaranteed load BEFORE any other service starts ──
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -63,7 +65,7 @@ public sealed class MaintenanceService(
         await base.StartAsync(cancellationToken);
     }
 
-    // ── Pull API — викликається з фонових поллерів ─────────────────────────
+    // ── Pull API — called from background pollers ─────────────────────────
 
     public bool IsUnderMaintenance(string serverIp, string group)
     {
@@ -79,7 +81,7 @@ public sealed class MaintenanceService(
         return false;
     }
 
-    /// <summary>Повертає активне вікно (для UI — показати Reason/To у тултипі).</summary>
+    /// <summary>Returns the active window (for the UI — to show Reason/To in a tooltip).</summary>
     public MaintenanceWindow? GetActiveWindow(string serverIp, string group)
     {
         var now = DateTimeOffset.Now;
@@ -95,9 +97,10 @@ public sealed class MaintenanceService(
     }
 
     /// <summary>
-    /// Усі активні вікна обслуговування прямо зараз. Публічний read-only
-    /// знімок — потрібен TelegramBotService (Фаза 5) для команди/кнопки
-    /// "Обслуговування", без потреби окремо кешувати стан через MediatR.
+    /// All active maintenance windows right now. A public read-only
+    /// snapshot — needed by TelegramBotService (Phase 5) for the
+    /// "Maintenance" command/button, without needing to separately cache
+    /// state via MediatR.
     /// </summary>
     public IReadOnlyList<MaintenanceWindow> GetActiveWindows()
     {
@@ -105,7 +108,7 @@ public sealed class MaintenanceService(
         return _windows.Values.Where(w => w.IsActiveAt(now)).ToList();
     }
 
-    // ── Push API — викликається з майбутнього Settings/Maintenance API ─────
+    // ── Push API — called from the future Settings/Maintenance API ─────
 
     public async Task StartMaintenanceAsync(MaintenanceWindow window, CancellationToken ct = default)
     {
@@ -113,21 +116,22 @@ public sealed class MaintenanceService(
         await WithRepositoryAsync(r => r.UpsertAsync(window, ct));
 
         logger.LogInformation(
-            "Maintenance розпочато: {Key}, до {To}",
-            window.Key, window.To?.ToString() ?? "без обмеження");
+            "Maintenance started: {Key}, until {To}",
+            window.Key, window.To?.ToString() ?? "no limit");
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Maintenance розпочато для {window.DisplayName}: " +
-            $"{(string.IsNullOrWhiteSpace(window.Reason) ? "без причини" : window.Reason)} " +
-            $"({(window.To is { } to ? $"до {to.ToLocalTime():dd.MM HH:mm}" : "без обмеження часу")})."), ct);
+            $"Maintenance started for {window.DisplayName}: " +
+            $"{(string.IsNullOrWhiteSpace(window.Reason) ? "no reason given" : window.Reason)} " +
+            $"({(window.To is { } to ? $"until {to.ToLocalTime():dd.MM HH:mm}" : "no time limit")})."), ct);
 
         await mediator.Publish(new MaintenanceChangedOccurred(MaintenanceAction.Started, window), ct);
     }
 
     /// <summary>
-    /// Дострокове завершення вручну (адмін відновив сервер раніше графіка).
-    /// Повертає false, якщо вікна з таким Key вже нема (idempotent no-op) —
-    /// REST-контролер (аудит-фікс п.1) використовує це для 404 vs 204.
+    /// Early manual completion (an admin restored the server ahead of
+    /// schedule). Returns false if no window with this Key exists anymore
+    /// (idempotent no-op) — the REST controller (audit fix #1) uses this to
+    /// distinguish 404 vs 204.
     /// </summary>
     public async Task<bool> EndMaintenanceEarlyAsync(string key, CancellationToken ct = default)
     {
@@ -137,18 +141,19 @@ public sealed class MaintenanceService(
         await WithRepositoryAsync(r => r.RemoveAsync(key, ct));
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Maintenance для {window.DisplayName} завершено вручну."), ct);
+            $"Maintenance for {window.DisplayName} ended manually."), ct);
 
         await mediator.Publish(new MaintenanceChangedOccurred(MaintenanceAction.Ended, window), ct);
         return true;
     }
 
     /// <summary>
-    /// Знімає ВСІ активні вікна обслуговування (включно з "без обмеження часу")
-    /// і очищує їх з БД. Викликається при graceful shutdown хосту —
-    /// Maintenance Mode свідомо не переживає перезапуск застосунку: інакше
-    /// забуте "без обмеження" вікно могло б мовчки придушувати алерти
-    /// тижнями після того, як службу просто перезапустили.
+    /// Clears ALL active maintenance windows (including "no time limit"
+    /// ones) and removes them from the DB. Called on graceful host
+    /// shutdown — Maintenance Mode is intentionally not meant to survive
+    /// an app restart: otherwise a forgotten "no limit" window could
+    /// silently suppress alerts for weeks after the service was simply
+    /// restarted.
     /// </summary>
     public async Task ClearAllOnShutdownAsync(CancellationToken ct = default)
     {
@@ -162,24 +167,25 @@ public sealed class MaintenanceService(
             await mediator.Publish(new MaintenanceChangedOccurred(MaintenanceAction.Ended, window), ct);
 
         logger.LogInformation(
-            "MaintenanceService: {Count} вікон(о) обслуговування знято при закритті застосунку.",
+            "MaintenanceService: {Count} maintenance window(s) cleared on app shutdown.",
             windows.Count);
     }
 
-    // ── Фонове автозавершення прострочених вікон ────────────────────────────
+    // ── Background auto-completion of expired windows ────────────────────────
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("MaintenanceService started. {Count} активних вікон завантажено.",
+        logger.LogInformation("MaintenanceService started. {Count} active window(s) loaded.",
             _windows.Count);
 
-        // Аудит Зона 1 (2026-08-22): раніше саме тіло циклу (читання/видалення
-        // прострочених вікон, публікація подій) не мало ЖОДНОГО try/catch —
-        // захищений був лише сам Task.Delay. Будь-який транзієнтний виняток БД
-        // під час завершення maintenance-вікна вилітав необхопленим і клав
-        // увесь хост (BackgroundServiceExceptionBehavior). Один цикл, що впав
-        // з винятком, тепер лише пропускається — наступний цикл (через
-        // CheckIntervalSeconds) спробує знову.
+        // Audit Zone 1 (2026-08-22): previously the loop body itself
+        // (reading/removing expired windows, publishing events) had NO
+        // try/catch at all — only the Task.Delay was protected. Any
+        // transient DB exception while completing a maintenance window
+        // used to bubble up unhandled and take down the whole host
+        // (BackgroundServiceExceptionBehavior). A cycle that throws is now
+        // simply skipped — the next cycle (after CheckIntervalSeconds)
+        // will try again.
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -202,7 +208,7 @@ public sealed class MaintenanceService(
                     await WithRepositoryAsync(r => r.RemoveAsync(key, stoppingToken));
 
                     await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                        $"Maintenance для {window.DisplayName} завершено (час вийшов)."), stoppingToken);
+                        $"Maintenance for {window.DisplayName} ended (time expired)."), stoppingToken);
 
                     await mediator.Publish(new MaintenanceChangedOccurred(MaintenanceAction.Ended, window), stoppingToken);
                 }
@@ -210,7 +216,7 @@ public sealed class MaintenanceService(
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                logger.LogError(ex, "MaintenanceService: помилка в циклі завершення вікон — пропускаємо цей цикл.");
+                logger.LogError(ex, "MaintenanceService: error in the window-completion loop — skipping this cycle.");
             }
         }
     }
@@ -230,7 +236,7 @@ public sealed class MaintenanceService(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "MaintenanceService: помилка завантаження з БД.");
+            logger.LogError(ex, "MaintenanceService: error loading from DB.");
         }
     }
 }

@@ -6,21 +6,22 @@ using EvtLogReader = System.Diagnostics.Eventing.Reader.EventLogReader;
 namespace AdminConsole.Infrastructure.Remote;
 
 /// <summary>
-/// Спільна логіка читання Windows Event Log через EventLogQuery (Eventing.Reader).
-/// На відміну від System.Diagnostics.EventLog, Eventing.Reader працює через
-/// курсори і XPath-запити — без індексованого доступу, тому стабільний
-/// при активному записі в лог (немає ArgumentException при зміні Entries під час читання).
+/// Shared logic for reading the Windows Event Log via EventLogQuery
+/// (Eventing.Reader). Unlike System.Diagnostics.EventLog, Eventing.Reader
+/// works through cursors and XPath queries — no indexed access, so it
+/// stays stable under active log writes (no ArgumentException from Entries
+/// changing mid-read).
 ///
-/// Перенесено без змін (T4.6) — статичний клас, нуль залежностей від WPF.
+/// Carried over unchanged (T4.6) — a static class, zero dependencies on WPF.
 /// </summary>
 public static class WinEventLogReader
 {
     public const int FetchCount = 20;
 
     /// <summary>
-    /// machineName: "." для localhost, або IP/hostname для віддаленої машини.
-    /// since: null = початкове читання (останні FetchCount помилок за 3 дні),
-    ///        not null = інкрементальний режим (тільки новіші за since).
+    /// machineName: "." for localhost, or an IP/hostname for a remote machine.
+    /// since: null = initial read (last FetchCount errors over 3 days),
+    ///        not null = incremental mode (only newer than since).
     /// </summary>
     public static List<EventLogEntry> ReadErrors(string machineName, DateTimeOffset? since)
     {
@@ -30,18 +31,18 @@ public static class WinEventLogReader
         {
             try
             {
-                // XPath фільтр: тільки Error (Level=2) і FailureAudit (Keywords=0x10000000000000)
-                // З часовим обмеженням щоб не сканувати весь лог.
+                // XPath filter: only Error (Level=2) and FailureAudit (Keywords=0x10000000000000)
+                // With a time bound so we don't scan the entire log.
                 string timeFilter = since.HasValue
                     ? $"@SystemTime > '{since.Value.UtcDateTime:yyyy-MM-ddTHH:mm:ss.fffffffZ}'"
                     : $"@SystemTime > '{DateTime.UtcNow.AddDays(-3):yyyy-MM-ddTHH:mm:ss.fffffffZ}'";
 
-                // Level=2 → Error, Keywords включає FailureAudit (0x10000000000000)
+                // Level=2 → Error, Keywords includes FailureAudit (0x10000000000000)
                 string xpath =
                     $"*[System[(Level=2 or Keywords='0x10000000000000') and TimeCreated[{timeFilter}]]]";
 
-                // PathType.LogName — читаємо живий лог (не файл).
-                // Direction.Backward — від нових до старих, тому зупиняємось після FetchCount.
+                // PathType.LogName — reads the live log (not a file).
+                // Direction.Backward — newest to oldest, so we stop after FetchCount.
                 var query = new EventLogQuery(logName, PathType.LogName, xpath)
                 {
                     ReverseDirection = true,
@@ -66,15 +67,15 @@ public static class WinEventLogReader
             }
             catch (EventLogNotFoundException)
             {
-                // Лог не існує на цій машині — пропускаємо мовчки
+                // Log doesn't exist on this machine — skip silently
             }
             catch (UnauthorizedAccessException)
             {
-                // Немає прав читати цей лог — пропускаємо мовчки
+                // No permission to read this log — skip silently
             }
             catch (Exception)
             {
-                // RPC недоступний, мережева помилка тощо — пропускаємо мовчки
+                // RPC unavailable, network error, etc. — skip silently
             }
         }
 
@@ -86,7 +87,7 @@ public static class WinEventLogReader
 
     private static EventLogEntry MapRecord(EventRecord r)
     {
-        // FormatDescription() може повернути null якщо провайдер не встановлений
+        // FormatDescription() can return null if the provider isn't installed
         string rawMessage = string.Empty;
         try { rawMessage = r.FormatDescription() ?? string.Empty; }
         catch { rawMessage = r.Properties?.FirstOrDefault()?.Value?.ToString() ?? string.Empty; }
@@ -101,7 +102,7 @@ public static class WinEventLogReader
             _ => EventSeverity.Information
         };
 
-        // FailureAudit — якщо є keyword Audit Failure
+        // FailureAudit — if the Audit Failure keyword is present
         const long auditFailureKeyword = 0x10000000000000;
         if ((r.Keywords & auditFailureKeyword) != 0)
             severity = EventSeverity.Critical;

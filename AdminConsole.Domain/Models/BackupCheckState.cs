@@ -1,9 +1,9 @@
 namespace AdminConsole.Domain.Models;
 
 /// <summary>
-/// Рантайм-стан однієї перевірки (сервер + Full/Diff). Персистується
-/// у logs/backups.json (atomic write, той самий патерн, що й
-/// DowntimeRecord/MaintenanceWindow — temp-файл + File.Move(overwrite: true)).
+/// Runtime state of a single check (server + Full/Diff). Persisted to
+/// logs/backups.json (atomic write, the same pattern as
+/// DowntimeRecord/MaintenanceWindow — temp file + File.Move(overwrite: true)).
 /// </summary>
 public sealed class BackupCheckState
 {
@@ -13,44 +13,44 @@ public sealed class BackupCheckState
     public BackupKind Kind       { get; init; }
 
     /// <summary>
-    /// Поточний, ПІДТВЕРДЖЕНИЙ (пост-анти-флапінг) стан — саме він
-    /// показується в UI і провокує Telegram-алерт при переході
-    /// в Stale/Missing.
+    /// The current, CONFIRMED (post-anti-flapping) state — this is what's
+    /// shown in the UI and what triggers a Telegram alert on a transition
+    /// to Stale/Missing.
     /// </summary>
     public BackupOutcome Outcome { get; set; } = BackupOutcome.Unknown;
 
-    /// <summary>Коли востаннє був підтверджений НЕ-Unknown результат.</summary>
+    /// <summary>When the last confirmed non-Unknown result occurred.</summary>
     public DateTimeOffset? LastConfirmedAt { get; set; }
 
-    /// <summary>Який саме був той останній підтверджений НЕ-Unknown результат.</summary>
+    /// <summary>What that last confirmed non-Unknown result actually was.</summary>
     public BackupOutcome? LastConfirmedOutcome { get; set; }
 
-    /// <summary>Скільки циклів поспіль перевірка не змогла достукатись (Stage A).</summary>
+    /// <summary>How many consecutive cycles the check has failed to reach its source (Stage A).</summary>
     public int ConsecutiveUnknownCount { get; set; }
 
     /// <summary>
-    /// Анти-флапінг лічильник: скільки циклів поспіль "сирий" результат
-    /// Stage B відрізняється від поточного підтвердженого Outcome.
-    /// Перехід у Outcome стається лише після MinConsecutiveForAlert
-    /// однакових "сирих" результатів поспіль.
+    /// Anti-flapping counter: how many consecutive cycles the "raw" Stage B
+    /// result has differed from the current confirmed Outcome.
+    /// A transition to a new Outcome only happens after MinConsecutiveForAlert
+    /// identical "raw" results in a row.
     /// </summary>
     public int ConsecutiveBadCount { get; set; }
 
     /// <summary>
-    /// Останній побачений "сирий" (до анти-флапінгу) результат — потрібен,
-    /// щоб рахувати саме ОДНАКОВІ результати поспіль, а не будь-яку зміну.
-    /// Null одразу після кожного підтвердженого переходу (нова серія
-    /// рахується з чистого аркуша).
+    /// The last "raw" (pre-anti-flapping) result seen — needed to count
+    /// IDENTICAL results in a row specifically, not just any change.
+    /// Null right after every confirmed transition (a new streak starts
+    /// from a clean slate).
     /// </summary>
     public BackupOutcome? LastRawOutcome { get; set; }
 
-    /// <summary>Текст останньої помилки Stage A (для показу в UI/логах). Null, якщо перевірка не падала.</summary>
+    /// <summary>Text of the last Stage A error (for display in the UI/logs). Null if the check hasn't failed.</summary>
     public string? LastError { get; set; }
 
     /// <summary>
-    /// Rolling-вікно останніх зразків розміру — лише з циклів, де
-    /// Stage A пройшов успішно. Обмежується сервісом до фіксованої
-    /// довжини (MaxHistorySamples, напр. 14) при кожному додаванні.
+    /// A rolling window of the most recent size samples — only from cycles
+    /// where Stage A succeeded. Trimmed by the service to a fixed length
+    /// (MaxHistorySamples, e.g. 14) on every addition.
     /// </summary>
     public List<BackupSample> History { get; init; } = new();
 }

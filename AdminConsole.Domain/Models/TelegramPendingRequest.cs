@@ -1,9 +1,9 @@
 namespace AdminConsole.Domain.Models;
 
 /// <summary>
-/// Запит на доступ до Telegram-бота від нового користувача (/start).
-/// Живе виключно в пам'яті (TelegramAccessControlService) — не персистентний,
-/// бо втрачений при перезапуску запит користувач просто надішле повторно.
+/// A request for Telegram bot access from a new user (/start).
+/// Lives purely in memory (TelegramAccessControlService) — not persisted,
+/// since a request lost on restart will simply be resent by the user.
 /// </summary>
 public sealed record TelegramPendingRequest(
     int            Id,

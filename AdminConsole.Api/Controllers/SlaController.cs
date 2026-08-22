@@ -5,10 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace AdminConsole.Api.Controllers;
 
 /// <summary>
-/// T4.12 — SLA on-demand: GET /api/sla повертає JSON (React показує в UI),
-/// GET /api/sla/html повертає самодостатній HTML-файл (SlaReportHtmlRenderer)
-/// для "завантажити звіт" — той самий рендер, що й у Hangfire-джобі SlaReportJob,
-/// лише на вимогу замість за розкладом.
+/// T4.12 — on-demand SLA: GET /api/sla returns JSON (rendered by React in the
+/// UI), GET /api/sla/html returns a self-contained HTML file
+/// (SlaReportHtmlRenderer) for "download report" — the same rendering used
+/// by the SlaReportJob Hangfire job, just on-demand instead of scheduled.
 /// </summary>
 public sealed class SlaController(SlaReportService slaReportService) : AdminConsoleControllerBase
 {

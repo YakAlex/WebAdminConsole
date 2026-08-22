@@ -1,10 +1,10 @@
 namespace AdminConsole.Infrastructure.Data.Entities;
 
 /// <summary>
-/// Службовий прапорець "одноразова міграція з JSON вже виконана".
-/// AdminConsole.Migration перевіряє це перед записом, щоб повторний
-/// запуск не задублював дані (Фаза 2, T2.6). Інфраструктурна сутність —
-/// не має бізнес-значення поза персистентністю, тому не в AdminConsole.Domain.
+/// Internal flag marking "the one-time migration from JSON has already run".
+/// AdminConsole.Migration checks this before writing, so a repeat run doesn't
+/// duplicate data (Phase 2, T2.6). An infrastructure entity — it has no
+/// business meaning beyond persistence, so it doesn't live in AdminConsole.Domain.
 /// </summary>
 public sealed class MigrationMarker
 {

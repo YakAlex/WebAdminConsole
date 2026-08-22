@@ -3,29 +3,29 @@ using AdminConsole.Domain.Models;
 namespace AdminConsole.Domain.Abstractions;
 
 /// <summary>
-/// Персистентність для DowntimeRecord. Дзеркалить LoadFromDisk/SaveToDisk/
-/// GetSnapshot з WPF UptimeTrackerService (Фаза 2, T2.3: "репозиторій
-/// замість File I/O" — уся бізнес-логіка анти-флапінгу, reconciliation
-/// і дедуплікації лишається в сервісі-споживачі БЕЗ ЗМІН, тут — лише
-/// нижній шар збереження).
+/// Persistence for DowntimeRecord. Mirrors LoadFromDisk/SaveToDisk/
+/// GetSnapshot from the WPF UptimeTrackerService (Phase 2, T2.3: "repository
+/// instead of File I/O" — all the anti-flapping, reconciliation, and
+/// deduplication business logic stays in the consuming service UNCHANGED;
+/// this is only the lower persistence layer).
 ///
-/// На відміну від файлового LoadFromDisk/SaveToDisk (які працювали
-/// поверх місячних JSON-файлів і вимагали ручного групування/видалення
-/// порожніх файлів), реляційна модель дозволяє прості CRUD-операції
-/// за природним ключем (ServerIp, FellAt) — групування по місяцю було
-/// суто файловим обмеженням, а не бізнес-правилом.
+/// Unlike the file-based LoadFromDisk/SaveToDisk (which worked on top of
+/// monthly JSON files and required manual grouping/deletion of empty files),
+/// the relational model allows simple CRUD operations by natural key
+/// (ServerIp, FellAt) — grouping by month was purely a file-storage
+/// constraint, not a business rule.
 /// </summary>
 public interface IDowntimeRepository
 {
-    /// <summary>Завантажує всі записи (відкриті й закриті) — виклик у конструкторі сервіса, до підписки на події.</summary>
+    /// <summary>Loads all records (open and closed) — called from the service constructor, before subscribing to events.</summary>
     Task<IReadOnlyList<DowntimeRecord>> LoadAllAsync(CancellationToken ct = default);
 
-    /// <summary>Insert або update за ключем (ServerIp, FellAt).</summary>
+    /// <summary>Insert or update by key (ServerIp, FellAt).</summary>
     Task UpsertAsync(DowntimeRecord record, CancellationToken ct = default);
 
-    /// <summary>Видаляє один запис за природним ключем (DeleteRecord).</summary>
+    /// <summary>Deletes a single record by its natural key (DeleteRecord).</summary>
     Task DeleteAsync(string serverIp, DateTimeOffset fellAt, CancellationToken ct = default);
 
-    /// <summary>Масове видалення всіх закритих (IsResolved) записів (ClearAllResolved). Повертає кількість видалених.</summary>
+    /// <summary>Bulk-deletes all closed (IsResolved) records (ClearAllResolved). Returns the number deleted.</summary>
     Task<int> DeleteAllResolvedAsync(CancellationToken ct = default);
 }

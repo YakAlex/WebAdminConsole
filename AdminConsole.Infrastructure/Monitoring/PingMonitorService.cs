@@ -11,12 +11,12 @@ using Microsoft.Extensions.Options;
 namespace AdminConsole.Infrastructure.Monitoring;
 
 /// <summary>
-/// T4.2: BackgroundService, AddSingleton — БЕЗ Hangfire (тісний dual-loop
-/// цикл секундного порядку, правило Hangfire vs BackgroundService).
+/// T4.2: BackgroundService, AddSingleton — NO Hangfire (a tight dual-loop
+/// cycle on the order of seconds, per the Hangfire vs BackgroundService rule).
 ///
-/// IRecipient&lt;MaintenanceChangedMessage&gt; (реєстрація в конструкторі,
+/// IRecipient&lt;MaintenanceChangedMessage&gt; (registered in the constructor,
 /// WeakReferenceMessenger) → INotificationHandler&lt;MaintenanceChangedOccurred&gt;
-/// (клас резолвиться й викликається через DI, MediatR fan-out).
+/// (the class is resolved and invoked through DI, MediatR fan-out).
 /// </summary>
 public sealed class PingMonitorService(
     IMediator                    mediator,
@@ -29,47 +29,48 @@ public sealed class PingMonitorService(
     private readonly MonitoringSettings         _settings = settings.Value;
     private readonly IReadOnlyList<ServerEntry> _servers  = servers.Value.AsReadOnly();
 
-    // ── Стан статусів ────────────────────────────────────────────────────────
+    // ── Status state ────────────────────────────────────────────────────────
 
-    // Єдине джерело правди про поточний статус кожного IP.
-    // ConcurrentDictionary — читається і пишеться з обох циклів паралельно.
+    // Single source of truth for the current status of each IP.
+    // ConcurrentDictionary — read and written from both loops concurrently.
     private readonly ConcurrentDictionary<string, PingStatus> _previousStatus = new();
 
     // ── Throttle ─────────────────────────────────────────────────────────────
 
-    // Основний цикл: до 10 паралельних пінгів (15 серверів → 10+5)
+    // Main loop: up to 10 parallel pings (15 servers → 10+5)
     private readonly SemaphoreSlim _mainThrottle     = new(10);
 
-    // Recovery loop: окремий throttle на 5 слотів.
-    // Не ділимо з основним — recovery не блокується основним циклом
-    // навіть якщо всі 10 слотів зайняті.
+    // Recovery loop: a separate throttle with 5 slots.
+    // Not shared with the main loop — recovery is never blocked by the main
+    // cycle even when all 10 main slots are in use.
     private readonly SemaphoreSlim _recoveryThrottle = new(5);
 
     /// <summary>
-    /// Per-IP замок: якщо /ping (on-demand з Telegram) і фоновий цикл
-    /// (main/recovery loop) намагаються опитати ОДИН і той самий сервер
-    /// одночасно — без цього замка обидва виклики незалежно читають/пишуть
-    /// _previousStatus[ip] через GetOrAdd+TryUpdate (CAS), що НЕ пошкоджує
-    /// сам словник, але може подвоїти або загубити один із Warning/Error
-    /// логів про перехід статусу через інтерлівінг двох перевірок стану.
-    /// Серіалізуємо саме на рівні "один сервер" — різні сервери й далі
-    /// пінгуються повністю паралельно між собою.
+    /// Per-IP lock: if /ping (on-demand from Telegram) and the background
+    /// loop (main/recovery loop) try to poll the SAME server at the same
+    /// time — without this lock both calls independently read/write
+    /// _previousStatus[ip] via GetOrAdd+TryUpdate (CAS), which does NOT
+    /// corrupt the dictionary itself, but can duplicate or drop a
+    /// Warning/Error log about a status transition due to interleaving
+    /// of the two state checks. We serialize exactly at "one server"
+    /// granularity — different servers are still pinged fully in parallel
+    /// with each other.
     /// </summary>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _perServerLocks = new();
 
     private SemaphoreSlim GetServerLock(string ip) =>
         _perServerLocks.GetOrAdd(ip, _ => new SemaphoreSlim(1, 1));
 
-    // Аудит-фікс (2026-08-22): троттлінг on-demand /ping (REST + Telegram
-    // /ping) — вікно те саме, що й основний цикл (PingIntervalSeconds).
+    // Audit fix (2026-08-22): throttling for on-demand /ping (REST + Telegram
+    // /ping) — the window matches the main loop (PingIntervalSeconds).
     private readonly OnDemandSnapshotThrottle<IReadOnlyList<PingResult>> _onDemandThrottle =
         new(TimeSpan.FromSeconds(settings.Value.PingIntervalSeconds));
 
-    // ── Константи ────────────────────────────────────────────────────────────
+    // ── Constants ────────────────────────────────────────────────────────────
 
     private const int    PingTimeoutMs        = 2000;
     private const string LogSource            = "PingMonitor";
-    private const int    MinOfflineIntervalSec = 5; // захист від некоректного appsettings
+    private const int    MinOfflineIntervalSec = 5; // guard against a bad appsettings value
 
     // ── INotificationHandler<MaintenanceChangedOccurred> ────────────────────
 
@@ -77,11 +78,11 @@ public sealed class PingMonitorService(
     {
         if (notification.Action != MaintenanceAction.Ended) return Task.CompletedTask;
 
-        // Скидаємо previousStatus для зачеплених серверів на Unknown —
-        // наступний цикл пінгу сприйме поточний Offline (якщо сервер
-        // не встиг піднятись вчасно) як "перехід з Unknown", що вже
-        // існуючою гілкою коду генерує Warning — без окремої логіки
-        // "примусового алерту".
+        // Reset previousStatus to Unknown for affected servers — the next
+        // ping cycle will treat a current Offline status (if the server
+        // didn't come back up in time) as a "transition from Unknown",
+        // which the existing code path already turns into a Warning — no
+        // separate "forced alert" logic needed.
         var affected = notification.Window.TargetGroup is not null
             ? _servers.Where(s => s.Group.Equals(notification.Window.TargetGroup,
                 StringComparison.OrdinalIgnoreCase))
@@ -97,7 +98,7 @@ public sealed class PingMonitorService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Валідація налаштувань — захист від некоректного appsettings.json
+        // Settings validation — guard against a malformed appsettings.json
         var offlineInterval = Math.Max(
             _settings.OfflinePingIntervalSeconds,
             MinOfflineIntervalSec);
@@ -113,9 +114,9 @@ public sealed class PingMonitorService(
 
         await PublishInitialCheckingStateAsync(stoppingToken);
 
-        // LinkedCts дозволяє одному циклу скасувати інший при падінні.
-        // Без цього якщо MainLoop впаде з винятком — RecoveryLoop
-        // продовжує крутитись нескінченно і навпаки.
+        // LinkedCts lets one loop cancel the other if it crashes.
+        // Without this, if MainLoop crashes with an exception, RecoveryLoop
+        // would keep running indefinitely, and vice versa.
         using var linkedCts = CancellationTokenSource
             .CreateLinkedTokenSource(stoppingToken);
 
@@ -130,27 +131,28 @@ public sealed class PingMonitorService(
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "PingMonitorService: критична помилка циклу.");
+            logger.LogError(ex, "PingMonitorService: critical loop error.");
         }
 
         logger.LogInformation("PingMonitorService stopped.");
 
-        // Аудит Зона 1 — знахідка з живого тестування (2026-08-22): цей рядок
-        // стоїть ПІСЛЯ try/catch вище (не всередині), тож нічим не був
-        // захищений. Під час реального shutdown хоста (не лише скасування
-        // stoppingToken, а й тому, що DI-контейнер уже почав звільнятись)
-        // цей виклик може впасти з ObjectDisposedException ("IServiceProvider"),
-        // а не з OperationCanceledException — підтверджено живим запуском.
-        // Це останній рядок методу, тож будь-який необхоплений виняток тут
-        // так само вилітав би з ExecuteAsync назовні.
+        // Audit Zone 1 — finding from live testing (2026-08-22): this line
+        // sits AFTER the try/catch above (not inside it), so it wasn't
+        // protected by anything. During an actual host shutdown (not just
+        // stoppingToken cancellation, but also because the DI container has
+        // already started disposing) this call can throw an
+        // ObjectDisposedException ("IServiceProvider") rather than an
+        // OperationCanceledException — confirmed by a live run. This is the
+        // last line of the method, so any unhandled exception here would
+        // likewise bubble out of ExecuteAsync.
         try
         {
             await mediator.Publish(AppLogEntryOccurred.Warning(LogSource, "Ping monitor stopped."), CancellationToken.None);
         }
-        catch { /* найгірший випадок — хост уже звільняє ресурси, ILogger вище вже зафіксував головне */ }
+        catch { /* worst case — the host is already disposing resources, the ILogger call above already recorded what matters */ }
     }
 
-    // ── Основний цикл (всі сервери, кожні N секунд) ──────────────────────────
+    // ── Main loop (all servers, every N seconds) ──────────────────────────
 
     private async Task RunMainLoopAsync(CancellationToken ct)
     {
@@ -159,8 +161,8 @@ public sealed class PingMonitorService(
         {
             while (!ct.IsCancellationRequested)
             {
-                // Перша ітерація — одразу пінгуємо без затримки.
-                // Наступні — чекаємо PingIntervalSeconds.
+                // First iteration — ping immediately, no delay.
+                // Subsequent iterations — wait PingIntervalSeconds.
                 if (firstRun)
                     firstRun = false;
                 else
@@ -176,11 +178,11 @@ public sealed class PingMonitorService(
         }
         catch (OperationCanceledException)
         {
-            // Нормальне завершення при StopAsync — ігноруємо.
+            // Normal completion on StopAsync — ignore.
         }
     }
 
-    // ── Recovery loop (тільки Offline сервери, кожні M секунд) ──────────────
+    // ── Recovery loop (Offline servers only, every M seconds) ──────────────
 
     private async Task RunRecoveryLoopAsync(int intervalSec, CancellationToken ct)
     {
@@ -212,13 +214,13 @@ public sealed class PingMonitorService(
         catch (OperationCanceledException) { }
     }
 
-    // ── Guard для циклів ──────────────────────────────────────────────────────
+    // ── Loop guard ──────────────────────────────────────────────────────
 
     /// <summary>
-    /// Обгортка над циклом: якщо цикл впав з неочікуваним винятком —
-    /// скасовує linkedCts щоб зупинити паралельний цикл,
-    /// потім перекидає виняток щоб Task.WhenAll його побачив.
-    /// OperationCanceledException — нормальне завершення, ігнорується.
+    /// Wraps a loop: if the loop throws an unexpected exception —
+    /// cancels linkedCts to stop the parallel loop, then rethrows the
+    /// exception so Task.WhenAll sees it.
+    /// OperationCanceledException — normal completion, ignored.
     /// </summary>
     private static async Task RunLoopGuardedAsync(
         Task                       loop,
@@ -231,28 +233,28 @@ public sealed class PingMonitorService(
         catch (OperationCanceledException) { }
         catch (Exception)
         {
-            // Падіння одного циклу → зупиняємо другий
+            // One loop failing → stop the other
             linkedCts.Cancel();
             throw;
         }
     }
 
-    // ── Спільна логіка пінгування ─────────────────────────────────────────────
+    // ── Shared pinging logic ─────────────────────────────────────────────────
 
     /// <summary>
-    /// Пінгує список серверів паралельно через вказаний throttle,
-    /// збирає результати і публікує один PingBatchResultOccurred.
-    /// Використовується і основним циклом і recovery loop —
-    /// різниця тільки у списку серверів і throttle.
+    /// Pings a list of servers in parallel through the given throttle,
+    /// collects the results and publishes a single PingBatchResultOccurred.
+    /// Used by both the main loop and the recovery loop — the only
+    /// difference is the server list and the throttle.
     /// </summary>
     private async Task PingServersAsync(
         IEnumerable<ServerEntry> servers,
         SemaphoreSlim            throttle,
         CancellationToken        ct)
     {
-        // Локальний bag — не поле класу.
-        // Кожен виклик PingServersAsync має свій ізольований bag,
-        // тому основний і recovery цикли не можуть перезаписати один одного.
+        // Local bag — not a class field.
+        // Each call to PingServersAsync has its own isolated bag,
+        // so the main and recovery loops can't overwrite each other.
         var bag = new ConcurrentBag<PingResult>();
 
         var tasks = servers.Select(s => PingSingleServerAsync(s, throttle, bag, ct));
@@ -260,8 +262,8 @@ public sealed class PingMonitorService(
 
         if (ct.IsCancellationRequested) return;
 
-        // Публікуємо навіть якщо bag порожній (всі OperationCanceled) —
-        // перевірка вище це покриває.
+        // We'd publish even if the bag is empty (all OperationCanceled) —
+        // the check above covers that.
         var results = bag.ToArray();
         if (results.Length == 0) return;
 
@@ -271,7 +273,7 @@ public sealed class PingMonitorService(
                 CycleCompletedAt: DateTimeOffset.Now)), ct);
     }
 
-    // ── Пінг одного сервера ───────────────────────────────────────────────────
+    // ── Pinging a single server ───────────────────────────────────────────────
 
     private async Task PingSingleServerAsync(
         ServerEntry       server,
@@ -285,12 +287,12 @@ public sealed class PingMonitorService(
         try
         {
             await throttle.WaitAsync(ct).ConfigureAwait(false);
-            acquired = true;  // слот захоплено — тепер Release() безпечний
+            acquired = true;  // slot acquired — Release() is now safe
 
-            // Серіалізація саме для цього IP — якщо цей сервер уже
-            // пінгується іншим викликом (main loop / recovery loop / /ping),
-            // чекаємо на його завершення перед тим, як читати/писати
-            // _previousStatus[ip] і слати транзиційні логи.
+            // Serialize just for this IP — if this server is already being
+            // pinged by another call (main loop / recovery loop / /ping),
+            // wait for it to finish before reading/writing
+            // _previousStatus[ip] and sending transition logs.
             await serverLock.WaitAsync(ct).ConfigureAwait(false);
             serverLockAcquired = true;
 
@@ -344,16 +346,16 @@ public sealed class PingMonitorService(
                         {
                             if (prev is PingStatus.Unknown or PingStatus.Checking)
                                 await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                                    $"{server.Name} ({server.IP}) недоступний при старті."), ct);
+                                    $"{server.Name} ({server.IP}) is unreachable at startup."), ct);
                             else
                                 await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
                                     $"{server.Name} ({server.IP}) went OFFLINE."), ct);
                         }
-                        // Під maintenance — жодного Warning/Error, але статус
-                        // все одно оновлюється (PingResult нижче), UI покаже
-                        // Offline + бейдж 🔧 замість тривоги.
+                        // Under maintenance — no Warning/Error, but the status
+                        // is still updated (PingResult below); the UI shows
+                        // Offline + a 🔧 badge instead of an alert.
                     }
-                    // Checking/Unknown → Online: тихо, без логу — не спам при старті.
+                    // Checking/Unknown → Online: silent, no log — avoid startup spam.
                 }
             }
 
@@ -388,32 +390,33 @@ public sealed class PingMonitorService(
             CycleCompletedAt: DateTimeOffset.Now)), ct);
     }
 
-    // ── Public API для TelegramBotService (Фаза 5)
+    // ── Public API for TelegramBotService (Phase 5)
 
     /// <summary>
-    /// Живий знімок поточного статусу всіх серверів прямо зараз.
-    /// ConcurrentDictionary вже є єдиним джерелом правди (_previousStatus),
-    /// тому це тонкий read-only метод без додаткової синхронізації.
-    /// Дозволяє боту відповідати коректно навіть у перші секунди після старту,
-    /// не покладаючись лише на PingBatchResultOccurred (яка ще могла не прийти).
+    /// A live snapshot of the current status of all servers right now.
+    /// ConcurrentDictionary is already the single source of truth
+    /// (_previousStatus), so this is a thin read-only method with no
+    /// extra synchronization. Lets the bot answer correctly even in the
+    /// first seconds after startup, without relying solely on
+    /// PingBatchResultOccurred (which might not have arrived yet).
     /// </summary>
     public IReadOnlyDictionary<string, PingStatus> GetSnapshot()
         => _previousStatus.ToDictionary(kv => kv.Key, kv => kv.Value);
 
     /// <summary>
-    /// Пінгує ВСІ сервери прямо зараз, поза звичайним циклом (REST GET
-    /// /api/ping при заході на Overview/Ping + команда /ping бота — "живий"
-    /// запит на вимогу). Перевикористовує ту саму PingSingleServerAsync —
-    /// тобто:
-    ///  - оновлює _previousStatus (той самий стан, що бачить UI);
-    ///  - шле ті самі Warning/Error/Success логи при зміні статусу;
-    ///  - шле PingBatchResultOccurred — UI Ping Dashboard оновиться теж.
-    /// Ділить throttle з основним циклом (_mainThrottle) — жодного
-    /// окремого "паралельного" навантаження на мережу понад заплановане.
-    /// Заразом (аудит-фікс 2026-08-22): _onDemandThrottle обмежує ЧАСТОТУ
-    /// самих викликів до PingIntervalSeconds — повторний REST/Telegram-запит
-    /// у межах вікна повертає щойно отриманий результат замість нового
-    /// реального ping-опитування.
+    /// Pings ALL servers right now, outside the regular cycle (REST GET
+    /// /api/ping when opening Overview/Ping + the bot's /ping command — an
+    /// on-demand "live" request). Reuses the same PingSingleServerAsync —
+    /// meaning it:
+    ///  - updates _previousStatus (the same state the UI sees);
+    ///  - sends the same Warning/Error/Success logs on status changes;
+    ///  - sends PingBatchResultOccurred — the Ping Dashboard UI updates too.
+    /// Shares the throttle with the main loop (_mainThrottle) — no separate
+    /// "parallel" load on the network beyond what's already scheduled.
+    /// Also (audit fix 2026-08-22): _onDemandThrottle caps the FREQUENCY of
+    /// the calls themselves to PingIntervalSeconds — a repeated REST/Telegram
+    /// request within the window returns the just-obtained result instead of
+    /// triggering a new real ping sweep.
     /// </summary>
     public Task<IReadOnlyList<PingResult>> PingAllNowAsync(CancellationToken ct) =>
         _onDemandThrottle.GetOrRunAsync(PingAllNowInternalAsync, ct);
@@ -425,12 +428,13 @@ public sealed class PingMonitorService(
         var tasks = _servers.Select(s => PingSingleServerAsync(s, _mainThrottle, bag, ct));
         await Task.WhenAll(tasks).ConfigureAwait(false);
 
-        // Аудит-фікс (2026-08-22, троттлінг on-demand): PingSingleServerAsync
-        // тихо ковтає власне OperationCanceledException (щоб один скасований
-        // сервер не валив увесь Task.WhenAll) — тому скасування зовнішнього ct
-        // (клієнт відключився під час опитування) інакше пройшло б непоміченим
-        // і НЕПОВНИЙ/порожній bag кешувався б _onDemandThrottle як валідний
-        // результат на весь PingIntervalSeconds для всіх наступних викликів.
+        // Audit fix (2026-08-22, on-demand throttling): PingSingleServerAsync
+        // silently swallows its own OperationCanceledException (so one
+        // canceled server doesn't fail the whole Task.WhenAll) — so
+        // cancellation of the outer ct (client disconnected mid-poll) would
+        // otherwise go unnoticed, and an INCOMPLETE/empty bag would get
+        // cached by _onDemandThrottle as a valid result for the entire
+        // PingIntervalSeconds window for all subsequent calls.
         ct.ThrowIfCancellationRequested();
 
         var results = bag.ToArray();
@@ -451,7 +455,7 @@ public sealed class PingMonitorService(
 
     public override void Dispose()
     {
-        // Обидва SemaphoreSlim містять внутрішній WaitHandle — звільняємо обидва.
+        // Both SemaphoreSlim instances hold an internal WaitHandle — dispose both.
         _mainThrottle.Dispose();
         _recoveryThrottle.Dispose();
         foreach (var l in _perServerLocks.Values) l.Dispose();

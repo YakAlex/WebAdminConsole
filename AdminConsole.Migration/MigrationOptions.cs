@@ -1,11 +1,11 @@
 namespace AdminConsole.Migration;
 
-/// <summary>Джерельні шляхи старої WPF-інсталяції (Фаза 2, T2.6).</summary>
+/// <summary>Source paths from the old WPF installation (Phase 2, T2.6).</summary>
 public sealed class MigrationOptions
 {
-    /// <summary>Директорія зі старими uptime-*.json / backups.json / maintenance.json (E:\AdminConsole_v2\logs).</summary>
+    /// <summary>Directory with the old uptime-*.json / backups.json / maintenance.json files (E:\AdminConsole_v2\logs).</summary>
     public required string OldLogsDirectory { get; init; }
 
-    /// <summary>Шлях до старого %LocalAppData%\AdminConsole\user_settings.json.</summary>
+    /// <summary>Path to the old %LocalAppData%\AdminConsole\user_settings.json.</summary>
     public required string OldUserSettingsPath { get; init; }
 }

@@ -11,13 +11,13 @@ using Microsoft.Extensions.Options;
 namespace AdminConsole.Tests.Reports;
 
 /// <summary>
-/// T4.15 — юніт-тести SLA-алгоритму. Дані сідуються напряму через
-/// IDowntimeRepository (в обхід живого ping-конвеєра UptimeTrackerService),
-/// потім свіжий UptimeTrackerService.StartAsync() довантажує їх у _records —
-/// той самий шлях, яким сервіс читає з БД при реальному старті. Це дає
-/// повний контроль над FellAt/RecoveredAt для перевірки точної математики
-/// (Uptime%, MTTR, maintenance-виключення), без залежності від живого часу
-/// виконання тесту.
+/// T4.15 — unit tests for the SLA algorithm. Data is seeded directly via
+/// IDowntimeRepository (bypassing UptimeTrackerService's live ping
+/// pipeline), then a fresh UptimeTrackerService.StartAsync() loads it into
+/// _records — the same path the service uses to read from the DB on a real
+/// startup. This gives full control over FellAt/RecoveredAt to verify the
+/// exact math (Uptime%, MTTR, maintenance exclusions), independent of the
+/// test's actual wall-clock run time.
 /// </summary>
 public sealed class SlaReportServiceTests : IAsyncLifetime
 {
@@ -62,7 +62,7 @@ public sealed class SlaReportServiceTests : IAsyncLifetime
             servers:  Options.Create(servers.ToList()),
             settings: Options.Create(new AdminConsole.Infrastructure.Configuration.MonitoringSettings()));
 
-        await uptime.StartAsync(ct); // await'ить LoadFromDbAsync ДО повернення (T4.3)
+        await uptime.StartAsync(ct); // awaits LoadFromDbAsync BEFORE returning (T4.3)
         return uptime;
     }
 
@@ -70,13 +70,13 @@ public sealed class SlaReportServiceTests : IAsyncLifetime
     public async Task Generate_ComputesUptimePercent_AndExcludesMaintenanceFromMainStats()
     {
         var from = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var to   = new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.Zero); // 24-годинний період
+        var to   = new DateTimeOffset(2026, 1, 2, 0, 0, 0, TimeSpan.Zero); // 24-hour period
 
         await using (var scope = _provider.CreateAsyncScope())
         {
             var repo = scope.ServiceProvider.GetRequiredService<AdminConsole.Domain.Abstractions.IDowntimeRepository>();
 
-            // Server1: реальний інцидент — 30 хв простою.
+            // Server1: a real incident — 30 minutes of downtime.
             await repo.UpsertAsync(new DowntimeRecord
             {
                 ServerName  = "Server1",
@@ -87,8 +87,8 @@ public sealed class SlaReportServiceTests : IAsyncLifetime
                 ClosedByMaintenance = false
             });
 
-            // Server2: інцидент, закритий через Maintenance — 2 години,
-            // НЕ повинен впливати на UptimePercent/IncidentCount Server2.
+            // Server2: an incident closed via Maintenance — 2 hours,
+            // must NOT affect Server2's UptimePercent/IncidentCount.
             await repo.UpsertAsync(new DowntimeRecord
             {
                 ServerName  = "Server2",
@@ -120,11 +120,11 @@ public sealed class SlaReportServiceTests : IAsyncLifetime
         Assert.Equal(TimeSpan.FromMinutes(30), server1.Mttr);
 
         var server2 = Assert.Single(report.Servers, s => s.ServerName == "Server2");
-        Assert.Equal(0, server2.IncidentCount); // maintenance-інцидент не рахується як звичайний
+        Assert.Equal(0, server2.IncidentCount); // a maintenance incident doesn't count as a regular one
         Assert.Equal(TimeSpan.Zero, server2.DowntimeInPeriod);
         Assert.Equal(TimeSpan.FromHours(2), server2.MaintenanceDowntimeInPeriod);
-        Assert.Equal(100.0, server2.UptimePercent); // maintenance не псує показник
-        Assert.Null(server2.Mttr); // MTTR лічить лише реальні відновлення, не maintenance-закриття
+        Assert.Equal(100.0, server2.UptimePercent); // maintenance doesn't hurt the metric
+        Assert.Null(server2.Mttr); // MTTR only counts real recoveries, not maintenance closures
 
         var appendixEntry = Assert.Single(report.MaintenanceAppendix);
         Assert.Equal("Server2", appendixEntry.ServerName);
@@ -134,15 +134,15 @@ public sealed class SlaReportServiceTests : IAsyncLifetime
     public async Task GetFleetAvailabilityPercent_UnionsOverlappingIncidents_AcrossServers()
     {
         var from = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var to   = new DateTimeOffset(2026, 1, 1, 10, 0, 0, TimeSpan.Zero); // 10-годинний період
+        var to   = new DateTimeOffset(2026, 1, 1, 10, 0, 0, TimeSpan.Zero); // 10-hour period
 
         await using (var scope = _provider.CreateAsyncScope())
         {
             var repo = scope.ServiceProvider.GetRequiredService<AdminConsole.Domain.Abstractions.IDowntimeRepository>();
 
-            // Два сервери падають ОДНОЧАСНО й частково перекриваються:
-            // Server1: [1h, 3h], Server2: [2h, 4h] → об'єднання = [1h, 4h] = 3 години,
-            // а НЕ 2+2=4 години (без union-логіки помилково подвоїло б простій).
+            // Two servers go down SIMULTANEOUSLY and partially overlap:
+            // Server1: [1h, 3h], Server2: [2h, 4h] → union = [1h, 4h] = 3 hours,
+            // NOT 2+2=4 hours (without union logic this would double-count the downtime).
             await repo.UpsertAsync(new DowntimeRecord
             {
                 ServerName = "Server1", ServerIp = "10.0.0.1", ServerGroup = "Core",

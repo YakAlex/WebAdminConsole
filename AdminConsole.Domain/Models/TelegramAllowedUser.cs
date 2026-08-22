@@ -1,18 +1,18 @@
 namespace AdminConsole.Domain.Models;
 
 /// <summary>
-/// Дозволений користувач Telegram-бота (read-only доступ, наданий Primary
-/// Admin). Заміна двох паралельних колекцій WPF UserSettings —
-/// TelegramAllowedChatIds (List&lt;long&gt;) і TelegramUsernames
-/// (Dictionary&lt;long, string&gt;) — однією таблицею (Фаза 2).
+/// An allowed user of the Telegram bot (read-only access, granted by the
+/// Primary Admin). Replaces two parallel WPF UserSettings collections —
+/// TelegramAllowedChatIds (List&lt;long&gt;) and TelegramUsernames
+/// (Dictionary&lt;long, string&gt;) — with a single table (Phase 2).
 /// </summary>
 public sealed class TelegramAllowedUser
 {
     public long ChatId { get; set; }
 
     /// <summary>
-    /// Останній відомий Telegram username (без @). Оновлюється при approve
-    /// і при кожному /start вже дозволеного користувача.
+    /// The last known Telegram username (without @). Updated on approve
+    /// and on every /start from an already-allowed user.
     /// </summary>
     public string? Username { get; set; }
 }

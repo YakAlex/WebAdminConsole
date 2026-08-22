@@ -7,31 +7,32 @@ namespace AdminConsole.Infrastructure.Data.Repositories;
 public sealed class AppSettingsRepository(AdminConsoleDbContext context)
     : RepositoryBase(context), IAppSettingsRepository
 {
-    // Аудит Зона 1, Знахідка №6 (2026-08-22): і GetAsync, і SaveAsync мали
-    // "прочитай, якщо нема — створи" без жодного захисту від конкурентних
-    // викликів. AppSettings — single-row таблиця (Id — autoincrement PK, БЕЗ
-    // додаткового unique-обмеження), а RDP/Zabbix (кожен зі своєю
-    // DbContext-сесією через IServiceScopeFactory) викликають GetAsync майже
-    // одночасно при старті процесу. Без синхронізації обидва можуть НЕ
-    // побачити рядок і обидва вставити свій — не виняток (autoincrement
-    // дозволяє два різні Id), а тиха поява ДВОХ рядків AppSettings, після
-    // чого різні виклики можуть читати/писати в різні рядки. Статичний gate
-    // серіалізує цей шлях у межах процесу — тут єдиний реалістичний масштаб,
-    // AdminConsole.Api завжди один процес.
+    // Audit Zone 1, Finding #6 (2026-08-22): both GetAsync and SaveAsync had a
+    // "read, if missing — create" pattern with no protection against concurrent
+    // calls. AppSettings is a single-row table (Id is an autoincrement PK, WITH
+    // NO additional unique constraint), and RDP/Zabbix (each with its own
+    // DbContext session via IServiceScopeFactory) call GetAsync nearly
+    // simultaneously at process startup. Without synchronization both could
+    // fail to see the row and both insert their own — not an exception
+    // (autoincrement allows two different Ids), but the silent appearance of
+    // TWO AppSettings rows, after which different calls could read/write
+    // different rows. A static gate serializes this path within the process —
+    // the only realistic scale here, since AdminConsole.Api is always a single process.
     private static readonly SemaphoreSlim CreateGate = new(1, 1);
 
     public Task<AppSettings> GetAsync(CancellationToken ct = default) => GetTrackedAsync(ct);
 
-    // Аудит Зона 2, Знахідка №2 (2026-08-22): UpdateMonitoringTogglesAsync/
-    // UpdateRdpDailyPeakAsync/UpdateTelegramPrimaryAdminAsync замінили
-    // GetAsync+SaveAsync(повний об'єкт) у своїх трьох викликачів
+    // Audit Zone 2, Finding #2 (2026-08-22): UpdateMonitoringTogglesAsync/
+    // UpdateRdpDailyPeakAsync/UpdateTelegramPrimaryAdminAsync replaced
+    // GetAsync+SaveAsync(full object) in their three callers
     // (MonitoringController, RdpMonitorService, TelegramAccessControlService).
-    // Кожен метод чіпає ТІЛЬКИ свої поля на трекованій сутності — EF Core
-    // за замовчуванням генерує UPDATE лише по позначених "modified" колонках,
-    // тож два конкурентні виклики, що змінюють РІЗНІ поля того самого рядка
-    // (напр. RDP-пік і monitoring-перемикачі одночасно), більше не можуть
-    // затерти зміни одне одного своєю застарілою копією решти полів
-    // (lost update — раніше SaveAsync/ApplyTo копіювали ВСІ поля разом).
+    // Each method touches ONLY its own fields on the tracked entity — by
+    // default EF Core generates an UPDATE covering only the columns marked
+    // "modified", so two concurrent calls that change DIFFERENT fields on the
+    // same row (e.g. the RDP peak and the monitoring toggles at the same
+    // time) can no longer overwrite each other's changes with their own stale
+    // copy of the remaining fields (lost update — previously SaveAsync/ApplyTo
+    // copied ALL fields together).
     public async Task UpdateMonitoringTogglesAsync(
         bool rdpEnabled, bool zabbixEnabled, bool backupEnabled, CancellationToken ct = default)
     {
@@ -65,8 +66,8 @@ public sealed class AppSettingsRepository(AdminConsoleDbContext context)
         await CreateGate.WaitAsync(ct);
         try
         {
-            // Повторна перевірка під замком — інший виклик (інша DbContext-
-            // сесія) міг устигнути створити рядок, поки ми чекали на gate.
+            // Re-check under the lock — another call (a different DbContext
+            // session) may have created the row while we were waiting on the gate.
             existing = await Context.AppSettings.FirstOrDefaultAsync(ct);
             if (existing is not null) return existing;
 

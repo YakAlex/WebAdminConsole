@@ -5,12 +5,13 @@ using Polly.Retry;
 namespace AdminConsole.Infrastructure.Data;
 
 /// <summary>
-/// Retry-політика на SQLITE_BUSY/SQLITE_LOCKED навколо SaveChangesAsync (T2.3).
-/// У WAL-режимі це один writer + багато читачів без блокувань — кілька
-/// одночасних ПИСАЧІВ (напр. дві Hangfire-джоби в один момент) усе одно
-/// серіалізуються на рівні SQLite. EF Core SQLite-провайдер сам такі помилки
-/// не ретраїть. При масштабі "10 серверів, кілька admin-запитів" це радше
-/// теоретичний захист, ніж реальна необхідність, але коштує кілька рядків.
+/// Retry policy for SQLITE_BUSY/SQLITE_LOCKED around SaveChangesAsync (T2.3).
+/// In WAL mode this is one writer plus many readers without blocking — several
+/// concurrent WRITERS (e.g. two Hangfire jobs at the same moment) still end up
+/// serialized at the SQLite level. The EF Core SQLite provider doesn't retry
+/// these errors on its own. At the scale of "10 servers, a handful of admin
+/// requests" this is more of a theoretical safeguard than a real necessity,
+/// but it costs only a few lines.
 /// </summary>
 internal static class SqliteRetryPolicy
 {

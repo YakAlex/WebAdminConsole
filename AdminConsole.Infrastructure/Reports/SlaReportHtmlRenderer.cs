@@ -6,12 +6,12 @@ using AdminConsole.Domain.Models.Reports;
 namespace AdminConsole.Infrastructure.Reports;
 
 /// <summary>
-/// Рендерить SlaReport у самодостатній HTML-файл — жодних зовнішніх
-/// CSS/JS-залежностей (inline &lt;style&gt;), тому відкривається будь-де
-/// офлайн. Чиста функція (string → string), легко тестується окремо
-/// від диска.
+/// Renders an SlaReport into a self-contained HTML file — no external
+/// CSS/JS dependencies (inline &lt;style&gt;), so it opens anywhere
+/// offline. A pure function (string → string), easy to test independently
+/// of disk I/O.
 ///
-/// T4.12: перенесено без змін.
+/// T4.12: carried over unchanged.
 /// </summary>
 public static class SlaReportHtmlRenderer
 {
@@ -19,8 +19,8 @@ public static class SlaReportHtmlRenderer
     {
         var sb = new StringBuilder();
 
-        sb.Append("<!DOCTYPE html><html lang=\"uk\"><head><meta charset=\"utf-8\"/>");
-        sb.Append($"<title>SLA-звіт {report.From:dd.MM.yyyy}–{report.To:dd.MM.yyyy}</title>");
+        sb.Append("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/>");
+        sb.Append($"<title>SLA Report {report.From:dd.MM.yyyy}–{report.To:dd.MM.yyyy}</title>");
         sb.Append(Styles());
         sb.Append("</head><body>");
 
@@ -38,9 +38,9 @@ public static class SlaReportHtmlRenderer
     private const int UptimePercentDecimals = 2;
 
     /// <summary>
-    /// Округлення не повинно "ховати" реальний даунтайм: якщо downtime > 0,
-    /// текстове представлення ніколи не показує 100.00%, навіть якщо справжнє
-    /// значення (99.998%) до нього математично округлюється.
+    /// Rounding must not "hide" real downtime: if downtime > 0, the text
+    /// representation never shows 100.00%, even if the true value
+    /// (99.998%) mathematically rounds to it.
     /// </summary>
     private static string FormatUptimePercent(double uptimePercent, TimeSpan downtime)
     {
@@ -53,12 +53,12 @@ public static class SlaReportHtmlRenderer
     }
 
     /// <summary>
-    /// Палітра — не довільна: буквально ті самі значення, що
-    /// <c>adminconsole-web/src/styles/tokens.scss</c> визначає для живого
-    /// застосунку (аудит-фікс п.3d — раніше тут була окрема, ніде більше не
-    /// вжита "Material Dark" палітра, яка не мала нічого спільного з
-    /// реальним UI). Жодних зовнішніх шрифтів/CDN — той самий fallback-стек,
-    /// що й --font-family-base, аби звіт лишався самодостатнім і відкривався офлайн.
+    /// The palette isn't arbitrary: it's literally the same values that
+    /// <c>adminconsole-web/src/styles/tokens.scss</c> defines for the live
+    /// application (audit fix item 3d — this used to be a separate, unused-
+    /// anywhere-else "Material Dark" palette that had nothing in common with
+    /// the real UI). No external fonts/CDN — the same fallback stack as
+    /// --font-family-base, so the report stays self-contained and opens offline.
     /// </summary>
     private static string Styles() => """
         <style>
@@ -100,10 +100,10 @@ public static class SlaReportHtmlRenderer
 
     private static string RenderHeader(SlaReport report) => $"""
         <div class="card">
-            <h1>SLA-звіт</h1>
+            <h1>SLA Report</h1>
             <div class="meta">
-                Період: {report.From:dd.MM.yyyy HH:mm} – {report.To:dd.MM.yyyy HH:mm}<br/>
-                Згенеровано: {report.GeneratedAt:dd.MM.yyyy HH:mm:ss}
+                Period: {report.From:dd.MM.yyyy HH:mm} – {report.To:dd.MM.yyyy HH:mm}<br/>
+                Generated: {report.GeneratedAt:dd.MM.yyyy HH:mm:ss}
             </div>
         </div>
         """;
@@ -124,12 +124,12 @@ public static class SlaReportHtmlRenderer
 
         return $"""
             <div class="card">
-                <h2>Зведення</h2>
+                <h2>Summary</h2>
                 <div class="summary-row">
-                    <div class="summary-pill"><div class="value">{overall}</div><div class="label">Загальний Uptime</div></div>
-                    <div class="summary-pill"><div class="value">{totalIncidents}</div><div class="label">Інцидентів за період</div></div>
-                    <div class="summary-pill"><div class="value">{report.Servers.Count}</div><div class="label">Серверів у звіті</div></div>
-                    <div class="summary-pill"><div class="value" style="font-size:16px;">{worstLine}</div><div class="label">Найгірший показник</div></div>
+                    <div class="summary-pill"><div class="value">{overall}</div><div class="label">Overall Uptime</div></div>
+                    <div class="summary-pill"><div class="value">{totalIncidents}</div><div class="label">Incidents in period</div></div>
+                    <div class="summary-pill"><div class="value">{report.Servers.Count}</div><div class="label">Servers in report</div></div>
+                    <div class="summary-pill"><div class="value" style="font-size:16px;">{worstLine}</div><div class="label">Worst performer</div></div>
                 </div>
             </div>
             """;
@@ -148,7 +148,7 @@ public static class SlaReportHtmlRenderer
             };
 
             var removedBadge = s.IsRemovedFromMonitoring
-                ? "<span class=\"badge badge-removed\">видалено з моніторингу</span>"
+                ? "<span class=\"badge badge-removed\">removed from monitoring</span>"
                 : "";
 
             rows.Append($"""
@@ -165,9 +165,9 @@ public static class SlaReportHtmlRenderer
 
         return $"""
             <div class="card">
-                <h2>Сервери</h2>
+                <h2>Servers</h2>
                 <table>
-                    <thead><tr><th>Сервер</th><th>Група</th><th>Uptime</th><th>DownTime</th><th>Інцидентів</th><th>MTTR</th></tr></thead>
+                    <thead><tr><th>Server</th><th>Group</th><th>Uptime</th><th>DownTime</th><th>Incidents</th><th>MTTR</th></tr></thead>
                     <tbody>{rows}</tbody>
                 </table>
             </div>
@@ -181,7 +181,7 @@ public static class SlaReportHtmlRenderer
         foreach (var i in s.Incidents)
         {
             var recoveredCell = i.IsOngoing
-                ? "<span class=\"badge badge-ongoing\">триває</span>"
+                ? "<span class=\"badge badge-ongoing\">ongoing</span>"
                 : $"<span class=\"mono\">{i.RecoveredAt:dd.MM HH:mm:ss}</span>";
 
             var maintenanceBadge = i.ClosedByMaintenance
@@ -203,9 +203,9 @@ public static class SlaReportHtmlRenderer
 
         return $"""
             <div class="card">
-                <h2>Деталі інцидентів</h2>
+                <h2>Incident details</h2>
                 <table>
-                    <thead><tr><th>Сервер</th><th>Початок інциденту</th><th>Відновлено</th><th>Тривалість у періоді</th><th></th></tr></thead>
+                    <thead><tr><th>Server</th><th>Incident start</th><th>Recovered</th><th>Duration in period</th><th></th></tr></thead>
                     <tbody>{rows}</tbody>
                 </table>
             </div>
@@ -231,9 +231,9 @@ public static class SlaReportHtmlRenderer
 
         return $"""
                 <div class="card">
-                    <h2>Додаток — планове обслуговування за період</h2>
+                    <h2>Appendix — scheduled maintenance in period</h2>
                     <table>
-                        <thead><tr><th>Сервер</th><th>Початок</th><th>Кінець</th><th>Тривалість</th></tr></thead>
+                        <thead><tr><th>Server</th><th>Start</th><th>End</th><th>Duration</th></tr></thead>
                         <tbody>{rows}</tbody>
                     </table>
                 </div>
@@ -242,18 +242,18 @@ public static class SlaReportHtmlRenderer
 
     private static string RenderFooter(SlaReport report) => $"""
         <div class="footer">
-            Звіт покриває лише час, коли AdminConsole активно опитував сервери —
-            періоди, коли сам застосунок не працював, до розрахунку не входять.<br/>
-            AdminConsole SLA Report · згенеровано {report.GeneratedAt:dd.MM.yyyy HH:mm:ss}
+            This report covers only the time AdminConsole was actively polling servers —
+            periods when the application itself was not running are excluded from the calculation.<br/>
+            AdminConsole SLA Report · generated {report.GeneratedAt:dd.MM.yyyy HH:mm:ss}
         </div>
         """;
 
     private static string FormatDuration(TimeSpan d)
     {
-        if (d.TotalHours >= 24) return $"{(int)d.TotalDays}д {d.Hours}г {d.Minutes:D2}хв";
-        if (d.TotalHours >= 1)  return $"{(int)d.TotalHours}г {d.Minutes:D2}хв";
-        if (d.TotalMinutes >= 1) return $"{(int)d.TotalMinutes}хв {d.Seconds:D2}с";
-        return $"{d.Seconds}с";
+        if (d.TotalHours >= 24) return $"{(int)d.TotalDays}d {d.Hours}h {d.Minutes:D2}m";
+        if (d.TotalHours >= 1)  return $"{(int)d.TotalHours}h {d.Minutes:D2}m";
+        if (d.TotalMinutes >= 1) return $"{(int)d.TotalMinutes}m {d.Seconds:D2}s";
+        return $"{d.Seconds}s";
     }
 
     private static string Encode(string s) => WebUtility.HtmlEncode(s);

@@ -4,12 +4,12 @@ using MediatR;
 namespace AdminConsole.Domain.Events;
 
 /// <summary>
-/// Публікується BackupMonitorService раз на цикл (після SaveToDb),
-/// зі знімком усіх BackupCheckState. Заміна BackupStatusUpdatedMessage.
+/// Published by BackupMonitorService once per cycle (after SaveToDb),
+/// with a snapshot of all BackupCheckState. Replaces BackupStatusUpdatedMessage.
 ///
-/// Знімок (не оригінальні мутабельні об'єкти) — той самий принцип,
-/// що вже застосований для DowntimeRecord/UptimeTrackerService
-/// (CloneRecord), щоб уникнути гонки даних між фоновим циклом і читачами.
+/// A snapshot (not the original mutable objects) — the same principle
+/// already applied for DowntimeRecord/UptimeTrackerService (CloneRecord),
+/// to avoid a data race between the background cycle and readers.
 /// </summary>
 public sealed record BackupStatusUpdatedOccurred(
     IReadOnlyList<BackupCheckState> Snapshot

@@ -2,32 +2,33 @@ namespace AdminConsole.Domain.Models;
 using System.Text.Json.Serialization;
 
 /// <summary>
-/// Планове вікно обслуговування для сервера або групи серверів.
-/// Поки активне (From..To) — поллери не генерують Warning/Error
-/// про недоступність цього сервера, а UptimeTracker не рахує це
-/// як SLA-інцидент.
+/// A scheduled maintenance window for a server or a group of servers.
+/// While active (From..To), pollers do not raise Warning/Error about this
+/// server being unreachable, and UptimeTracker does not count it as an
+/// SLA incident.
 ///
-/// Ключ у MaintenanceService: ServerIp якщо TargetGroup == null,
-/// інакше "group:{TargetGroup}". Одне активне вікно на ключ.
+/// Key in MaintenanceService: ServerIp if TargetGroup == null, otherwise
+/// "group:{TargetGroup}". One active window per key.
 /// </summary>
 public sealed class MaintenanceWindow
 {
-    /// <summary>IP конкретного сервера. Null якщо вікно на всю групу.</summary>
+    /// <summary>IP of a specific server. Null if the window applies to a whole group.</summary>
     public string? ServerIp { get; init; }
 
-    /// <summary>Назва групи (ServerEntry.Group). Null якщо вікно на один сервер.</summary>
+    /// <summary>Group name (ServerEntry.Group). Null if the window applies to a single server.</summary>
     public string? TargetGroup { get; init; }
 
-    /// <summary>Ім'я для відображення в UI/логах (сервер або назва групи).</summary>
+    /// <summary>Display name for the UI/logs (server or group name).</summary>
     public required string DisplayName { get; init; }
 
     public required DateTimeOffset From { get; init; }
 
     /// <summary>
-    /// Момент автоматичного завершення вікна. Null — "без обмеження часу":
-    /// вікно лишається активним, поки адміністратор не вимкне його вручну
-    /// (EndMaintenanceEarly) — фоновий цикл автозавершення MaintenanceService
-    /// такі вікна просто пропускає при перевірці прострочення.
+    /// The moment the window ends automatically. Null means "no time limit":
+    /// the window stays active until the administrator turns it off
+    /// manually (EndMaintenanceEarly) — MaintenanceService's background
+    /// auto-completion cycle simply skips such windows when checking for
+    /// expiration.
     /// </summary>
     public DateTimeOffset? To { get; init; }
 
@@ -36,10 +37,10 @@ public sealed class MaintenanceWindow
 
     public bool IsActiveAt(DateTimeOffset now) => now >= From && (To is null || now <= To);
 
-    /// <summary>Ключ для зберігання/пошуку в MaintenanceService.</summary>
+    /// <summary>Key used for storage/lookup in MaintenanceService.</summary>
     [JsonIgnore]
     public string Key => TargetGroup is not null
         ? $"group:{TargetGroup}"
         : ServerIp ?? throw new InvalidOperationException(
-            "MaintenanceWindow повинен мати або ServerIp, або TargetGroup.");
+            "MaintenanceWindow must have either ServerIp or TargetGroup.");
 }

@@ -3,20 +3,20 @@ using AdminConsole.Domain.Models;
 namespace AdminConsole.Domain.Abstractions;
 
 /// <summary>
-/// Персистентність для AppLogEntry — заміна файлових app-YYYY-MM-DD.log
-/// (FileLoggerService, T4.13: сервіс видаляється повністю). Прибирає весь
-/// клас проблем із multi-file merge/"хвіст найновішого файлу" — це просто
-/// ORDER BY Timestamp DESC LIMIT :take в SQL (T3.9: GET /api/logs).
+/// Persistence for AppLogEntry — replaces the file-based app-YYYY-MM-DD.log
+/// (FileLoggerService, T4.13: the service is removed entirely). Eliminates
+/// the whole class of multi-file merge / "tail of the newest file" problems —
+/// this is just ORDER BY Timestamp DESC LIMIT :take in SQL (T3.9: GET /api/logs).
 /// </summary>
 public interface IAppLogRepository
 {
     Task AppendAsync(AppLogEntry entry, CancellationToken ct = default);
 
     /// <summary>
-    /// Останні записи, найновіші перші. <paramref name="before"/>/<paramref name="after"/> —
-    /// межі діапазону дат (Крок 6, #10 — пошук+фільтрація за датою на Logs),
-    /// <paramref name="search"/> — підрядок у Source/Message (case-insensitive
-    /// через SQLite LIKE за замовчуванням).
+    /// Most recent entries, newest first. <paramref name="before"/>/<paramref name="after"/>
+    /// bound the date range (Step 6, #10 — search + date filtering on Logs),
+    /// <paramref name="search"/> is a substring match against Source/Message
+    /// (case-insensitive via SQLite's default LIKE behavior).
     /// </summary>
     Task<IReadOnlyList<AppLogEntry>> GetRecentAsync(
         int take,

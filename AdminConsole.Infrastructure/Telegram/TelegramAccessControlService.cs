@@ -8,25 +8,25 @@ using Microsoft.Extensions.Logging;
 
 namespace AdminConsole.Infrastructure.Telegram;
 
-/// <summary>Пара chat_id + username для відображення в списку дозволених користувачів.</summary>
+/// <summary>Chat_id + username pair for display in the allowed-users list.</summary>
 public sealed record TelegramAllowedUserView(long ChatId, string Username);
 
 /// <summary>
-/// Централізована перевірка доступу до Telegram-бота: Primary Admin,
-/// approval-флоу для інших користувачів, rate limiting.
+/// Centralized access control for the Telegram bot: Primary Admin,
+/// approval flow for other users, rate limiting.
 ///
-/// T5.3: UserSettingsService (файлова персистентність WPF) → IAppSettingsRepository
-/// (EF Core, Фаза 2), той самий IServiceScopeFactory-патерн, що решта
-/// Singleton-сервісів Фази 4/5 (репозиторій Scoped, сервіс Singleton).
-/// PrimaryAdminChatId/AllowedUsers кешуються в пам'яті (як і раніше — гарячий
-/// шлях: IsAllowed/IsPrimaryAdmin викликаються на КОЖНЕ вхідне повідомлення
-/// бота), явно завантажуються один раз через InitializeAsync (викликає
-/// TelegramBotService.ExecuteAsync до старту polling), і синхронно
-/// пишуться в кеш + асинхронно в БД на кожній мутації (Approve/Deny/
-/// Revoke/TryClaimAdmin/RefreshUsername).
+/// T5.3: UserSettingsService (WPF file-based persistence) → IAppSettingsRepository
+/// (EF Core, Phase 2), the same IServiceScopeFactory pattern used by the rest
+/// of the Phase 4/5 Singleton services (Scoped repository, Singleton service).
+/// PrimaryAdminChatId/AllowedUsers are cached in memory (as before — this is a
+/// hot path: IsAllowed/IsPrimaryAdmin are called on EVERY incoming bot
+/// message), loaded explicitly once via InitializeAsync (called by
+/// TelegramBotService.ExecuteAsync before polling starts), and written
+/// synchronously to the cache + asynchronously to the DB on every mutation
+/// (Approve/Deny/Revoke/TryClaimAdmin/RefreshUsername).
 ///
-/// Pending-запити, claim-код, rate-limit — і далі ЛИШЕ в пам'яті, без змін:
-/// це навмисно ефемерний стан (як і в оригіналі), що не переживає рестарт.
+/// Pending requests, claim code, rate limiting — remain IN-MEMORY ONLY, unchanged:
+/// this is deliberately ephemeral state (as in the original) that doesn't survive a restart.
 /// </summary>
 public sealed class TelegramAccessControlService(
     IMediator                             mediator,
@@ -35,17 +35,17 @@ public sealed class TelegramAccessControlService(
 {
     private const string LogSource = "TelegramAccess";
 
-    // ── Кеш персистентного стану (PrimaryAdmin + AllowedUsers) ─────────────
+    // ── Cache of persistent state (PrimaryAdmin + AllowedUsers) ─────────────
 
     private long? _primaryAdminChatId;
     private readonly Dictionary<long, string?> _allowedUsers = new();
     private readonly object _stateLock = new();
 
     /// <summary>
-    /// Викликається ОДИН раз з TelegramBotService.ExecuteAsync до старту
-    /// long-polling — той самий принцип, що LoadFromDbAsync у MaintenanceService/
-    /// UptimeTrackerService (Фаза 4): гарантія, що кеш заповнений ДО того,
-    /// як перше вхідне повідомлення від Telegram могло б його прочитати.
+    /// Called ONCE from TelegramBotService.ExecuteAsync before long-polling
+    /// starts — the same principle as LoadFromDbAsync in MaintenanceService/
+    /// UptimeTrackerService (Phase 4): guarantees the cache is populated BEFORE
+    /// the first incoming Telegram message could possibly read it.
     /// </summary>
     public async Task InitializeAsync(CancellationToken ct = default)
     {
@@ -64,7 +64,7 @@ public sealed class TelegramAccessControlService(
         }
 
         logger.LogInformation(
-            "TelegramAccessControlService: завантажено PrimaryAdmin={PrimaryAdmin}, {Count} дозволених користувач(ів).",
+            "TelegramAccessControlService: loaded PrimaryAdmin={PrimaryAdmin}, {Count} allowed user(s).",
             _primaryAdminChatId, users.Count);
     }
 
@@ -88,7 +88,7 @@ public sealed class TelegramAccessControlService(
     private readonly ConcurrentDictionary<long, DateTimeOffset> _requestCooldownUntil = new();
     private static readonly TimeSpan RequestCooldown = TimeSpan.FromMinutes(15);
 
-    // ── Claim-код для Primary Admin ─────────────────────────────────────────
+    // ── Claim code for Primary Admin ─────────────────────────────────────────
 
     private string?         _claimCode;
     private DateTimeOffset  _claimCodeExpiresAt;
@@ -107,7 +107,7 @@ public sealed class TelegramAccessControlService(
         Domain.Models.TelegramPendingRequest? Request,
         TimeSpan?                              CooldownRemaining);
 
-    // ── Primary Admin claim-флоу ─────────────────────────────────────────────
+    // ── Primary Admin claim flow ─────────────────────────────────────────────
 
     public bool IsPrimaryAdminClaimed { get { lock (_stateLock) return _primaryAdminChatId is not null; } }
 
@@ -115,7 +115,7 @@ public sealed class TelegramAccessControlService(
 
     public long? PrimaryAdminChatId { get { lock (_stateLock) return _primaryAdminChatId; } }
 
-    /// <summary>Генерує 6-значний код, дійсний 10 хв. Лише в пам'яті — не переживає перезапуск (навмисно, безпечніше).</summary>
+    /// <summary>Generates a 6-digit code, valid for 10 min. In-memory only — doesn't survive a restart (deliberately, for safety).</summary>
     public (string Code, DateTimeOffset ExpiresAt) GenerateClaimCode()
     {
         lock (_claimLock)
@@ -138,23 +138,23 @@ public sealed class TelegramAccessControlService(
             if (!string.Equals(_claimCode, code.Trim(), StringComparison.Ordinal))
                 return false;
 
-            _claimCode = null; // одноразовий
+            _claimCode = null; // single-use
         }
 
-        // Аудит Зона 2 (2026-08-22): точкове оновлення лише одного поля —
-        // не GetAsync+SaveAsync повного об'єкта (lost update із паралельним
-        // записом RdpMonitorService/MonitoringController).
+        // Audit Zone 2 (2026-08-22): a targeted update of just this one field —
+        // not GetAsync+SaveAsync of the whole object (lost update from a concurrent
+        // write by RdpMonitorService/MonitoringController).
         await WithAppSettingsAsync(r => r.UpdateTelegramPrimaryAdminAsync(chatId, ct));
 
         lock (_stateLock) _primaryAdminChatId = chatId;
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Telegram Primary Admin прив'язано: chat_id={chatId}."), ct);
+            $"Telegram Primary Admin claimed: chat_id={chatId}."), ct);
 
         return true;
     }
 
-    // ── Доступ read-only користувачів ────────────────────────────────────────
+    // ── Read-only user access ────────────────────────────────────────
 
     public bool IsAllowed(long chatId)
     {
@@ -166,21 +166,21 @@ public sealed class TelegramAccessControlService(
         lock (_stateLock) return _allowedUsers.Keys.ToList();
     }
 
-    /// <summary>Список дозволених користувачів разом з username, для показу в боті ("👥 Користувачі").</summary>
+    /// <summary>List of allowed users together with their username, for display in the bot ("👥 Users").</summary>
     public IReadOnlyList<TelegramAllowedUserView> GetAllowedUsers()
     {
         lock (_stateLock)
             return _allowedUsers
-                .Select(kv => new TelegramAllowedUserView(kv.Key, kv.Value ?? "невідомо"))
+                .Select(kv => new TelegramAllowedUserView(kv.Key, kv.Value ?? "unknown"))
                 .ToList();
     }
 
     /// <summary>
-    /// Додає користувача напряму (Settings UI, T6.2 п.3) — без проходження
-    /// approval-флоу через pending request. Той самий ефект, що й
-    /// ApproveAsync, просто ініційований адміном, а не вхідним /start.
-    /// Idempotent: повторний виклик для вже дозволеного chat_id лише
-    /// оновлює username.
+    /// Adds a user directly (Settings UI, T6.2 item 3) — without going through the
+    /// approval flow via a pending request. Same effect as
+    /// ApproveAsync, just initiated by the admin instead of an incoming /start.
+    /// Idempotent: a repeat call for an already-allowed chat_id just
+    /// updates the username.
     /// </summary>
     public async Task AddAllowedUserAsync(long chatId, string? username, CancellationToken ct = default)
     {
@@ -189,7 +189,7 @@ public sealed class TelegramAccessControlService(
         await WithAppSettingsAsync(r => r.UpsertTelegramAllowedUserAsync(chatId, username, ct));
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Telegram доступ додано вручну через Settings: chat_id={chatId}" +
+            $"Telegram access added manually via Settings: chat_id={chatId}" +
             (username is null ? "." : $", @{username}.")), ct);
         await mediator.Publish(new TelegramAccessChangedOccurred(
             TelegramAccessAction.Approved, chatId, username), ct);
@@ -205,13 +205,13 @@ public sealed class TelegramAccessControlService(
         _requestCooldownUntil[chatId] = DateTimeOffset.Now.Add(RequestCooldown);
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Telegram доступ відкликано: chat_id={chatId}. " +
-            $"Кулдаун на повторний запит: {RequestCooldown.TotalMinutes} хв."), ct);
+            $"Telegram access revoked: chat_id={chatId}. " +
+            $"Cooldown before another request: {RequestCooldown.TotalMinutes} min."), ct);
         await mediator.Publish(new TelegramAccessChangedOccurred(TelegramAccessAction.Revoked, chatId, null), ct);
         return true;
     }
 
-    // ── Pending requests (approval-флоу) ────────────────────────────────────
+    // ── Pending requests (approval flow) ────────────────────────────────────
 
     public async Task<PendingRequestResult> RegisterPendingRequestAsync(
         long chatId, string username, CancellationToken ct = default)
@@ -234,8 +234,8 @@ public sealed class TelegramAccessControlService(
         if (_pending.Count >= MaxPendingRequests)
         {
             await mediator.Publish(AppLogEntryOccurred.Warning(LogSource,
-                $"Досягнуто ліміту pending-запитів ({MaxPendingRequests}). " +
-                $"Новий запит від chat_id={chatId} відхилено без реєстрації."), ct);
+                $"Pending-request limit reached ({MaxPendingRequests}). " +
+                $"New request from chat_id={chatId} rejected without registering."), ct);
             return new PendingRequestResult(null, null);
         }
 
@@ -244,7 +244,7 @@ public sealed class TelegramAccessControlService(
         _pending[id] = request;
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Новий запит доступу: @{username} (chat_id={chatId})."), ct);
+            $"New access request: @{username} (chat_id={chatId})."), ct);
         await mediator.Publish(new TelegramAccessRequestOccurred(request), ct);
 
         return new PendingRequestResult(request, null);
@@ -297,7 +297,7 @@ public sealed class TelegramAccessControlService(
         await WithAppSettingsAsync(r => r.UpsertTelegramAllowedUserAsync(request.ChatId, request.Username, ct));
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Доступ дозволено: @{request.Username} (chat_id={request.ChatId})."), ct);
+            $"Access approved: @{request.Username} (chat_id={request.ChatId})."), ct);
         await mediator.Publish(new TelegramAccessChangedOccurred(
             TelegramAccessAction.Approved, request.ChatId, request.Username), ct);
         return true;
@@ -310,8 +310,8 @@ public sealed class TelegramAccessControlService(
         _requestCooldownUntil[request.ChatId] = DateTimeOffset.Now.Add(RequestCooldown);
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Доступ відхилено: @{request.Username} (chat_id={request.ChatId}). " +
-            $"Кулдаун на повторний запит: {RequestCooldown.TotalMinutes} хв."), ct);
+            $"Access denied: @{request.Username} (chat_id={request.ChatId}). " +
+            $"Cooldown before another request: {RequestCooldown.TotalMinutes} min."), ct);
         await mediator.Publish(new TelegramAccessChangedOccurred(
             TelegramAccessAction.Denied, request.ChatId, request.Username), ct);
         return true;
@@ -350,10 +350,10 @@ public sealed class TelegramAccessControlService(
     }
 
     /// <summary>
-    /// Оновлює збережений username для вже дозволеного (не Primary Admin)
-    /// chat_id — викликається при кожному /start. Primary Admin навмисно
-    /// не потрапляє у TelegramAllowedUsers (і не показується в GetAllowedUsers) —
-    /// той самий принцип, що й у старому WPF.
+    /// Updates the stored username for an already-allowed (non-Primary-Admin)
+    /// chat_id — called on every /start. The Primary Admin deliberately
+    /// never ends up in TelegramAllowedUsers (and isn't shown in GetAllowedUsers) —
+    /// same principle as in the old WPF app.
     /// </summary>
     public async Task RefreshUsernameAsync(long chatId, string username, CancellationToken ct = default)
     {

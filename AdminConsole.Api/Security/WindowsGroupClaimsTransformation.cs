@@ -7,18 +7,18 @@ using Microsoft.AspNetCore.Authentication;
 namespace AdminConsole.Api.Security;
 
 /// <summary>
-/// Мапить членство в AD-групі (Authorization:ViewerGroup — "AdminConsole-Admins")
-/// у ClaimTypes.Role. На IIS `WindowsPrincipal` мав ролі = AD-групи "з коробки";
-/// у Kestrel + Negotiate поза IIS групова приналежність НЕ мапиться в claims
-/// автоматично (R4) — без цього класу авторизація або пропустить усіх,
-/// або не пустить нікого.
+/// Maps AD group membership (Authorization:ViewerGroup — "AdminConsole-Admins")
+/// into ClaimTypes.Role. Under IIS, `WindowsPrincipal` had roles = AD groups
+/// out of the box; under Kestrel + Negotiate outside IIS, group membership is
+/// NOT mapped into claims automatically (R4) — without this class,
+/// authorization would either let everyone through or let no one through.
 ///
-/// Викликається на кожен автентифікований запит (framework не кешує
-/// IClaimsTransformation між запитами); захист від повторної трансформації
-/// того самого principal — перевірка вже доданого claim'а на початку.
+/// Called on every authenticated request (the framework doesn't cache
+/// IClaimsTransformation between requests); guarded against re-transforming
+/// the same principal by checking for the already-added claim up front.
 ///
-/// Windows-only за дизайном (WindowsIdentity, System.DirectoryServices.AccountManagement) —
-/// узгоджено з рештою застосунку (Windows Service, DPAPI-NG, майбутні WMI/quser у Фазі 4).
+/// Windows-only by design (WindowsIdentity, System.DirectoryServices.AccountManagement) —
+/// consistent with the rest of the app (Windows Service, DPAPI-NG, future WMI/quser in Phase 4).
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WindowsGroupClaimsTransformation : IClaimsTransformation
@@ -30,7 +30,7 @@ public sealed class WindowsGroupClaimsTransformation : IClaimsTransformation
         IConfiguration config, ILogger<WindowsGroupClaimsTransformation> logger)
     {
         _requiredGroup = config["Authorization:ViewerGroup"]
-            ?? throw new InvalidOperationException("Authorization:ViewerGroup не сконфігуровано.");
+            ?? throw new InvalidOperationException("Authorization:ViewerGroup is not configured.");
         _logger = logger;
     }
 
@@ -40,7 +40,7 @@ public sealed class WindowsGroupClaimsTransformation : IClaimsTransformation
             return Task.FromResult(principal);
 
         if (principal.HasClaim(c => c.Type == ClaimTypes.Role && c.Value == _requiredGroup))
-            return Task.FromResult(principal); // вже трансформовано цього запиту
+            return Task.FromResult(principal); // already transformed for this request
 
         bool isMember;
         try
@@ -51,14 +51,15 @@ public sealed class WindowsGroupClaimsTransformation : IClaimsTransformation
         }
         catch (Exception ex)
         {
-            // Машина поза доменом / контролер домену недоступний — трактуємо як
-            // "не можемо підтвердити членство" (у підсумку 403 нижче по пайплайну),
-            // а НЕ як 500. Це водночас і легітимний production-ризик (R1 — сервіс
-            // під локальним, а не gMSA-акаунтом), і очікуваний сценарій локального
-            // тестування поза AD (недоменна машина розробника).
+            // Machine off-domain / domain controller unreachable — treated as
+            // "cannot confirm membership" (resulting in a 403 further down the
+            // pipeline), NOT a 500. This is both a legitimate production risk
+            // (R1 — the service runs under a local rather than gMSA account)
+            // and an expected scenario for local testing outside AD (a
+            // developer's non-domain-joined machine).
             _logger.LogWarning(ex,
-                "WindowsGroupClaimsTransformation: не вдалось перевірити членство {User} в AD-групі {Group} " +
-                "— домен недоступний або машина не приєднана до домену.",
+                "WindowsGroupClaimsTransformation: failed to verify {User}'s membership in AD group {Group} " +
+                "— the domain is unreachable or the machine is not domain-joined.",
                 identity.Name, _requiredGroup);
             return Task.FromResult(principal);
         }
@@ -66,19 +67,19 @@ public sealed class WindowsGroupClaimsTransformation : IClaimsTransformation
         if (!isMember)
             return Task.FromResult(principal);
 
-        // WindowsIdentity.RoleClaimType за замовчуванням вказує на
-        // ClaimTypes.GroupSid, а НЕ на ClaimTypes.Role — це властивість,
-        // яку Clone() успадковує і яку неможливо змінити пост-фактум.
-        // Тому AddClaim(ClaimTypes.Role, ...) напряму в клон WindowsIdentity
-        // НЕ працює: User.IsInRole(...)/RequireRole(...) шукають claim
-        // виключно за identity.RoleClaimType, який лишається GroupSid
-        // незалежно від того, які claims туди додати (перевірено емпірично:
-        // claim видно в User.Claims, а IsInRole все одно повертає false).
+        // WindowsIdentity.RoleClaimType defaults to ClaimTypes.GroupSid, NOT
+        // ClaimTypes.Role — a property that Clone() inherits and that cannot
+        // be changed after the fact. So AddClaim(ClaimTypes.Role, ...) directly
+        // on a cloned WindowsIdentity does NOT work: User.IsInRole(...)/
+        // RequireRole(...) only look for claims matching identity.RoleClaimType,
+        // which stays GroupSid no matter what claims you add to it (verified
+        // empirically: the claim is visible in User.Claims, yet IsInRole still
+        // returns false).
         //
-        // Виправлення — окрема, звичайна ClaimsIdentity з явним
-        // RoleClaimType = ClaimTypes.Role. ClaimsPrincipal.IsInRole()
-        // перевіряє ВСІ ClaimsIdentity в principal, тож досить додати цю
-        // другу ідентичність поруч із оригінальною WindowsIdentity.
+        // The fix — a separate, plain ClaimsIdentity with an explicit
+        // RoleClaimType = ClaimTypes.Role. ClaimsPrincipal.IsInRole() checks
+        // ALL ClaimsIdentity instances on the principal, so it's enough to add
+        // this second identity alongside the original WindowsIdentity.
         var roleIdentity = new ClaimsIdentity(
             claims: [new Claim(ClaimTypes.Role, _requiredGroup)],
             authenticationType: null,

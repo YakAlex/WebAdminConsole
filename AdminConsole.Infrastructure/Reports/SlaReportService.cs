@@ -6,19 +6,19 @@ using Microsoft.Extensions.Options;
 namespace AdminConsole.Infrastructure.Reports;
 
 /// <summary>
-/// Рахує SLA-звіт над уже наявними в пам'яті даними —
-/// GetSnapshot() з UptimeTrackerService і статичним списком серверів
-/// з appsettings.json (той самий IOptions, що й у PingMonitorService,
-/// без залежності на сам пінг-цикл).
+/// Computes an SLA report over data already held in memory —
+/// GetSnapshot() from UptimeTrackerService and the static server list
+/// from appsettings.json (the same IOptions used by PingMonitorService,
+/// with no dependency on the ping loop itself).
 ///
-/// Generate() — чиста функція відносно свого входу (Now фіксується
-/// один раз на початку) — жодного файлового I/O тут немає, тому
-/// математику можна юніт-тестити окремо від диска й UI.
+/// Generate() is a pure function of its input (Now is captured once at
+/// the start) — there's no file I/O here at all, so the math can be
+/// unit-tested independently of disk and UI.
 ///
-/// T4.12: перенесено без змін (сервіс і так не мав жодної залежності
-/// на IMessenger/файлову персистентність — Generate() уже був чистою
-/// функцією). Реєструється як on-demand Singleton + викликається з
-/// SlaReportJob (Hangfire, за розкладом) і SlaController (REST, on-demand).
+/// T4.12: carried over unchanged (the service had no dependency on
+/// IMessenger/file persistence anyway — Generate() was already a pure
+/// function). Registered as an on-demand Singleton + called from
+/// SlaReportJob (Hangfire, scheduled) and SlaController (REST, on-demand).
 /// </summary>
 public sealed class SlaReportService(
     IOptions<List<ServerEntry>> servers,
@@ -27,8 +27,9 @@ public sealed class SlaReportService(
     private readonly IReadOnlyList<ServerEntry> _servers = servers.Value.AsReadOnly();
 
     /// <summary>
-    /// "Флотова доступність" за період — яку частку [from, to] хоч ОДИН
-    /// сервер був офлайн, через об'єднання (union) інтервалів простою.
+    /// "Fleet availability" for the period — the fraction of [from, to] during
+    /// which at least ONE server was offline, via the union of downtime
+    /// intervals.
     /// </summary>
     public double GetFleetAvailabilityPercent(DateTimeOffset from, DateTimeOffset to)
     {
@@ -124,7 +125,7 @@ public sealed class SlaReportService(
             }
             else
             {
-                // Видалений з конфіга — беремо ім'я/групу з останнього запису.
+                // Removed from config — take the name/group from the last record.
                 var last = serverRecords.OrderByDescending(r => r.FellAt).First();
                 name  = last.ServerName;
                 group = last.ServerGroup;
@@ -177,7 +178,7 @@ public sealed class SlaReportService(
             });
         }
 
-        entries = entries.OrderBy(e => e.UptimePercent).ToList(); // найгірші зверху
+        entries = entries.OrderBy(e => e.UptimePercent).ToList(); // worst first
 
         var maintenanceAppendix = records
             .Where(r => r.ClosedByMaintenance)
@@ -193,8 +194,8 @@ public sealed class SlaReportService(
         }
         else
         {
-            // double-арифметика навмисно: periodDuration.Ticks * entries.Count
-            // у long міг би переповнитись на довгих періодах × багатьох серверах.
+            // double arithmetic is deliberate: periodDuration.Ticks * entries.Count
+            // could overflow in a long on long periods × many servers.
             double totalDowntimeTicks = entries.Sum(e => (double)e.DowntimeInPeriod.Ticks);
             double totalPeriodTicks   = (double)periodDuration.Ticks * entries.Count;
 
@@ -213,13 +214,13 @@ public sealed class SlaReportService(
         };
     }
 
-    // ── Допоміжні методи ─────────────────────────────────────────────────────
+    // ── Helper methods ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// Єдина формула на весь сервіс: EffectiveEnd = RecoveredAt ?? Min(Now, To),
-    /// потім перетин [FellAt, EffectiveEnd] з [From, To]. Однаково коректно
-    /// обробляє і активний інцидент живого сервера, і "покинутий" відкритий
-    /// інцидент видаленого сервера — без окремих гілок для кожного випадку.
+    /// A single formula for the whole service: EffectiveEnd = RecoveredAt ?? Min(Now, To),
+    /// then intersect [FellAt, EffectiveEnd] with [From, To]. Equally correctly
+    /// handles both an active incident on a live server and an "abandoned" open
+    /// incident on a removed server — with no separate branches for either case.
     /// </summary>
     private static TimeSpan ClippedDuration(
         DowntimeRecord record, DateTimeOffset from, DateTimeOffset to, DateTimeOffset now)
@@ -254,7 +255,7 @@ public sealed class SlaReportService(
             !group.Equals(request.GroupFilter, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        // Підрядок, не точна рівність.
+        // Substring match, not exact equality.
         if (!string.IsNullOrWhiteSpace(request.ServerFilter) &&
             !name.Contains(request.ServerFilter, StringComparison.OrdinalIgnoreCase))
             return false;

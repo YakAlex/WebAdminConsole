@@ -4,9 +4,9 @@ using MediatR;
 namespace AdminConsole.Domain.Events;
 
 /// <summary>
-/// Публікується PingMonitorService раз на повний цикл опитування.
-/// Містить результати ВСІХ серверів — одна подія на цикл замість
-/// однієї на сервер. Заміна PingBatchResultMessage.
+/// Published by PingMonitorService once per full polling cycle.
+/// Contains results for ALL servers — one event per cycle instead of
+/// one per server. Replaces PingBatchResultMessage.
 /// </summary>
 public sealed record PingBatchResultOccurred(PingBatchPayload Payload) : INotification;
 

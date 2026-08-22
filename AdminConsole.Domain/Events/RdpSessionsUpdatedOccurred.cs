@@ -4,9 +4,9 @@ using MediatR;
 namespace AdminConsole.Domain.Events;
 
 /// <summary>
-/// Публікується RdpMonitorService після кожного опитування quser для сервера.
-/// Несе повний список заміни сесій для цього сервера.
-/// Заміна RdpSessionsUpdatedMessage.
+/// Published by RdpMonitorService after every quser poll for a server.
+/// Carries the full replacement session list for that server.
+/// Replaces RdpSessionsUpdatedMessage.
 /// </summary>
 public sealed record RdpSessionsUpdatedOccurred(RdpSessionsPayload Payload) : INotification;
 

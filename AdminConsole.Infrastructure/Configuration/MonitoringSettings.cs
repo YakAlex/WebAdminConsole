@@ -1,10 +1,11 @@
 namespace AdminConsole.Infrastructure.Configuration;
 
 /// <summary>
-/// Bind-клас для розділу "Monitoring" у appsettings.json. Options-конфігурація —
-/// адаптерний, не доменний концепт, тому в Infrastructure, а не в Domain
-/// (на відміну від ServerEntry/AppSettings, які є справжніми доменними моделями).
-/// Перенесено без змін з AdminConsole.Configuration.MonitoringSettings.
+/// Binding class for the "Monitoring" section in appsettings.json. Options
+/// configuration is an adapter-level, not a domain-level concept, hence it
+/// lives in Infrastructure rather than Domain (unlike ServerEntry/AppSettings,
+/// which are genuine domain models). Moved over unchanged from
+/// AdminConsole.Configuration.MonitoringSettings.
 /// </summary>
 public sealed class MonitoringSettings
 {
@@ -13,9 +14,9 @@ public sealed class MonitoringSettings
     public int    PingIntervalSeconds              { get; init; } = 30;
 
     /// <summary>
-    /// Інтервал пінгу для серверів у стані Offline.
-    /// Recovery loop пінгує тільки їх — швидше виявляє відновлення.
-    /// Має бути менше PingIntervalSeconds. Мінімум 5с.
+    /// Ping interval for servers in the Offline state.
+    /// The recovery loop pings only these — it detects recovery faster.
+    /// Must be less than PingIntervalSeconds. Minimum 5s.
     /// </summary>
     public int    OfflinePingIntervalSeconds       { get; init; } = 10;
     public string ZabbixUrl                        { get; init; } = string.Empty;
@@ -23,14 +24,14 @@ public sealed class MonitoringSettings
     public int    RdpPollIntervalSeconds           { get; init; } = 120;
 
     /// <summary>
-    /// Мінімальна тривалість (у секундах) даунтайму, щоб він потрапив
-    /// у DowntimeRecord і зберігся в БД. Коротші "миготіння"
-    /// (наприклад, одиничний втрачений ping-пакет через мережеву затримку)
-    /// відкидаються при відновленні і не рахуються як SLA-інцидент.
-    /// 0 — вимкнути фільтр (записувати все, як раніше).
+    /// Minimum downtime duration (in seconds) required for it to be recorded
+    /// as a DowntimeRecord and saved to the DB. Shorter "blips"
+    /// (e.g. a single lost ping packet due to network latency)
+    /// are discarded on recovery and don't count as an SLA incident.
+    /// 0 disables the filter (records everything, as before).
     /// </summary>
     public int MinIncidentDurationSeconds { get; init; } = 10;
 
-    /// <summary>Інтервал опитування BackupMonitorJob. Бекапи не змінюються щохвилини — дефолт навмисно більший за решту.</summary>
+    /// <summary>Polling interval for BackupMonitorJob. Backups don't change every minute — the default is deliberately larger than the others.</summary>
     public int BackupPollIntervalMinutes { get; init; } = 60;
 }

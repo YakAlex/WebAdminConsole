@@ -21,22 +21,23 @@ public sealed record AppLogEntry(
 )
 {
     /// <summary>
-    /// Максимальна довжина одного лог-повідомлення. Захист від того,
-    /// щоб зовнішній некерований вхід (наприклад, довільний текст
-    /// Telegram-повідомлення від неавторизованого користувача) не міг
-    /// роздути один рядок логу до неконтрольованого розміру.
+    /// Maximum length of a single log message. Guards against uncontrolled
+    /// external input (e.g. arbitrary text from a Telegram message sent by
+    /// an unauthorized user) inflating a single log line to an unbounded
+    /// size.
     /// </summary>
     private const int MaxMessageLength = 2000;
 
-    // Кешуємо при першому зверненні — record immutable, значення ніколи не змінюється.
-    // Уникаємо повторного форматування рядка при кожному записі у файл та відображенні в UI.
+    // Cached on first access — the record is immutable, so the value never changes.
+    // Avoids re-formatting the string on every file write and UI render.
     //
-    // Log Injection fix: Message може містити СИРИЙ, зовнішньо контрольований
-    // текст (наприклад, вміст Telegram-повідомлення від будь-кого, хто написав
-    // боту — навіть неавторизований). Без санітизації символи \r\n дозволяють
-    // підробити вигляд ЦІЛОГО додаткового рядка логу у файлі — атакуючий міг би
-    // імітувати справжній системний запис. Тому прибираємо/екрануємо переноси
-    // рядків і контрольні символи ДО того, як рядок потрапляє у Formatted.
+    // Log Injection fix: Message may contain RAW, externally controlled
+    // text (e.g. the contents of a Telegram message from anyone who has
+    // messaged the bot — even an unauthorized user). Without sanitization,
+    // \r\n characters could be used to fake the appearance of an ENTIRE
+    // extra log line in the file — an attacker could impersonate a genuine
+    // system entry. So we strip/escape line breaks and control characters
+    // BEFORE the string ends up in Formatted.
     public string Formatted { get; } =
         $"[{Timestamp.ToLocalTime():yyyy-MM-dd HH:mm:ss}] [{Severity,-7}] [{Source}] {Sanitize(Message)}";
 
@@ -44,19 +45,20 @@ public sealed record AppLogEntry(
     {
         if (string.IsNullOrEmpty(message)) return message;
 
-        // Замінюємо будь-які переноси рядків на видимий, безпечний маркер —
-        // зберігаємо інформацію (не просто видаляємо), але унеможливлюємо
-        // підробку окремого рядка логу.
+        // Replace any line breaks with a visible, safe marker — preserves
+        // the information (rather than just deleting it) while preventing
+        // a fake extra log line.
         var sb = new System.Text.StringBuilder(message.Length);
         foreach (char c in message)
         {
             switch (c)
             {
-                case '\r': break; // прибираємо повністю — \n нижче вже покриє перенос
+                case '\r': break; // dropped entirely — \n below already represents the break
                 case '\n': sb.Append("⏎"); break;
                 default:
-                    // Інші керуючі символи (крім звичайних друкованих) теж прибираємо —
-                    // захист від інших форм ін'єкції в термінал/файл (напр. escape-послідовності).
+                    // Other control characters (besides normal printable ones) are
+                    // stripped too — guards against other forms of terminal/file
+                    // injection (e.g. escape sequences).
                     if (char.IsControl(c)) continue;
                     sb.Append(c);
                     break;
@@ -65,7 +67,7 @@ public sealed record AppLogEntry(
 
         string result = sb.ToString();
         return result.Length > MaxMessageLength
-            ? result[..MaxMessageLength] + "…(обрізано)"
+            ? result[..MaxMessageLength] + "…(truncated)"
             : result;
     }
 }

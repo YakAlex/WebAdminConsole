@@ -1,13 +1,13 @@
 namespace AdminConsole.Migration.LegacyModels;
 
 /// <summary>
-/// Дзеркалить стару WPF AdminConsole.Configuration.UserSettings ЛИШЕ для
-/// десеріалізації user_settings.json. Не переноситься в Domain — це суто
-/// одноразовий формат джерела міграції (T2.6), а не робоча модель.
+/// Mirrors the old WPF AdminConsole.Configuration.UserSettings ONLY for
+/// deserializing user_settings.json. Not carried over into Domain — this is
+/// purely a one-time migration source format (T2.6), not a working model.
 /// </summary>
 public sealed class LegacyUserSettings
 {
-    /// <summary>Навмисно ігнорується при мапінгу в AppSettings — немає сенсу на сервері (Windows Service без трею).</summary>
+    /// <summary>Deliberately ignored when mapping to AppSettings — makes no sense on the server (a Windows Service has no tray).</summary>
     public bool CloseToTray { get; set; } = true;
 
     public bool RdpMonitoringEnabled { get; set; } = true;

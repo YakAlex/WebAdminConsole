@@ -1,0 +1,77 @@
+@use '@/styles/mixins' as *;
+
+.wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-app);
+  padding: var(--space-6);
+}
+
+.card {
+  @include card-surface;
+  max-width: 480px;
+  width: 100%;
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.icon {
+  color: var(--color-critical);
+}
+
+.title {
+  font-size: var(--font-size-page-title);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.message {
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: var(--line-height-base);
+}
+
+.detail {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-critical-bg);
+  color: var(--color-critical);
+  font-size: var(--font-size-micro);
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+
+.reloadButton {
+  margin-top: var(--space-2);
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-brand-cyan-border);
+  background: var(--color-brand-cyan-bg);
+  color: var(--color-brand-cyan);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  transition: filter var(--transition-fast);
+
+  &:hover {
+    filter: brightness(1.1);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}

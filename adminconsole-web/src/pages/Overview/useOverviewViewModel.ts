@@ -71,6 +71,9 @@ export function useOverviewViewModel() {
     // включає й Disconnected (той самий плаский список, що йде на повну сторінку
     // RDP Sessions), інакше "Active sessions" рахував і відключені сесії.
     rdpSessions: rdpDisabled ? [] : data.rdpSessions.filter((s) => s.state === RdpSessionState.Active),
+    // Немає активних сесій — покажемо останній disconnect замість порожньої
+    // плашки "All clear" (менш інформативно, коли насправді хтось заходив).
+    rdpLastLogout: rdpDisabled ? null : data.rdpLastLogout,
     maintenanceWindows: data.maintenanceWindows,
   }
 }

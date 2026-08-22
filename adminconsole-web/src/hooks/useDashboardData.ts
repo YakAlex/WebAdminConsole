@@ -48,6 +48,7 @@ export function useDashboardData() {
     backupsLoading: backupsQuery.loading,
     backupsError: backupsQuery.error,
     rdpSessions: rdp.sessions,
+    rdpLastLogout: rdp.lastLogout,
     rdpLoading: rdp.loading,
     rdpError: rdp.error,
     zabbixProblems: zabbixQuery.payload?.problems ?? [],

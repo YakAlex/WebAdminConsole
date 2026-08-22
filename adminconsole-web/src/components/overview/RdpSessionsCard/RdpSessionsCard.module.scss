@@ -83,6 +83,19 @@
   flex: 1;
 }
 
+.lastSession {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+  justify-content: center;
+}
+
+.lastSessionLabel {
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+}
+
 .session {
   display: flex;
   align-items: center;
@@ -96,8 +109,15 @@
 }
 
 .sessionUser {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--font-size-body);
   color: var(--color-text-primary);
+}
+
+.sessionDot {
+  flex-shrink: 0;
 }
 
 .sessionMeta {

@@ -74,7 +74,11 @@ export function Overview() {
               <BackupsCard jobs={vm.backups} disabled={vm.toggles?.backupMonitoringEnabled === false} />
             </div>
             <div className={styles.rdp}>
-              <RdpSessionsCard sessions={vm.rdpSessions} disabled={vm.toggles?.rdpMonitoringEnabled === false} />
+              <RdpSessionsCard
+                sessions={vm.rdpSessions}
+                lastLogout={vm.rdpLastLogout}
+                disabled={vm.toggles?.rdpMonitoringEnabled === false}
+              />
             </div>
             <div className={styles.maintenance}>
               <MaintenanceCard windows={vm.maintenanceWindows} />

@@ -267,6 +267,27 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     await scope.ServiceProvider.GetRequiredService<AdminConsoleDbContext>().Database.MigrateAsync();
 }
+else
+{
+    // Аудит Зона 2, Знахідка №3 (2026-08-22): production свідомо НЕ мігрує
+    // сам (AdminConsole.Migration.exe — окремий ручний крок при деплої,
+    // README → Deployment) — намагатись автоматично ALTER TABLE на бойовій
+    // базі без відома оператора теж ризиковано. Але пропущений цей крок
+    // раніше проявлявся як непрозорий SqliteException ("no such column")
+    // десь усередині першого-ліпшого фонового сервісу, що торкнувся нової
+    // колонки (саме так і сталось із RdpDailyPeak). Явна перевірка тут дає
+    // читабельне повідомлення одразу при старті замість цього.
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AdminConsoleDbContext>();
+    var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+    if (pending.Count > 0)
+    {
+        throw new InvalidOperationException(
+            $"База даних потребує {pending.Count} незастосован(а/і) міграці(я/й): " +
+            $"{string.Join(", ", pending)}. Запустіть AdminConsole.Migration.exe " +
+            "(поруч із цим .exe) перед стартом AdminConsole.Api — див. README.md → Deployment / Setup.");
+    }
+}
 
 app.UseStaticFiles();
 

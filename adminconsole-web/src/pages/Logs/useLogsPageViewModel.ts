@@ -6,10 +6,10 @@ const LOG_PAGE_SIZE = 200
 
 export function useLogsPageViewModel() {
   const [searchInput, setSearchInput] = useState('')
-  // `activeSearch` — те, що реально йде в запит. Оновлюється ЛИШЕ через
-  // submitSearch (Enter або кнопка "Пошук") — аудит-фікс, п.2: раніше
-  // будь-яке натискання клавіші (навіть із дебаунсом) рано чи пізно
-  // тригерило рефетч, який ховав/перемонтовував саме поле пошуку.
+  // `activeSearch` is what actually goes into the request. It's updated
+  // ONLY via submitSearch (Enter or the "Search" button) — audit fix, §2:
+  // previously any keystroke (even with debounce) would sooner or later
+  // trigger a refetch that hid/remounted the search field itself.
   const [activeSearch, setActiveSearch] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -17,7 +17,7 @@ export function useLogsPageViewModel() {
   const logsQuery = useAppLogEntries(LOG_PAGE_SIZE, {
     search: activeSearch || undefined,
     from: from ? new Date(from).toISOString() : undefined,
-    // <input type="date"> дає лише YYYY-MM-DD (північ) — +1 день, щоб обраний "to"-день був включно.
+    // <input type="date"> only gives YYYY-MM-DD (midnight) — +1 day so the selected "to" day is inclusive.
     to: to ? new Date(new Date(to).getTime() + 24 * 60 * 60 * 1000).toISOString() : undefined,
   })
   const entries = logsQuery.entries
@@ -44,9 +44,9 @@ export function useLogsPageViewModel() {
     error: errorCount,
     loading: logsQuery.loading,
     refreshing: logsQuery.refreshing,
-    // Раніше цей стан ігнорувався повністю — збій GET /api/logs виглядав
-    // на екрані ідентично до "логів справді немає" (порожня таблиця, без
-    // жодного повідомлення про помилку).
+    // This state used to be ignored entirely — a failed GET /api/logs looked
+    // on screen identical to "there really are no logs" (an empty table,
+    // with no error message at all).
     fetchError: logsQuery.error,
     searchInput,
     setSearchInput,

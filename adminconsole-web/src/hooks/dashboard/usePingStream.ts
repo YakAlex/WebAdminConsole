@@ -9,14 +9,16 @@ import type { PingBatchPayload, PingBatchResultEvent } from '@/lib/api/types'
 const GROUPS = ['ping'] as const
 
 /**
- * GET /api/ping (початковий live-знімок при монтуванні — бекенд РЕАЛЬНО
- * пінгує сервери зараз, не просто читає застарілий кеш, див. PingController)
- * + PingBatchResultOccurred (SignalR, живі оновлення що ~PingIntervalSeconds).
+ * GET /api/ping (initial live snapshot on mount — the backend ACTUALLY
+ * pings the servers right now, not just reading a stale cache, see
+ * PingController) + PingBatchResultOccurred (SignalR, live updates
+ * roughly every PingIntervalSeconds).
  *
- * Раніше цього REST-виклику не було — картки Ping/Overview лишались
- * порожніми до першого SignalR-пуша (до 30с). Порівнюємо cycleCompletedAt
- * при кожному оновленні (з REST І з SignalR), щоб повільна REST-відповідь,
- * яка прийшла ПІСЛЯ свіжішого SignalR-пуша, не відкотила дані назад.
+ * Previously this REST call didn't exist — the Ping/Overview cards
+ * stayed empty until the first SignalR push (up to 30s). We compare
+ * cycleCompletedAt on every update (from REST AND SignalR) so a slow
+ * REST response that arrives AFTER a fresher SignalR push doesn't roll
+ * the data back.
  */
 export function usePingStream() {
   const [payload, setPayload] = useState<PingBatchPayload | null>(null)

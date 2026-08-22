@@ -26,7 +26,7 @@
   background: var(--color-inactive);
 }
 
-// §8: "дуже слабкий glow" — тільки коли явно потрібно привернути увагу.
+// §8: "a very subtle glow" — only when attention explicitly needs to be drawn.
 .glow {
   &.success {
     box-shadow: 0 0 0 3px var(--color-success-glow);

@@ -8,10 +8,10 @@ export interface PageHeaderProps {
 }
 
 /**
- * §6 брифу, узагальнено для будь-якої вкладки (§26/§27 — спільний
- * компонент шапки сторінки замість повторення розмітки в кожному Page).
- * Дата/час і привітання лишились винятково на Overview — тут лише
- * заголовок + опційний підзаголовок/дії.
+ * §6 of the brief, generalized for any tab (§26/§27 — a shared page
+ * header component instead of repeating markup in every Page).
+ * Date/time and the greeting stay exclusive to Overview — this is just
+ * the title + optional subtitle/actions.
  */
 export function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
   return (

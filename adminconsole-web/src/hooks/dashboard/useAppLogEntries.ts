@@ -9,21 +9,23 @@ import type { AppLogEntry, AppLogEntryEvent } from '@/lib/api/types'
 const GROUPS = ['logs'] as const
 
 /**
- * GET /api/logs?take=N&amp;after&amp;before&amp;search (початкова сторінка/пошук) +
- * AppLogEntryOccurred (нові записи зверху, з обрізанням до N).
+ * GET /api/logs?take=N&amp;after&amp;before&amp;search (initial page/search) +
+ * AppLogEntryOccurred (new entries prepended, trimmed to N).
  *
- * Крок 6 (#10): коли активний пошук/діапазон дат, live-потік НЕ домішується
- * в результати — інакше щойно прийшла подія могла б не відповідати фільтру,
- * але все одно з'явитись зверху списку. У "нефільтрованому" режимі (типовий
- * перегляд Logs) поведінка та сама, що й раніше.
+ * Step 6 (#10): when a search/date range is active, the live stream is
+ * NOT merged into the results — otherwise a freshly arrived event
+ * might not match the filter but would still show up at the top of
+ * the list. In "unfiltered" mode (the typical Logs view), behavior is
+ * unchanged.
  */
 export function useAppLogEntries(take = 20, query: LogQuery = {}) {
   const [entries, setEntries] = useState<AppLogEntry[]>([])
-  // `loading` — лише ПЕРШЕ завантаження сторінки (full-page Spinner-gate).
-  // `refreshing` — кожен наступний рефетч (зміна пошуку/дат). Розділено
-  // навмисно (аудит, п.2): раніше `loading` виставлявся в true на КОЖЕН
-  // рефетч, через що сторінка ховала (розмонтовувала) свій вміст, включно з
-  // полем пошуку — курсор/фокус втрачався щоразу, коли спрацьовував пошук.
+  // `loading` — only the FIRST page load (full-page Spinner gate).
+  // `refreshing` — every subsequent refetch (search/date change).
+  // Deliberately split apart (audit, item 2): previously `loading` was
+  // set to true on EVERY refetch, which made the page hide (unmount)
+  // its content, including the search field — the cursor/focus was
+  // lost every time a search fired.
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)

@@ -3,15 +3,16 @@ import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
 import { Agent } from 'node:http'
 
-// Windows Negotiate (NTLM/Kerberos) — багатокроковий handshake, що
-// прив'язується до ОДНОГО TCP-з'єднання між проксі й бекендом. Дефолтний
-// http-proxy-агент Node НЕ тримає keep-alive і відкриває нове з'єднання на
-// кожен запит — бекенд щоразу бачить "нового" анонімного клієнта і
-// нескінченно повторює 401-виклик (перевірено вручну: curl --negotiate
-// через проксі отримував Connection: close і зависав у 401-циклі, тоді як
-// прямий запит на :5074 завершувався за 2 кроки). Один спільний keep-alive
-// Agent на /api і /hubs — обов'язковий, інакше жоден захищений запит
-// ніколи не долетить успішно через дев-проксі.
+// Windows Negotiate (NTLM/Kerberos) — a multi-step handshake that's
+// bound to a SINGLE TCP connection between the proxy and the backend.
+// Node's default http-proxy agent does NOT keep-alive and opens a new
+// connection on every request — the backend sees a "new" anonymous
+// client each time and endlessly repeats the 401 challenge (verified
+// manually: curl --negotiate through the proxy got Connection: close
+// and got stuck in a 401 loop, whereas a direct request to :5074
+// completed in 2 round trips). A single shared keep-alive Agent for
+// /api and /hubs is mandatory — otherwise no authenticated request
+// ever makes it through the dev proxy successfully.
 const keepAliveAgent = new Agent({ keepAlive: true })
 
 // https://vite.dev/config/
@@ -24,15 +25,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // REST API — AdminConsole.Api (Kestrel, Фаза 3). changeOrigin потрібен,
-      // бо бекенд перевіряє Host-заголовок для Negotiate/Windows-автентифікації.
+      // REST API — AdminConsole.Api (Kestrel, Phase 3). changeOrigin is
+      // needed because the backend checks the Host header for
+      // Negotiate/Windows authentication.
       '/api': {
         target: 'http://localhost:5074',
         changeOrigin: true,
         agent: keepAliveAgent,
       },
-      // SignalR hub (DashboardHub, T3.7) — окремий прапорець ws: true,
-      // інакше Vite не проксіює WebSocket upgrade для реал-тайм подій.
+      // SignalR hub (DashboardHub, T3.7) — a separate ws: true flag,
+      // otherwise Vite won't proxy the WebSocket upgrade for real-time events.
       '/hubs': {
         target: 'http://localhost:5074',
         changeOrigin: true,

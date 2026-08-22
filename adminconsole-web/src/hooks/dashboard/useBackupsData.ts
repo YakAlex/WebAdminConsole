@@ -8,7 +8,7 @@ import type { BackupCheckState, BackupStatusUpdatedEvent } from '@/lib/api/types
 
 const GROUPS = ['backups'] as const
 
-/** GET /api/backups (початковий знімок) + BackupStatusUpdatedOccurred (повний знімок раз на цикл). */
+/** GET /api/backups (initial snapshot) + BackupStatusUpdatedOccurred (full snapshot once per cycle). */
 export function useBackupsData() {
   const [states, setStates] = useState<BackupCheckState[]>([])
   const [loading, setLoading] = useState(true)

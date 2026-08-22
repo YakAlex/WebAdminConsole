@@ -1,11 +1,11 @@
 import styles from './Spinner.module.scss'
 
 export interface SpinnerProps {
-  /** Текст під спінером, напр. "Loading dashboard…". Необов'язковий. */
+  /** Text under the spinner, e.g. "Loading dashboard…". Optional. */
   label?: string
 }
 
-/** Крок 11.3 аудиту: єдиний спінер для loading-gate на сторінках замість "тихого" порожнього стану. */
+/** Audit step 11.3: a single spinner for page loading gates instead of a "silent" empty state. */
 export function Spinner({ label }: SpinnerProps) {
   return (
     <div className={styles.wrap} role="status" aria-live="polite">

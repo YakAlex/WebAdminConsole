@@ -57,26 +57,26 @@ const ACTION_COPY: Record<ActionKind, { verb: string; danger: boolean; warning: 
 
 export interface PingHostsTableProps {
   hosts: HostRow[]
-  /** Аудит-фікс (2026-08-22, п.1): активні вікна обслуговування — визначає стан кнопки 🔧 на кожному рядку. */
+  /** Audit fix (2026-08-22, #1): active maintenance windows — determines the 🔧 button state on each row. */
   maintenanceWindows: MaintenanceWindow[]
 }
 
 /**
- * Знаходить активне вікно для хоста — або пряме (за IP), або групове
- * (targetGroup === host.group). Той самий пріоритет, що й у
- * MaintenanceService.IsUnderMaintenance на бекенді.
+ * Finds the active window for a host — either direct (by IP) or group-level
+ * (targetGroup === host.group). Same priority order as
+ * MaintenanceService.IsUnderMaintenance on the backend.
  */
 function findActiveWindow(host: HostRow, windows: MaintenanceWindow[]): MaintenanceWindow | null {
   return windows.find((w) => w.serverIp === host.ip) ?? windows.find((w) => w.targetGroup === host.group) ?? null
 }
 
 /**
- * §26 брифу (Ping): "Hosts table" — усі сервери зі статусом, IP, response time.
- * Пріоритет 3, #3.1: колонка Actions — Restart/Shutdown/RDP (лише Windows,
- * той самий принцип, що й у WPF PingResultViewModel.IsWindows) + Continuous
- * Ping (усі типи пристроїв). Аудит-фікс (2026-08-22, п.1): +Maintenance
- * toggle — теж для усіх типів пристроїв (це Ping/Backup-алертинг, не
- * RDP-специфіка), той самий принцип, що й WPF ToggleMaintenanceCommand.
+ * Brief §26 (Ping): "Hosts table" — all servers with status, IP, response time.
+ * Priority 3, #3.1: Actions column — Restart/Shutdown/RDP (Windows only,
+ * same principle as WPF PingResultViewModel.IsWindows) + Continuous
+ * Ping (all device types). Audit fix (2026-08-22, #1): +Maintenance
+ * toggle — also for all device types (this is Ping/Backup alerting, not
+ * RDP-specific), same principle as the WPF ToggleMaintenanceCommand.
  */
 export function PingHostsTable({ hosts, maintenanceWindows }: PingHostsTableProps) {
   const [pending, setPending] = useState<PendingAction | null>(null)

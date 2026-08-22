@@ -11,15 +11,15 @@ interface ErrorBoundaryState {
 }
 
 /**
- * Аудит Зона 6, Знахідка №2 (2026-08-22): раніше жодного React Error
- * Boundary не було в усьому застосунку (підтверджено грепом) — будь-яка
- * непіймана помилка рендеру на БУДЬ-ЯКІЙ сторінці клала БІЛИЙ ЕКРАН усього
- * застосунку замість ізольованого, зрозумілого фолбеку. Class-компонент —
- * componentDidCatch/getDerivedStateFromError не мають хук-еквівалента.
+ * Audit Zone 6, Finding #2 (2026-08-22): previously the app had no React
+ * Error Boundary at all (confirmed via grep) — any uncaught render error on
+ * ANY page took down the ENTIRE app with a BLANK WHITE SCREEN instead of an
+ * isolated, understandable fallback. Class component — componentDidCatch /
+ * getDerivedStateFromError have no hook equivalent.
  *
- * Розміщено в main.tsx навколо всього дерева (AuthProvider +
- * DashboardConnectionProvider + App) — єдина глобальна страхувальна сітка;
- * per-page межі можна додати пізніше, якщо знадобиться ізоляція точніше.
+ * Placed in main.tsx around the whole tree (AuthProvider +
+ * DashboardConnectionProvider + App) as a single global safety net;
+ * per-page boundaries can be added later if finer isolation is needed.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null }

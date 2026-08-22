@@ -10,13 +10,14 @@ export interface TelegramUsersTableProps {
 }
 
 /**
- * §T6.2 п.3 (Settings → Telegram Users) + аудит-фікс п.5: раніше тут була
- * ручна форма Chat ID/Username/"Add" — але реальна авторизація нових
- * користувачів іде виключно через сам бот (/start → запит → Primary Admin
- * підтверджує ✅/❌ прямо в Telegram, TelegramAccessControlService/
- * TelegramBotService). Ручне додавання тут дублювало інший, не пов'язаний
- * з тим флоу шлях і могло ввести в оману, що це "офіційний" спосіб додати
- * когось. Лишається лише список уже підтверджених користувачів + видалення.
+ * §T6.2 item 3 (Settings → Telegram Users) + audit fix item 5: this used
+ * to have a manual Chat ID/Username/"Add" form — but real authorization of
+ * new users happens exclusively through the bot itself (/start → request →
+ * the Primary Admin confirms ✅/❌ directly in Telegram, via
+ * TelegramAccessControlService/TelegramBotService). Manual adding here
+ * duplicated a separate, unrelated path and could mislead people into
+ * thinking it was the "official" way to add someone. Only the list of
+ * already-approved users + removal remains.
  */
 export function TelegramUsersTable({ users, onRemove }: TelegramUsersTableProps) {
   const [removingChatId, setRemovingChatId] = useState<number | null>(null)
@@ -28,7 +29,7 @@ export function TelegramUsersTable({ users, onRemove }: TelegramUsersTableProps)
     try {
       await onRemove(id)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не вдалося видалити користувача.')
+      setError(err instanceof ApiError ? err.message : 'Failed to remove user.')
     } finally {
       setRemovingChatId(null)
     }

@@ -4,7 +4,7 @@ import { useHubGroups } from '@/lib/signalr/useHubGroups'
 import { useHubEvent } from '@/lib/signalr/useHubEvent'
 import { MaintenanceAction, type MaintenanceChangedEvent, type MaintenanceWindow } from '@/lib/api/types'
 
-// MaintenanceChangedOccurred летить і в "ping", і в "uptime" (SignalRBroadcastHandler) — досить приєднатись до однієї.
+// MaintenanceChangedOccurred is broadcast to both "ping" and "uptime" (SignalRBroadcastHandler) — joining either one is enough.
 const GROUPS = ['ping'] as const
 
 function windowKey(window: MaintenanceWindow): string {
@@ -12,12 +12,12 @@ function windowKey(window: MaintenanceWindow): string {
 }
 
 /**
- * Аудит-фікс (2026-08-22, п.1): раніше не було REST-знімка активних вікон
- * обслуговування взагалі — лише подія на кожен Start/End, тож вікна,
- * створені ДО того як відкрили сторінку, були невидимі аж до наступної
- * live-події. GET /api/maintenance тепер сідить початковий стан (той самий
- * REST+SignalR патерн, що вже в Zabbix/RDP/Ping), SignalR і далі тримає
- * його свіжим.
+ * Audit fix (2026-08-22, item 1): previously there was no REST snapshot
+ * of active maintenance windows at all — only an event on each
+ * Start/End, so windows created BEFORE the page was opened stayed
+ * invisible until the next live event. GET /api/maintenance now seeds
+ * the initial state (the same REST+SignalR pattern already used by
+ * Zabbix/RDP/Ping), and SignalR keeps it fresh from there.
  */
 export function useMaintenanceWindows(): MaintenanceWindow[] {
   const [windows, setWindows] = useState<Record<string, MaintenanceWindow>>({})
@@ -32,8 +32,8 @@ export function useMaintenanceWindows(): MaintenanceWindow[] {
         setWindows(Object.fromEntries(data.map((w) => [windowKey(w), w])))
       })
       .catch(() => {
-        // Не критичні дані сторінки — якщо запит впав, лишаємось на
-        // порожньому стані, SignalR і так наздожене на наступній події.
+        // Non-critical page data — if the request fails, we just stay
+        // in the empty state; SignalR will catch up on the next event.
       })
     return () => {
       cancelled = true

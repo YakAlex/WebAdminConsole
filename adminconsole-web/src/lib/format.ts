@@ -1,10 +1,10 @@
-/** "12:43" з ISO-рядка (DateTimeOffset), у локальному часі браузера. */
+/** "12:43" from an ISO string (DateTimeOffset), in the browser's local time. */
 export function formatClock(iso: string | null | undefined): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
 }
 
-/** "12:43:10" — той самий формат, що в референсі для "Last check". */
+/** "12:43:10" — the same format the reference uses for "Last check". */
 export function formatClockWithSeconds(iso: string | null | undefined): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleTimeString(undefined, {
@@ -14,7 +14,7 @@ export function formatClockWithSeconds(iso: string | null | undefined): string {
   })
 }
 
-/** "Aug 18 · 23:00" — для вікон обслуговування. */
+/** "Aug 18 · 23:00" — for maintenance windows. */
 export function formatMaintenanceSchedule(from: string, to: string | null): string {
   const fromDate = new Date(from)
   const dateLabel = fromDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -27,7 +27,7 @@ export function formatMaintenanceSchedule(from: string, to: string | null): stri
   return `${dateLabel} · ${fromTime}–${toTime}`
 }
 
-/** "Aug 21, 13:45:02" — для Logs (може охоплювати кілька діб, потрібна дата). */
+/** "Aug 21, 13:45:02" — for Logs (can span multiple days, so the date is needed). */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
@@ -40,7 +40,7 @@ export function truncate(text: string, maxLength: number): string {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text
 }
 
-/** "2d 3h 14m" / "12m" — тривалість інциденту; recoveredAt=null → рахує до "зараз" (відкритий інцидент). */
+/** "2d 3h 14m" / "12m" — incident duration; recoveredAt=null → counts up to "now" (an open incident). */
 export function formatDuration(fellAt: string, recoveredAt: string | null): string {
   const start = new Date(fellAt).getTime()
   const end = recoveredAt ? new Date(recoveredAt).getTime() : Date.now()
@@ -56,9 +56,10 @@ export function formatDuration(fellAt: string, recoveredAt: string | null): stri
 }
 
 /**
- * "1d 2h 30m" з .NET TimeSpan "c"-формату (напр. "1.02:30:00") — саме так
- * System.Text.Json за замовчуванням серіалізує TimeSpan (перевірено
- * емпірично на .NET 8, це не ISO 8601 duration). Пріоритет 3, #3.2 (SLA-звіт).
+ * "1d 2h 30m" from .NET TimeSpan's "c" format (e.g. "1.02:30:00") —
+ * this is how System.Text.Json serializes TimeSpan by default
+ * (verified empirically on .NET 8; it's not an ISO 8601 duration).
+ * Priority 3, #3.2 (SLA report).
  */
 export function formatTimeSpan(value: string | null | undefined): string {
   if (!value) return '—'
@@ -75,7 +76,7 @@ export function formatTimeSpan(value: string | null | undefined): string {
   return `${sign}${minutes}m`
 }
 
-/** "2.34 GB" / "412.5 MB" — той самий поріг/округлення, що WPF BackupRowViewModel.FormatSize. */
+/** "2.34 GB" / "412.5 MB" — the same threshold/rounding as WPF BackupRowViewModel.FormatSize. */
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null) return '—'
   const gb = bytes / 1024 / 1024 / 1024

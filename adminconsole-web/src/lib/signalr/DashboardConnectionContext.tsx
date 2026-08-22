@@ -7,13 +7,14 @@ interface DashboardConnectionValue {
   connection: HubConnection
   state: HubConnectionState
   /**
-   * Аудит Зона 5, Знахідка №1 (2026-08-22): rejoin груп після reconnect уже
-   * був (rejoinActiveGroups), але жоден data-хук не перезапитував REST після
-   * успішного reconnect — SignalR-групи коректно перевступлені, а дані,
-   * пропущені за час розриву, ніколи не наздоганялись (тихо застарілий
-   * стан, без жодної помилки в UI). Інкрементується на кожен onreconnected;
-   * хуки додають це значення в залежності свого REST-ефекту (useHubGroups
-   * повертає його), щоб автоматично перезапитувати REST після reconnect.
+   * Audit Zone 5, Finding #1 (2026-08-22): group rejoin after reconnect
+   * already existed (rejoinActiveGroups), but no data hook refetched
+   * REST after a successful reconnect — SignalR groups were correctly
+   * rejoined, but data missed during the disconnect was never caught
+   * up (silently stale state, no error shown in the UI). Incremented
+   * on every onreconnected; hooks add this value to their REST
+   * effect's dependencies (useHubGroups returns it) so REST is
+   * automatically refetched after a reconnect.
    */
   reconnectGeneration: number
   joinGroup: (group: string) => void
@@ -23,15 +24,17 @@ interface DashboardConnectionValue {
 const DashboardConnectionContext = createContext<DashboardConnectionValue | null>(null)
 
 /**
- * Один спільний HubConnection на весь застосунок (монтується раз у main.tsx,
- * навколо <App/>). Групи (§DashboardHub: "ping"/"uptime"/"backups"/"logs")
- * підписуються через ref-counted joinGroup/leaveGroup — кілька хуків можуть
- * хотіти ту саму групу, а сервер бачить лише один Join/Leave виклик.
+ * A single shared HubConnection for the whole app (mounted once in
+ * main.tsx, around <App/>). Groups (§DashboardHub:
+ * "ping"/"uptime"/"backups"/"logs") are subscribed to via ref-counted
+ * joinGroup/leaveGroup — several hooks may want the same group, while
+ * the server only sees a single Join/Leave call.
  *
- * Rejoin після reconnect теж централізований тут (ОДИН connection.onreconnected
- * на весь застосунок) — @microsoft/signalr не дає API для відписки від
- * onreconnected, тож реєструвати його з кожного окремого хука було б
- * витоком підписок при кожному ре-рендері.
+ * Rejoin after reconnect is also centralized here (ONE
+ * connection.onreconnected for the whole app) — @microsoft/signalr
+ * provides no API to unsubscribe from onreconnected, so registering it
+ * from each individual hook would leak subscriptions on every
+ * re-render.
  */
 export function DashboardConnectionProvider({ children }: { children: ReactNode }) {
   const connectionRef = useRef<HubConnection | null>(null)
@@ -46,10 +49,11 @@ export function DashboardConnectionProvider({ children }: { children: ReactNode 
   const rejoinActiveGroups = useCallback(() => {
     for (const [group, count] of groupRefCounts.current) {
       if (count > 0) {
-        // Аудит Зона 5, Знахідка №2 (2026-08-22): раніше .catch(() => {}) тихо
-        // ковтав будь-яку помилку rejoin — якщо саме ЦЯ група не перевступила
-        // після reconnect, відповідна частина UI мовчки лишалась без живих
-        // оновлень, без жодного логу чи індикатора.
+        // Audit Zone 5, Finding #2 (2026-08-22): previously .catch(() => {})
+        // silently swallowed any rejoin error — if THIS group specifically
+        // failed to rejoin after a reconnect, the corresponding part of the
+        // UI would silently be left without live updates, with no log or
+        // indicator at all.
         connection
           .invoke('JoinGroup', group)
           .catch((err: unknown) => console.warn(`[SignalR] rejoin group "${group}" failed after reconnect:`, err))
@@ -92,8 +96,9 @@ export function DashboardConnectionProvider({ children }: { children: ReactNode 
     connection.onreconnected(() => {
       updateState()
       rejoinActiveGroups()
-      // Сигнал для data-хуків (через useHubGroups) перезапитати REST —
-      // rejoin груп сам по собі не наздоганяє події, пропущені за час розриву.
+      // Signal for data hooks (via useHubGroups) to refetch REST —
+      // rejoining groups alone doesn't catch up on events missed during
+      // the disconnect.
       setReconnectGeneration((g) => g + 1)
     })
     connection.onclose(updateState)

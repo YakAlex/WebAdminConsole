@@ -9,7 +9,7 @@ export interface UptimeCardProps {
   axisLabels: string[]
 }
 
-/** §11 брифу. Тренд рахується з реальних DowntimeRecord — див. hooks/dashboard/uptimeMath.ts. */
+/** Brief §11. The trend is computed from real DowntimeRecord data — see hooks/dashboard/uptimeMath.ts. */
 export function UptimeCard({ overallPercent, monitoredDevices, trend, axisLabels }: UptimeCardProps) {
   return (
     <div className={styles.card}>

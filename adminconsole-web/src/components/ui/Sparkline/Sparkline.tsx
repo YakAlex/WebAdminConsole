@@ -25,9 +25,9 @@ function buildPath(data: number[], width: number, height: number, padding: numbe
 }
 
 /**
- * Тонкий inline-графік без сторонніх бібліотек (§11: "не робити великий
- * TradingView-style chart"). Один компонент — Uptime KPI, Uptime by Device
- * trend-колонка — усі споживають той самий примітив.
+ * Thin inline chart with no third-party libraries (§11: "don't build a
+ * big TradingView-style chart"). One component — Uptime KPI, the Uptime
+ * by Device trend column — all consume the same primitive.
  */
 export function Sparkline({
   data,

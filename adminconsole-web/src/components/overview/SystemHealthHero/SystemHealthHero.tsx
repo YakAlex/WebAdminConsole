@@ -17,9 +17,9 @@ export interface SystemHealthHeroProps {
 }
 
 /**
- * §7 брифу: головний Hero-блок dashboard'у — health ring зліва, три KPI
- * метрики справа (розділені вертикальними divider'ами), semantic статус
- * унизу. Займає ~65–70% ширини — решту бере AttentionRequired.
+ * Brief §7: the dashboard's main Hero block — health ring on the left, three
+ * KPI metrics on the right (separated by vertical dividers), semantic status
+ * at the bottom. Takes up ~65–70% of the width — the rest goes to AttentionRequired.
  */
 export function SystemHealthHero({
   online,

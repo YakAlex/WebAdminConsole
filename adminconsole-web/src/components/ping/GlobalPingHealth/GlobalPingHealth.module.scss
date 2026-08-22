@@ -5,10 +5,10 @@
   overflow: hidden;
 }
 
-// Приліплена до правого краю картки (той самий принцип, що server-icon.png
-// на System Health / Overview) — position:absolute виносить її з потоку,
-// місце під неї резервується явно нижче (.stats padding-right), лише на
-// ширших екранах, щоб на вузьких не тіснити метрики.
+// Pinned to the right edge of the card (same principle as server-icon.png
+// on System Health / Overview) — position:absolute takes it out of the flow,
+// space for it is reserved explicitly below (.stats padding-right), only on
+// wider screens, so it doesn't crowd the metrics on narrow ones.
 .signalArt {
   display: none;
   position: absolute;

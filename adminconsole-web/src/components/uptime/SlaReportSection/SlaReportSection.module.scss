@@ -15,22 +15,23 @@
   gap: var(--space-2);
 }
 
-// Аудит-фікс (2026-08-22): раніше .field не мав жодної явної ширини (лише
-// min-width:120px) — text- і date-інпути в браузері мають РІЗНУ природну
-// ширину/висоту (нативний UA-рендер календарного пікера), тож ряд "розповзався"
-// нерівномірно попри однаковий CSS. Тепер date/text-поля мають явні,
-// пропорційні flex-базиси (.fieldDate/.fieldText), а .input/.generateButton —
-// однакову фіксовану height, тому кнопка (без лейбла над собою) вирівнюється
-// по нижньому краю інпутів пікселем-у-піксель, а не "на око" через flex-end.
+// Audit fix (2026-08-22): previously .field had no explicit width (only
+// min-width:120px) — text and date inputs have DIFFERENT natural
+// width/height in the browser (native UA rendering of the date picker), so
+// the row drifted unevenly despite identical CSS. Now date/text fields have
+// explicit, proportional flex bases (.fieldDate/.fieldText), and
+// .input/.generateButton share the same fixed height, so the button (which
+// has no label above it) aligns with the bottom edge of the inputs
+// pixel-for-pixel, rather than "eyeballed" via flex-end.
 .form {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-4);
-  // .header уже має свій power (table-card-header, усі 4 сторони) — тут
-  // бракувало ЛІВОГО/ПРАВОГО/НИЖНЬОГО padding'у взагалі (0 звідусіль),
-  // тому ряд інпутів впритул торкався країв картки, особливо знизу.
-  // Той самий патерн, що вже в TelegramUsersTable нижче свого .header.
+  // .header already has its own padding (table-card-header, all 4 sides) —
+  // this element had no LEFT/RIGHT/BOTTOM padding at all (0 on every side),
+  // so the row of inputs touched the card edges directly, especially at the
+  // bottom. Same pattern already used in TelegramUsersTable below its .header.
   padding: 0 var(--card-padding) var(--card-padding);
 }
 

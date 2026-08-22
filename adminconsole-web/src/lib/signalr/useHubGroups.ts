@@ -2,11 +2,11 @@ import { useEffect } from 'react'
 import { useDashboardConnection } from './DashboardConnectionContext'
 
 /**
- * Приєднує компонент до SignalR-груп на час його життя (ref-counted, див.
- * DashboardConnectionContext). Повертає reconnectGeneration — додайте його
- * в залежності свого REST-фетч-ефекту (поруч із reportDenied), щоб дані
- * автоматично перезапитувались після reconnect, а не лишались тихо
- * застарілими (Аудит Зона 5, Знахідка №1, 2026-08-22).
+ * Joins the component to SignalR groups for its lifetime (ref-counted,
+ * see DashboardConnectionContext). Returns reconnectGeneration — add it
+ * to your REST fetch effect's dependencies (alongside reportDenied) so
+ * data automatically refetches after a reconnect instead of staying
+ * silently stale (Audit Zone 5, Finding #1, 2026-08-22).
  */
 export function useHubGroups(groups: readonly string[]): number {
   const { joinGroup, leaveGroup, reconnectGeneration } = useDashboardConnection()

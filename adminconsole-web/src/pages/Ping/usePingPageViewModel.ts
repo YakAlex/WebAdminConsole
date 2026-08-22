@@ -5,8 +5,8 @@ import { computeGlobalPingStats, mergeServersWithPingResults } from '@/hooks/das
 import type { ApiError } from '@/lib/api/http'
 
 /**
- * Композиція для сторінки Ping: лише те, що їй реально треба (без backups/rdp/zabbix/logs — Overview туди не тягнемо).
- * Крок 11.3 аудиту: servers/ping loading+error раніше повністю відкидались.
+ * Composition for the Ping page: only what it actually needs (no backups/rdp/zabbix/logs — we don't drag Overview in here).
+ * Audit step 11.3: servers/ping loading+error used to be discarded entirely.
  */
 export function usePingPageViewModel() {
   const serversQuery = useServers()

@@ -11,8 +11,8 @@ import styles from './Settings.module.scss'
 
 /**
  * T6.2: Settings — Credentials (Zabbix Token, Telegram Bot Token) +
- * Telegram Users (дозволені chat_id). Дані/дії — REST через
- * useSettingsViewModel(), без SignalR (рідкісні, явні дії адміна).
+ * Telegram Users (allowed chat_id). Data/actions go through REST via
+ * useSettingsViewModel(), no SignalR (rare, explicit admin actions).
  */
 export function Settings() {
   const vm = useSettingsViewModel()

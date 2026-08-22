@@ -8,7 +8,7 @@ import { useMonitoringToggles } from '@/hooks/dashboard/useMonitoringToggles'
 import { useRdpSessionsPageViewModel } from './useRdpSessionsPageViewModel'
 import styles from './RdpSessions.module.scss'
 
-/** §26 брифу: Page header → Active sessions summary → Connected users table. */
+/** Brief §26: Page header → Active sessions summary → Connected users table. */
 export function RdpSessions() {
   const vm = useRdpSessionsPageViewModel()
   const toggles = useMonitoringToggles()

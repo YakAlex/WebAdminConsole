@@ -1,4 +1,4 @@
-/** Базова помилка REST-запиту (не 2xx, не auth). */
+/** Base error for a REST request (non-2xx, non-auth). */
 export class ApiError extends Error {
   readonly status: number
 
@@ -9,7 +9,7 @@ export class ApiError extends Error {
   }
 }
 
-/** 401/403 — окремий тип, щоб UI міг відрізнити "немає доступу" від "щось зламалось". */
+/** 401/403 — a separate type so the UI can distinguish "no access" from "something broke". */
 export class ApiAuthError extends ApiError {
   constructor(status: number) {
     super(status, status === 401 ? 'Unauthorized' : 'Forbidden')
@@ -22,8 +22,9 @@ export function isAuthError(error: unknown): error is ApiAuthError {
 }
 
 /**
- * GET-запит до /api/*. `credentials: 'include'` — щоб Windows-автентифікація
- * (Negotiate) коректно проходила через Vite dev-proxy до бекенду.
+ * GET request to /api/*. `credentials: 'include'` is needed for
+ * Windows authentication (Negotiate) to correctly pass through the
+ * Vite dev proxy to the backend.
  */
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
@@ -47,16 +48,17 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (cause) {
     throw new ApiError(
       response.status,
-      `Не вдалося розпарсити відповідь сервера: ${cause instanceof Error ? cause.message : 'invalid JSON'}`,
+      `Failed to parse server response: ${cause instanceof Error ? cause.message : 'invalid JSON'}`,
     )
   }
 }
 
 /**
- * POST/DELETE до /api/* з JSON-тілом. На non-2xx намагається витягти
- * `{ error: "..." }` з тіла відповіді (саме так бекенд повертає
- * BadRequest — напр. CredentialsController/TelegramUsersController) —
- * інакше форма показала б лише "Bad Request" без пояснення чому.
+ * POST/DELETE to /api/* with a JSON body. On non-2xx, tries to extract
+ * `{ error: "..." }` from the response body (this is how the backend
+ * returns BadRequest — e.g. CredentialsController/TelegramUsersController)
+ * — otherwise the form would only show "Bad Request" with no
+ * explanation why.
  */
 async function apiSend<T>(path: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<T> {
   let response: Response
@@ -84,7 +86,7 @@ async function apiSend<T>(path: string, method: 'POST' | 'PUT' | 'DELETE', body?
         message = data.error
       }
     } catch {
-      // тіло не JSON — лишаємо statusText
+      // body isn't JSON — keep statusText
     }
     throw new ApiError(response.status, message)
   }
@@ -96,7 +98,7 @@ async function apiSend<T>(path: string, method: 'POST' | 'PUT' | 'DELETE', body?
   } catch (cause) {
     throw new ApiError(
       response.status,
-      `Не вдалося розпарсити відповідь сервера: ${cause instanceof Error ? cause.message : 'invalid JSON'}`,
+      `Failed to parse server response: ${cause instanceof Error ? cause.message : 'invalid JSON'}`,
     )
   }
 }

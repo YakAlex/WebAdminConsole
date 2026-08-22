@@ -4,7 +4,7 @@ import { ApiError, isAuthError } from '@/lib/api/http'
 import { useAuth } from '@/lib/auth/AuthContext'
 import type { ServerEntry } from '@/lib/api/types'
 
-/** GET /api/servers — статичний список (appsettings.json), без SignalR-оновлень. */
+/** GET /api/servers — a static list (appsettings.json), no SignalR updates. */
 export function useServers() {
   const [servers, setServers] = useState<ServerEntry[]>([])
   const [loading, setLoading] = useState(true)

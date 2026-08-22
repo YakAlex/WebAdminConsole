@@ -13,14 +13,15 @@
   }
 }
 
-// Без внутрішнього padding — для карток, що самі керують структурою
-// (наприклад, таблиці на всю ширину картки, як "Uptime by Device").
+// No inner padding — for cards that manage their own structure
+// (e.g. a full-width table inside the card, like "Uptime by Device").
 .noPadding {
   padding: 0;
 }
 
-// Трохи світліший фон (--color-bg-card-elevated) — для карток, які мають
-// візуально виділятись на тлі решти сітки (§19 "elevated cards").
+// A slightly lighter background (--color-bg-card-elevated) — for cards
+// that should visually stand out against the rest of the grid (§19
+// "elevated cards").
 .elevated {
   background: var(--color-bg-card-elevated);
 }

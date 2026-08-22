@@ -84,7 +84,7 @@
   background: var(--color-info-bg);
 }
 
-// Слабкий glow навколо badge, коли значення > 0 (§8: "very subtle red glow").
+// Subtle glow around the badge when the value is > 0 (§8: "very subtle red glow").
 .attention {
   box-shadow: 0 0 12px -2px currentColor;
 }

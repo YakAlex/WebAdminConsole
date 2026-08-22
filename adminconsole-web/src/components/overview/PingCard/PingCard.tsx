@@ -10,7 +10,7 @@ export interface PingCardProps {
   hasData: boolean
 }
 
-/** §10 брифу. Дані — з usePingStream() (SignalR PingBatchResultOccurred), без REST-знімка. */
+/** Brief §10. Data comes from usePingStream() (SignalR PingBatchResultOccurred), no REST snapshot. */
 export function PingCard({ online, total, successRate, offline, hasData }: PingCardProps) {
   return (
     <div className={styles.card}>

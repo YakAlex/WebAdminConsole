@@ -1,22 +1,22 @@
 // ============================================================================
-// DTO-типи REST/SignalR — дзеркалять AdminConsole.Domain.Models/Events 1:1.
+// REST/SignalR DTO types — mirror AdminConsole.Domain.Models/Events 1:1.
 //
-// Бекенд серіалізує через дефолтний System.Text.Json (AddControllers()/
-// AddSignalR() без кастомних JsonSerializerOptions) — це означає:
-//   - властивості camelCase ("ServerName" → "serverName", "IP" → "ip");
-//   - enum'и як ЧИСЛА (немає JsonStringEnumConverter), тому нижче кожен
-//     enum продубльований як числовий const enum з тим самим порядком,
-//     що й у C#.
-// Якщо бекенд колись додасть JsonStringEnumConverter — це єдине місце,
-// яке треба буде поправити.
+// The backend serializes via the default System.Text.Json (AddControllers()/
+// AddSignalR() with no custom JsonSerializerOptions) — this means:
+//   - properties are camelCase ("ServerName" → "serverName", "IP" → "ip");
+//   - enums are serialized as NUMBERS (no JsonStringEnumConverter), so
+//     below each enum is duplicated as a numeric const enum with the
+//     same ordering as in C#.
+// If the backend ever adds a JsonStringEnumConverter, this is the one
+// place that will need updating.
 // ============================================================================
 
-// ── Enums (порядок = порядок у C#, значення важливі!) ──────────────────────
+// ── Enums (order = order in C#, the values matter!) ─────────────────────────
 //
-// `enum` заборонений цим проєктом (tsconfig: erasableSyntaxOnly — enum'и
-// генерують нестрипабельний рантайм-код). Замість нього — стандартна
-// TS-заміна: const-об'єкт "as const" + union-тип з тим самим іменем, що й
-// значення. Використання лишається ідентичним: `PingStatus.Online`.
+// `enum` is disallowed in this project (tsconfig: erasableSyntaxOnly —
+// enums generate non-erasable runtime code). Instead, the standard TS
+// replacement is used: a const object "as const" + a union type with
+// the same name as the values. Usage stays identical: `PingStatus.Online`.
 
 export const PingStatus = {
   Unknown: 0,
@@ -125,7 +125,7 @@ export interface AppLogEntry {
   formatted: string
 }
 
-// ── SignalR event payloads (назва методу = typeof(T).Name на бекенді) ─────
+// ── SignalR event payloads (method name = typeof(T).Name on the backend) ──
 
 export interface PingResult {
   name: string
@@ -205,13 +205,13 @@ export interface RdpSessionsUpdatedEvent {
   payload: RdpSessionsPayload
 }
 
-/** POST /api/servers/{ip}/restart|shutdown — результат WMI-команди (Пріоритет 3, #3.1). */
+/** POST /api/servers/{ip}/restart|shutdown — result of a WMI command (Priority 3, #3.1). */
 export interface ServerActionResult {
   success: boolean
   error: string | null
 }
 
-/** GET /api/rdp-sessions — агрегований живий знімок (Крок 11.2 аудиту). */
+/** GET /api/rdp-sessions — aggregated live snapshot (audit step 11.2). */
 export interface RdpSnapshotPayload {
   sessions: RdpSessionInfo[]
   globalDailyPeak: number
@@ -239,7 +239,7 @@ export interface ZabbixProblemsUpdatedEvent {
   payload: ZabbixProblemsPayload
 }
 
-// ── Settings: Credentials + Telegram Users (REST, без SignalR) ─────────────
+// ── Settings: Credentials + Telegram Users (REST, no SignalR) ──────────────
 
 export interface ZabbixCredentialsStatus {
   hasCredentials: boolean
@@ -258,14 +258,14 @@ export interface CredentialsStatusResponse {
   telegram: TelegramCredentialsStatus
 }
 
-/** Результат негайної перевірки з'єднання одразу після Save (POST /api/credentials/zabbix/token|password). */
+/** Result of an immediate connection check right after Save (POST /api/credentials/zabbix/token|password). */
 export interface ZabbixTestResult {
   success: boolean
   version: string | null
   error: string | null
 }
 
-/** GET/PUT /api/monitoring/toggles — вмикачі фонових сервісів (Settings, Крок 4 #7). */
+/** GET/PUT /api/monitoring/toggles — background service toggles (Settings, Step 4 #7). */
 export interface MonitoringToggles {
   rdpMonitoringEnabled: boolean
   zabbixMonitoringEnabled: boolean
@@ -279,7 +279,7 @@ export const MonitoredService = {
 } as const
 export type MonitoredService = (typeof MonitoredService)[keyof typeof MonitoredService]
 
-/** SignalR: MonitoringController публікує це на кожну зміну тумблера в Settings (аудит-фікс п.4). */
+/** SignalR: MonitoringController publishes this on every toggle change in Settings (audit fix item 4). */
 export interface MonitoringToggledEvent {
   service: MonitoredService
   enabled: boolean
@@ -290,7 +290,7 @@ export interface TelegramAllowedUserView {
   username: string
 }
 
-// ── Telegram access — claim code + pending requests (Аудит-фікс 2026-08-22, п.2) ──
+// ── Telegram access — claim code + pending requests (Audit fix 2026-08-22, item 2) ──
 
 export interface TelegramPendingRequest {
   id: number

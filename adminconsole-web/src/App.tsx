@@ -25,15 +25,15 @@ const PAGES: Record<string, ComponentType> = {
 }
 
 /**
- * Виправлення двох проблем з фідбеку користувача:
+ * Fixes two issues from user feedback:
  *
- * 1. Flash of Unauthenticated Content — status === 'checking' рендерить
- *    ЛИШЕ AuthChecking, жодного AppLayout/маршруту ще не існує в дереві.
- * 2. AccessDenied всередині AppLayout — status === 'denied' рендерить
- *    AccessDenied ЗАМІСТЬ усього <BrowserRouter>, тож Sidebar/TopBar
- *    у принципі не монтуються для неавторизованого користувача.
+ * 1. Flash of Unauthenticated Content — status === 'checking' renders
+ *    ONLY AuthChecking; no AppLayout/route exists in the tree yet.
+ * 2. AccessDenied inside AppLayout — status === 'denied' renders
+ *    AccessDenied INSTEAD OF the entire <BrowserRouter>, so the
+ *    Sidebar/TopBar never mount at all for an unauthorized user.
  *
- * Лише status === 'authorized' монтує реальний застосунок.
+ * Only status === 'authorized' mounts the real app.
  */
 export function App() {
   const { status } = useAuth()

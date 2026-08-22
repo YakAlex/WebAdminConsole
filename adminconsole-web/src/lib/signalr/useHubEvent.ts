@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useDashboardConnection } from './DashboardConnectionContext'
 
-/** Підписка на один SignalR-метод (назва = typeof(T).Name на бекенді, див. SignalRBroadcastHandler). */
+/** Subscribes to a single SignalR method (name = typeof(T).Name on the backend, see SignalRBroadcastHandler). */
 export function useHubEvent<T>(eventName: string, handler: (payload: T) => void): void {
   const { connection } = useDashboardConnection()
 

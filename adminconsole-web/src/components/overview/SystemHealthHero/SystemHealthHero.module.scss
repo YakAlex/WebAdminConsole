@@ -16,10 +16,11 @@
   z-index: 1;
 }
 
-// Декоративна ілюстрація сервера — приліплена до правого краю картки.
-// position:absolute виносить її з потоку, тож на решту вмісту (.top/.footer)
-// вона не впливає; місце під неї резервується явно через .top { padding-right }
-// нижче, лише на ширших екранах (щоб на вузьких не красти простір у метрик).
+// Decorative server illustration, pinned to the right edge of the card.
+// position:absolute takes it out of the flow, so it doesn't affect the rest
+// of the content (.top/.footer); space for it is reserved explicitly via
+// .top { padding-right } below, only on wider screens (so it doesn't steal
+// room from the metrics on narrow ones).
 .serverIcon {
   display: none;
   position: absolute;
@@ -49,7 +50,7 @@
   }
 }
 
-// ── Ліва частина: ring + статус ─────────────────────────────────────────
+// ── Left side: ring + status ─────────────────────────────────────────
 
 .status {
   display: flex;
@@ -82,7 +83,7 @@
   color: var(--color-text-secondary);
 }
 
-// ── Метрики (Ping / Uptime / Backups) ───────────────────────────────────
+// ── Metrics (Ping / Uptime / Backups) ───────────────────────────────────
 
 .metrics {
   flex: 1;
@@ -127,7 +128,7 @@
   color: var(--color-text-muted);
 }
 
-// ── Нижній рядок статусу ─────────────────────────────────────────────────
+// ── Bottom status row ─────────────────────────────────────────────────
 
 .footer {
   display: flex;

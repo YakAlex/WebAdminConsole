@@ -2,9 +2,9 @@ import { useBackupsData } from '@/hooks/dashboard/useBackupsData'
 import { BackupOutcome } from '@/lib/api/types'
 
 /**
- * Крок 11.3 аудиту: раніше брало лише `{ states }` з useBackupsData(),
- * відкидаючи loading/error — збій GET /api/backups виглядав ідентично
- * "бекапів не налаштовано". Той самий баг, що фіксили на Logs.
+ * Audit step 11.3: previously only took `{ states }` from useBackupsData(),
+ * discarding loading/error — a failed GET /api/backups looked identical to
+ * "backups aren't configured". The same bug that was fixed on Logs.
  */
 export function useBackupsPageViewModel() {
   const { states, loading, error } = useBackupsData()
@@ -16,10 +16,10 @@ export function useBackupsPageViewModel() {
   ).length
   const successRate = states.length > 0 ? Math.round((successful / states.length) * 100) : 0
 
-  // Аудит-фікс (2026-08-22, п.3): найновіший відомий розмір кожного job,
-  // просумований по всій системі — той самий "total backup size", що був
-  // на Overview у WPF. history.at(-1) — останній підтверджений семпл;
-  // job без жодного успішного циклу ще (порожня history) не додає нічого.
+  // Audit fix (2026-08-22, §3): the latest known size of each job, summed
+  // across the whole system — the same "total backup size" shown on
+  // Overview in WPF. history.at(-1) is the last confirmed sample; a job
+  // with no successful cycle yet (empty history) contributes nothing.
   const totalSizeBytes = states.reduce((sum, job) => sum + (job.history.at(-1)?.sizeBytes ?? 0), 0)
 
   return { jobs: states, successRate, successful, warnings, failed, totalSizeBytes, loading, error }

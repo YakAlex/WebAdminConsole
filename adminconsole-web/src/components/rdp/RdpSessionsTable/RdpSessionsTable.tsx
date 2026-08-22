@@ -30,9 +30,9 @@ export interface RdpSessionsTableProps {
   sessions: RdpSessionInfo[]
 }
 
-// Крок 3 (#4): активні сесії — зверху, відключені — знизу (в межах групи —
-// за іменем користувача), щоб "хто зараз підключений" читалось одразу,
-// не гортаючи весь список.
+// Step 3 (#4): active sessions on top, disconnected ones at the bottom
+// (sorted by username within a group), so "who's currently connected"
+// reads immediately, without scrolling through the whole list.
 const STATE_ORDER: Record<RdpSessionState, number> = {
   [RdpSessionState.Active]: 0,
   [RdpSessionState.Idle]: 1,
@@ -40,7 +40,7 @@ const STATE_ORDER: Record<RdpSessionState, number> = {
   [RdpSessionState.Unknown]: 3,
 }
 
-/** §26 брифу (RDP): "Connected users" / детальна таблиця сесій. Дані — useRdpSessions() (SignalR, без REST-знімка). */
+/** Brief §26 (RDP): "Connected users" / detailed sessions table. Data — useRdpSessions() (SignalR, no REST snapshot). */
 export function RdpSessionsTable({ sessions }: RdpSessionsTableProps) {
   const sortedSessions = [...sessions].sort((a, b) => {
     const stateDiff = STATE_ORDER[a.state] - STATE_ORDER[b.state]

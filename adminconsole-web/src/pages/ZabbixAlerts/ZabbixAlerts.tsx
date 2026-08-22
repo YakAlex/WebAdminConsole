@@ -8,7 +8,7 @@ import { useMonitoringToggles } from '@/hooks/dashboard/useMonitoringToggles'
 import { useZabbixAlertsPageViewModel } from './useZabbixAlertsPageViewModel'
 import styles from './ZabbixAlerts.module.scss'
 
-/** §26 брифу: Page header → Critical/Warning/Informational summary → Active problems table. */
+/** Brief §26: Page header → Critical/Warning/Informational summary → Active problems table. */
 export function ZabbixAlerts() {
   const vm = useZabbixAlertsPageViewModel()
   const toggles = useMonitoringToggles()

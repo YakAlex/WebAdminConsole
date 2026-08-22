@@ -22,9 +22,9 @@ export interface CredentialCardProps {
 }
 
 /**
- * §T6.2 п.2 (Settings → Credentials): одна картка на секрет (Zabbix Token,
- * Telegram Bot Token) — статус + password-поле + Save/Clear. Один
- * компонент, дві точки використання (Settings.tsx) замість дублювання розмітки.
+ * §T6.2 item 2 (Settings → Credentials): one card per secret (Zabbix
+ * Token, Telegram Bot Token) — status + password field + Save/Clear. One
+ * component, two usage sites (Settings.tsx) instead of duplicating markup.
  */
 export function CredentialCard({
   title,
@@ -54,7 +54,7 @@ export function CredentialCard({
       setValue('')
       if (result) setSaveResult(result)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не вдалося зберегти.')
+      setError(err instanceof ApiError ? err.message : 'Failed to save.')
     } finally {
       setSaving(false)
     }
@@ -67,7 +67,7 @@ export function CredentialCard({
     try {
       await onClear()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не вдалося очистити.')
+      setError(err instanceof ApiError ? err.message : 'Failed to clear.')
     } finally {
       setClearing(false)
     }

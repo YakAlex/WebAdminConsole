@@ -6,47 +6,50 @@ export type AuthStatus = 'checking' | 'authorized' | 'denied'
 
 interface AuthContextValue {
   status: AuthStatus
-  /** Викликати з будь-якого місця (REST-хук, SignalR-провайдер), щойно прийшло 401/403. */
+  /** Call from anywhere (a REST hook, the SignalR provider) as soon as a 401/403 comes in. */
   reportDenied: () => void
-  /** Викликати, коли якийсь канал (REST canary, SignalR negotiate) підтвердив доступ. */
+  /** Call when some channel (REST canary, SignalR negotiate) has confirmed access. */
   reportAuthorized: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 /**
- * Єдине джерело правди "чи цей користувач взагалі має доступ" для всього
- * застосунку — виправлення двох проблем з фідбеку:
+ * The single source of truth for "does this user have access at all"
+ * for the whole app — fixes two issues from feedback:
  *
- * 1. Flash of Unauthenticated Content: доки status === 'checking', App.tsx
- *    не рендерить ні AppLayout, ні маршрути — лише повноекранний лоадер.
- * 2. AccessDenied всередині AppLayout: тепер це ЄДИНИЙ producer стану
- *    "немає доступу" на весь застосунок (раніше кожна сторінка рахувала
- *    власний authDenied і рендерила AccessDenied як Outlet-контент,
- *    залишаючи Sidebar/TopBar видимими) — App.tsx рендерить AccessDenied
- *    ЗАМІСТЬ усього дерева маршрутів, а не всередині нього.
+ * 1. Flash of Unauthenticated Content: while status === 'checking',
+ *    App.tsx renders neither AppLayout nor any routes — just a
+ *    full-screen loader.
+ * 2. AccessDenied inside AppLayout: this is now the ONE producer of
+ *    "no access" state for the whole app (previously every page
+ *    tracked its own authDenied and rendered AccessDenied as Outlet
+ *    content, leaving the Sidebar/TopBar visible) — App.tsx renders
+ *    AccessDenied INSTEAD OF the whole route tree, not inside it.
  *
- * Розв'язується найпершим з двох незалежних сигналів — REST canary
- * (/api/servers, нижче) або результат SignalR negotiate
- * (DashboardConnectionProvider, вкладений усередину AuthProvider, викликає
- * reportDenied/reportAuthorized) — хто відповість раніше. Після першого
- * дозволу (`resolvedRef`) статус більше не змінюється: разова перевірка,
- * а не постійний перемикач на кожен наступний запит.
+ * Resolved by whichever of two independent signals answers first — a
+ * REST canary (/api/servers, below) or the result of the SignalR
+ * negotiate (DashboardConnectionProvider, nested inside AuthProvider,
+ * calls reportDenied/reportAuthorized). After the first resolution
+ * (`resolvedRef`), the status no longer changes: it's a one-time
+ * check, not a permanent toggle on every subsequent request.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('checking')
   const resolvedRef = useRef(false)
 
-  // reportDenied завжди спрацьовує (навіть після початкового 'authorized' —
-  // напр. сесія стала недійсною пізніше) і "заморожує" resolvedRef, щоб
-  // запізніла reportAuthorized з іншого каналу не відкотила denied назад.
+  // reportDenied always fires (even after an initial 'authorized' —
+  // e.g. the session became invalid later) and "freezes" resolvedRef
+  // so a late reportAuthorized from another channel can't roll denied
+  // back.
   const reportDenied = useCallback(() => {
     resolvedRef.current = true
     setStatus('denied')
   }, [])
 
-  // reportAuthorized розв'язує лише початкові перегони (checking → authorized)
-  // — якщо стан уже вирішено (ким завгодно), повторний виклик — no-op.
+  // reportAuthorized only resolves the initial race (checking →
+  // authorized) — if the state is already resolved (by anyone), a
+  // repeat call is a no-op.
   const reportAuthorized = useCallback(() => {
     if (resolvedRef.current) return
     resolvedRef.current = true
@@ -65,9 +68,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isAuthError(err)) {
           reportDenied()
         } else {
-          // Мережева помилка/500 на canary-запиті не повинна блокувати
-          // застосунок назавжди — той самий принцип, що й раніше (Крок 3):
-          // блокуємо лише на підтверджений 401/403.
+          // A network error/500 on the canary request shouldn't block
+          // the app forever — the same principle as before (Step 3):
+          // only block on a confirmed 401/403.
           reportAuthorized()
         }
       })

@@ -8,15 +8,15 @@ import type { RdpSessionInfo } from '@/lib/api/types'
 import styles from './RdpSessionsCard.module.scss'
 
 export interface RdpSessionsCardProps {
-  /** Уже відфільтровано на Active-only (useOverviewViewModel, Крок 3 #4). */
+  /** Already filtered to Active-only (useOverviewViewModel, Step 3 #4). */
   sessions: RdpSessionInfo[]
-  /** Останній зафіксований disconnect (будь-якого сервера) — показуємо, коли активних сесій нема. */
+  /** Last recorded disconnect (from any server) — shown when there are no active sessions. */
   lastLogout?: LastLogout | null
-  /** Аудит-фікс п.4: RDP Monitor вимкнено в Settings — sessions вже занулено викликачем. */
+  /** Audit fix #4: RDP Monitor is disabled in Settings — sessions is already zeroed out by the caller. */
   disabled?: boolean
 }
 
-/** §14 брифу: адаптується під наявність активних сесій. Дані — з useRdpSessions() (SignalR, без REST-знімка). */
+/** Brief §14: adapts based on whether there are active sessions. Data comes from useRdpSessions() (SignalR, no REST snapshot). */
 export function RdpSessionsCard({ sessions, lastLogout, disabled }: RdpSessionsCardProps) {
   const navigate = useNavigate()
 

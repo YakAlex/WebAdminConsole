@@ -39,7 +39,7 @@ export interface BackupJobsTableProps {
   jobs: BackupCheckState[]
 }
 
-/** §26 брифу (Backups): "Jobs table" — детальніша за компактну версію Overview: Kind, size-тренд з History, Last error. */
+/** Brief §26 (Backups): "Jobs table" — more detailed than the compact Overview version: Kind, size trend from History, Last error. */
 export function BackupJobsTable({ jobs }: BackupJobsTableProps) {
   return (
     <div className={styles.card}>

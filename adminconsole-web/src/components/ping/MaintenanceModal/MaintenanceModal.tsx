@@ -9,7 +9,7 @@ import styles from './MaintenanceModal.module.scss'
 
 export interface MaintenanceModalProps {
   host: HostRow
-  /** Активне вікно для цього сервера/групи, якщо є — перемикає модалку в режим "End" замість "Start". */
+  /** Active window for this server/group, if any — switches the modal into "End" mode instead of "Start". */
   activeWindow: MaintenanceWindow | null
   onClose: () => void
 }
@@ -27,10 +27,11 @@ const DURATION_OPTIONS: { value: DurationChoice; label: string }[] = [
 type Phase = 'form' | 'busy' | { result: 'error'; message: string }
 
 /**
- * Аудит-фікс (2026-08-22, п.1): веб-нативний аналог WPF MaintenanceDialog —
- * запускає/завершує MaintenanceWindow через REST-шар над MaintenanceService,
- * який існував у бекенді з Фази 4 без жодного UI над ним. Ті самі
- * пресети тривалості (10/30/60/без обмеження), що й у WPF.
+ * Audit fix (2026-08-22, #1): a web-native counterpart to the WPF
+ * MaintenanceDialog — starts/ends a MaintenanceWindow through the REST layer
+ * over MaintenanceService, which had existed in the backend since Phase 4
+ * with no UI on top of it. Same duration presets (10/30/60/unlimited) as in
+ * the WPF version.
  */
 export function MaintenanceModal({ host, activeWindow, onClose }: MaintenanceModalProps) {
   const [scope, setScope] = useState<Scope>('server')

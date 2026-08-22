@@ -51,7 +51,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  margin-left: 2px; // місце під індикатор активного пункту
+  margin-left: 2px; // space for the active-item indicator
   border-radius: var(--radius-control);
   color: var(--color-text-secondary);
   font-size: var(--font-size-body);
@@ -80,7 +80,7 @@
   }
 }
 
-// Активний пункт (§4): тонка cyan-лінія зліва + темний cyan-фон + cyan-іконка + білий текст.
+// Active item (§4): a thin cyan line on the left + dark cyan background + cyan icon + white text.
 .navItemActive {
   color: var(--color-text-primary);
   background: var(--color-brand-cyan-bg);

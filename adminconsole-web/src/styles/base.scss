@@ -70,7 +70,7 @@ svg {
   display: block;
 }
 
-// Застосовуємо тонкий скролбар глобально — весь застосунок, не лише картки.
+// Apply the thin scrollbar globally — the whole app, not just cards.
 body {
   @include thin-scrollbar;
 }

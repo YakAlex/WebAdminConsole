@@ -11,7 +11,7 @@ export interface GlobalUptimeHealthProps {
   incidentsInWindow: number
 }
 
-/** §26 брифу (Uptime): "99.98% global uptime" + графік — великий, на всю ширину, KPI-блок. */
+/** Brief §26 (Uptime): "99.98% global uptime" + chart — a large, full-width KPI block. */
 export function GlobalUptimeHealth({
   overallPercent,
   trend,

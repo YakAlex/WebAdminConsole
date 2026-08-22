@@ -9,7 +9,7 @@ export interface ZabbixSeveritySummaryProps {
   errorMessage: string | null
 }
 
-/** §26 брифу (Zabbix): "Critical / Warning / Resolved" — тут Critical/Warning/Informational (реальні Severity-групи Zabbix). */
+/** Brief §26 (Zabbix): "Critical / Warning / Resolved" — here Critical/Warning/Informational (actual Zabbix severity groups). */
 export function ZabbixSeveritySummary({ critical, warning, info, errorMessage }: ZabbixSeveritySummaryProps) {
   return (
     <Card>

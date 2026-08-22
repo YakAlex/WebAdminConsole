@@ -11,7 +11,7 @@ export interface RdpSessionsSummaryProps {
   lastLogout: LastLogout | null
 }
 
-/** §26 брифу (RDP): підсумок активних сесій — реальні поля з RdpSessionsPayload (globalDailyPeak/lastLogout*). */
+/** Brief §26 (RDP): summary of active sessions — real fields from RdpSessionsPayload (globalDailyPeak/lastLogout*). */
 export function RdpSessionsSummary({ activeCount, uniqueUsers, dailyPeak, lastLogout }: RdpSessionsSummaryProps) {
   return (
     <Card>

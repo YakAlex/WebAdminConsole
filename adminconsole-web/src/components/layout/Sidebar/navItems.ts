@@ -15,9 +15,9 @@ export interface NavItem {
   icon: LucideIcon
 }
 
-// Порядок і склад — буквально §4 брифу. Іконки — Lucide (§22: один стиль
-// іконок на весь застосунок, line-стиль, stroke ~1.5-2px за замовчуванням
-// у Lucide — нічого додатково налаштовувати не треба).
+// Order and composition — literally brief §4. Icons — Lucide (§22: a
+// single icon style across the whole app, line style, stroke ~1.5-2px by
+// default in Lucide — nothing extra to configure).
 export const navItems: NavItem[] = [
   { path: '/', label: 'Overview', icon: LayoutGrid },
   { path: '/ping', label: 'Ping', icon: Activity },

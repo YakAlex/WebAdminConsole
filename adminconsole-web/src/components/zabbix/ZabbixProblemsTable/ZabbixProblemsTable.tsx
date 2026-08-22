@@ -35,7 +35,7 @@ export interface ZabbixProblemsTableProps {
   problems: ZabbixProblem[]
 }
 
-/** §26 брифу (Zabbix): "Active alerts" — детальна таблиця. Дані — useZabbixProblems() (SignalR, без REST-знімка). */
+/** Brief §26 (Zabbix): "Active alerts" — detailed table. Data — useZabbixProblems() (SignalR, no REST snapshot). */
 export function ZabbixProblemsTable({ problems }: ZabbixProblemsTableProps) {
   return (
     <div className={styles.card}>

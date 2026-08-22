@@ -18,7 +18,7 @@ export interface RecentActivityProps {
   entries: AppLogEntry[]
 }
 
-/** §12 брифу: вертикальний event feed із тонкими роздільниками. Дані — з useAppLogEntries(). */
+/** Brief §12: a vertical event feed with thin dividers. Data comes from useAppLogEntries(). */
 export function RecentActivity({ entries }: RecentActivityProps) {
   const navigate = useNavigate()
 

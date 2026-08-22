@@ -9,7 +9,7 @@ export interface GlobalPingStats {
   hasData: boolean
 }
 
-/** Агреговані показники по всіх хостах з останнього PingBatchResultOccurred. */
+/** Aggregated stats across all hosts from the latest PingBatchResultOccurred. */
 export function computeGlobalPingStats(servers: ServerEntry[], results: PingResult[]): GlobalPingStats {
   const hasData = results.length > 0
   const total = results.length || servers.length
@@ -36,9 +36,10 @@ export interface HostRow {
 }
 
 /**
- * Об'єднує статичний конфіг серверів (/api/servers) з останнім ping-знімком
- * по IP — хости, для яких ще не прийшла жодна подія, лишаються у стані
- * Unknown (чесний "ще не перевірено"), а не зникають з таблиці.
+ * Merges the static server config (/api/servers) with the latest
+ * ping snapshot by IP — hosts that haven't received any event yet
+ * stay in the Unknown state (an honest "not checked yet") instead of
+ * disappearing from the table.
  */
 export function mergeServersWithPingResults(servers: ServerEntry[], results: PingResult[]): HostRow[] {
   const byIp = new Map(results.map((r) => [r.ip, r]))

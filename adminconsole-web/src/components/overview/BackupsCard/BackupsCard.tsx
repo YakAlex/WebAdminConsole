@@ -33,11 +33,11 @@ const STATUS_TONE: Record<BackupOutcome, StatusTone> = {
 
 export interface BackupsCardProps {
   jobs: BackupCheckState[]
-  /** Аудит-фікс п.4: Backup Monitor вимкнено в Settings — jobs вже занулено викликачем. */
+  /** Audit fix #4: Backup Monitor is disabled in Settings — jobs is already zeroed out by the caller. */
   disabled?: boolean
 }
 
-/** §13 брифу. Дані — з useBackupsData() (GET /api/backups + BackupStatusUpdatedOccurred). */
+/** Brief §13. Data comes from useBackupsData() (GET /api/backups + BackupStatusUpdatedOccurred). */
 export function BackupsCard({ jobs, disabled }: BackupsCardProps) {
   const navigate = useNavigate()
   const successful = jobs.filter((j) => j.outcome === BackupOutcome.Ok).length

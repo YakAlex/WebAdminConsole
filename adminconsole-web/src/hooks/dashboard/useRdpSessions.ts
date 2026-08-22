@@ -23,16 +23,18 @@ export interface RdpSessionsData {
 }
 
 /**
- * RdpSessionsUpdatedOccurred несе ПОВНИЙ список сесій ОДНОГО сервера за
- * раз (не глобальний знімок) — клієнт тримає мапу serverIp → payload і на
- * кожній події замінює лише слайс цього сервера.
+ * RdpSessionsUpdatedOccurred carries the FULL session list for ONE
+ * server at a time (not a global snapshot) — the client keeps a map of
+ * serverIp → payload and replaces only that server's slice on each
+ * event.
  *
- * Крок 11.2 аудиту: раніше тут не було жодного REST-запиту — сторінка
- * показувала "0 сесій" до першого SignalR-тіка після заходу/F5, невідрізнимо
- * від "сесій справді нема". GET /api/rdp-sessions тепер дає живий знімок
- * одразу; поки не прийшла хоч одна SignalR-подія (byServer порожній),
- * показуємо REST-знімок як seed — щойно прилетить перша подія, переходимо
- * на live per-server модель (вона точніша на довгій дистанції).
+ * Audit step 11.2: previously there was no REST request here at all —
+ * the page showed "0 sessions" until the first SignalR tick after
+ * load/F5, indistinguishable from "there really are no sessions".
+ * GET /api/rdp-sessions now gives a live snapshot immediately; until at
+ * least one SignalR event arrives (byServer is empty), we show the
+ * REST snapshot as a seed — as soon as the first event lands, we
+ * switch to the live per-server model (more accurate over time).
  */
 export function useRdpSessions(): RdpSessionsData {
   const [byServer, setByServer] = useState<Record<string, RdpSessionsPayload>>({})

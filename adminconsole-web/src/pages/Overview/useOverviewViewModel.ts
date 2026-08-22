@@ -5,9 +5,9 @@ import { BackupOutcome, RdpSessionState, ZabbixSeverity } from '@/lib/api/types'
 import type { ApiError } from '@/lib/api/http'
 
 /**
- * T6.2 п.5: одна точка, де "сирі" дані з useDashboardData() перетворюються
- * на готові пропси для кожної картки Overview — заміна всіх mock-констант,
- * що раніше жили прямо в компонентах.
+ * T6.2 §5: the single place where "raw" data from useDashboardData() is
+ * transformed into ready-made props for each Overview card — replacing all
+ * the mock constants that used to live directly in the components.
  */
 export function useOverviewViewModel() {
   const data = useDashboardData()
@@ -18,10 +18,11 @@ export function useOverviewViewModel() {
   const uptime = computeUptimeSeries(data.downtimeRecords, data.servers.length, { hours: 24, buckets: 12 })
   const uptimeAxisLabels = computeUptimeAxisLabels(24, 5)
 
-  // Аудит-фікс п.4: вимкнення сервісу в Settings мусить очищати ЙОГО дані
-  // всюди на Overview, а не лишати останній відомий знімок ("12 problems"
-  // від Zabbix, показаних уже ПІСЛЯ вимкнення). toggles === null — ще не
-  // завантажились (перший рендер) — свідомо НЕ гейтимо до першої відповіді.
+  // Audit fix §4: disabling a service in Settings must clear ITS data
+  // everywhere on Overview, rather than leaving the last known snapshot
+  // ("12 problems" from Zabbix, still shown AFTER it was disabled).
+  // toggles === null means it hasn't loaded yet (first render) — deliberately
+  // NOT gated until the first response arrives.
   const zabbixDisabled = data.toggles?.zabbixMonitoringEnabled === false
   const rdpDisabled = data.toggles?.rdpMonitoringEnabled === false
   const backupsDisabled = data.toggles?.backupMonitoringEnabled === false
@@ -36,10 +37,10 @@ export function useOverviewViewModel() {
     ? 0
     : data.zabbixProblems.filter((p) => p.severity === ZabbixSeverity.Average || p.severity === ZabbixSeverity.Warning).length
 
-  // Крок 11.3 аудиту: Overview — головна сторінка входу — не мала жодного
-  // loading-індикатора чи error-банера, попри те що useDashboardData() уже
-  // повертав *Loading/*Error для кожного джерела. Збій будь-якого REST-запиту
-  // виглядав ідентично "усе тихо і спокійно".
+  // Audit step 11.3: Overview — the main landing page — had neither a
+  // loading indicator nor an error banner, even though useDashboardData()
+  // already returned *Loading/*Error for each source. A failure in any
+  // REST request looked identical to "everything's fine".
   const initialLoading =
     data.serversLoading || data.pingLoading || data.downtimeLoading || data.backupsLoading ||
     data.zabbixLoading || data.rdpLoading
@@ -67,12 +68,12 @@ export function useOverviewViewModel() {
     backups: backupsDisabled ? [] : data.backups,
     backupsSummary: { successful: backupsSuccessful, total: backupsTotal },
     recentActivity: data.logEntries,
-    // Крок 3 (#4): картка Overview рахує/показує тільки Active — data.rdpSessions
-    // включає й Disconnected (той самий плаский список, що йде на повну сторінку
-    // RDP Sessions), інакше "Active sessions" рахував і відключені сесії.
+    // Step 3 (#4): the Overview card counts/shows only Active — data.rdpSessions
+    // also includes Disconnected (the same flat list used on the full RDP
+    // Sessions page), otherwise "Active sessions" would also count disconnected ones.
     rdpSessions: rdpDisabled ? [] : data.rdpSessions.filter((s) => s.state === RdpSessionState.Active),
-    // Немає активних сесій — покажемо останній disconnect замість порожньої
-    // плашки "All clear" (менш інформативно, коли насправді хтось заходив).
+    // No active sessions — show the last disconnect instead of an empty
+    // "All clear" placeholder (less informative when someone actually logged in).
     rdpLastLogout: rdpDisabled ? null : data.rdpLastLogout,
     maintenanceWindows: data.maintenanceWindows,
   }

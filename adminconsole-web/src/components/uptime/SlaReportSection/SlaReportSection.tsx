@@ -9,7 +9,7 @@ function toIsoDayStart(dateStr: string): string {
   return new Date(`${dateStr}T00:00:00`).toISOString()
 }
 
-/** "to" включно — весь обраний день, той самий підхід, що вже в Logs/Incidents фільтрах. */
+/** "to" is inclusive — the entire selected day, same approach already used in the Logs/Incidents filters. */
 function toIsoDayEnd(dateStr: string): string {
   return new Date(new Date(`${dateStr}T00:00:00`).getTime() + 24 * 60 * 60 * 1000).toISOString()
 }
@@ -25,10 +25,10 @@ function defaultTo(): string {
 }
 
 /**
- * Аудит-фікс п.3: більше ніякого inline-прев'ю таблиці прямо на сторінці
- * Uptime — клік на "Generate SLA Report" одразу відкриває готовий HTML-звіт
- * (GET /api/sla/html, той самий рендер що й у щотижневій Hangfire-джобі) у
- * НОВІЙ вкладці браузера. Тут лишається лише форма параметрів.
+ * Audit fix #3: no more inline table preview directly on the Uptime page —
+ * clicking "Generate SLA Report" now opens the ready-made HTML report
+ * (GET /api/sla/html, the same render used by the weekly Hangfire job) in a
+ * NEW browser tab. Only the parameter form remains here.
  */
 export interface SlaReportSectionProps {
   servers: ServerEntry[]
@@ -45,8 +45,8 @@ export function SlaReportSection({ servers }: SlaReportSectionProps) {
     [servers],
   )
 
-  // Список серверів звужується під обрану групу — не дає обрати сервер поза
-  // фільтром групи (бекенд однаково застосував би обидва фільтри одночасно).
+  // The server list narrows to the selected group — prevents picking a server
+  // outside the group filter (the backend would apply both filters together anyway).
   const serverOptions = useMemo(
     () =>
       servers

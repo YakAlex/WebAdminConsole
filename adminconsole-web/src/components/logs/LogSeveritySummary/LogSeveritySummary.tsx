@@ -9,7 +9,7 @@ export interface LogSeveritySummaryProps {
   error: number
 }
 
-/** §26 брифу (Logs): "Log severity summary". */
+/** Brief §26 (Logs): "Log severity summary". */
 export function LogSeveritySummary({ info, success, warning, error }: LogSeveritySummaryProps) {
   return (
     <Card>

@@ -66,7 +66,7 @@
   font-size: var(--font-size-secondary);
 }
 
-// ── Дії (Пріоритет 3, #3.1) ─────────────────────────────────────────────
+// ── Actions (Priority 3, #3.1) ─────────────────────────────────────────────
 
 .actions {
   display: flex;
@@ -101,9 +101,9 @@
     color: var(--color-critical);
   }
 
-  // Аудит-фікс (2026-08-22, п.1): сервер/група вже під активним вікном
-  // обслуговування — вирізняємо 🔧 навіть без наведення, той самий
-  // принцип, що й maintenance-бейдж/тултип у WPF PingResultViewModel.
+  // Audit fix (2026-08-22, #1): the server/group is already under an active
+  // maintenance window — highlight the 🔧 even without hover, same principle
+  // as the maintenance badge/tooltip in the WPF PingResultViewModel.
   &.maintenanceActive {
     color: var(--color-warning);
 
@@ -113,7 +113,7 @@
   }
 }
 
-// ── Confirm/result-модалка ───────────────────────────────────────────────
+// ── Confirm/result modal ───────────────────────────────────────────────
 
 .modalMessage {
   margin: 0 0 var(--space-2);

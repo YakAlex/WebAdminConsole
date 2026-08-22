@@ -9,10 +9,10 @@ import { PingStatus, type DowntimeRecord } from '@/lib/api/types'
 import type { DetailedDeviceRow } from '@/components/uptime/UptimeDeviceTable/UptimeDeviceTable'
 
 /**
- * Відкриті інциденти — завжди зверху (найновіші спочатку), закриті —
- * нижче, від нових до старих (Крок 5, #3). UptimeUpdatedOccurred після
- * кожної зміни (delete/clear) прилітає з тим самим повним знімком, тож
- * список пересортовується автоматично — окремого рефетчу не потрібно.
+ * Open incidents always come first (newest first), resolved ones follow,
+ * newest to oldest (Step 5, #3). UptimeUpdatedOccurred fires after every
+ * change (delete/clear) with the same full snapshot, so the list re-sorts
+ * itself automatically — no separate refetch needed.
  */
 function sortIncidents(records: DowntimeRecord[]) {
   return [...records].sort((a, b) => {
@@ -24,15 +24,15 @@ function sortIncidents(records: DowntimeRecord[]) {
 }
 
 /**
- * Крок 6 (#10): пошук за іменем сервера + діапазон дат. На відміну від
- * Logs, тут немає окремого запиту до бекенду — useDowntimeData() і так
- * тримає повний знімок (масштаб — сотні записів, не мільйони), тож
- * фільтрація суто клієнтська, без дебаунсу/рефетчу.
+ * Step 6 (#10): search by server name + date range. Unlike Logs, there's no
+ * separate backend request here — useDowntimeData() already holds the full
+ * snapshot (scale is hundreds of records, not millions), so filtering is
+ * purely client-side, without debounce or refetch.
  */
 function filterIncidents(records: DowntimeRecord[], search: string, from: string, to: string) {
   const needle = search.trim().toLowerCase()
   const fromMs = from ? new Date(from).getTime() : null
-  // "to" — включно весь обраний день.
+  // "to" is inclusive of the entire selected day.
   const toMs = to ? new Date(to).getTime() + 24 * 60 * 60 * 1000 : null
 
   return records.filter((r) => {
@@ -44,7 +44,7 @@ function filterIncidents(records: DowntimeRecord[], search: string, from: string
   })
 }
 
-/** Композиція для сторінки Uptime: servers + downtime (REST+SignalR) + ping (лише для live-статусу в таблиці). */
+/** Composition for the Uptime page: servers + downtime (REST+SignalR) + ping (only for live status in the table). */
 export function useUptimePageViewModel() {
   const serversQuery = useServers()
   const downtimeQuery = useDowntimeData()
@@ -55,9 +55,9 @@ export function useUptimePageViewModel() {
   const [incidentFrom, setIncidentFrom] = useState('')
   const [incidentTo, setIncidentTo] = useState('')
 
-  // Крок 11.3 аудиту: початкове завантаження (servers/downtime/ping) раніше
-  // не мало ні loading-індикатора, ні відображення помилки — сторінка просто
-  // мовчки показувала нулі, невідрізнимо від "даних справді нема".
+  // Audit step 11.3: the initial load (servers/downtime/ping) used to have
+  // neither a loading indicator nor error display — the page would silently
+  // show zeros, indistinguishable from "there's genuinely no data".
   const initialLoading = serversQuery.loading || downtimeQuery.loading || pingQuery.loading
   const initialErrors = [
     serversQuery.error && { context: 'servers', error: serversQuery.error },
@@ -92,7 +92,7 @@ export function useUptimePageViewModel() {
     setIncidentActionError(null)
     try {
       await deleteDowntimeRecord(serverIp, fellAt)
-      // Успіх — UptimeUpdatedOccurred прилетить через SignalR і оновить downtimeQuery.records сам.
+      // On success, UptimeUpdatedOccurred arrives via SignalR and updates downtimeQuery.records on its own.
     } catch (err) {
       setIncidentActionError(err instanceof ApiError ? err : new ApiError(0, 'Unknown error'))
     } finally {

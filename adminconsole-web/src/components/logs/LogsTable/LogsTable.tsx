@@ -28,7 +28,7 @@ export interface LogsTableProps {
   entries: AppLogEntry[]
 }
 
-/** §26 брифу (Logs): "Log table" / event timeline. Дані — useAppLogEntries() (GET /api/logs + AppLogEntryOccurred). */
+/** Brief §26 (Logs): "Log table" / event timeline. Data — useAppLogEntries() (GET /api/logs + AppLogEntryOccurred). */
 export function LogsTable({ entries }: LogsTableProps) {
   return (
     <div className={styles.card}>

@@ -8,11 +8,11 @@ export interface BackupsSummaryProps {
   successful: number
   warnings: number
   failed: number
-  /** Аудит-фікс (2026-08-22, п.3): сума останнього відомого розміру кожного job — раніше ніде не показувалась. */
+  /** Audit fix (2026-08-22, item 3): sum of each job's last known size — previously shown nowhere. */
   totalSizeBytes: number
 }
 
-/** §26 брифу (Backups): "Backup health" + "Success rate" — великий KPI на всю ширину. */
+/** Brief §26 (Backups): "Backup health" + "Success rate" — large full-width KPI. */
 export function BackupsSummary({ successRate, successful, warnings, failed, totalSizeBytes }: BackupsSummaryProps) {
   return (
     <Card>

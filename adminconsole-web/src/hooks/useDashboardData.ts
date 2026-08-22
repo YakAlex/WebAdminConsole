@@ -10,15 +10,16 @@ import { useAppLogEntries } from './dashboard/useAppLogEntries'
 import { useMonitoringToggles } from './dashboard/useMonitoringToggles'
 
 /**
- * T6.2: єдина точка входу для сторінок, яким потрібні дані дашборду —
- * поєднує початкове REST-завантаження (servers/downtime/backups/logs) з
- * живими SignalR-оновленнями (ping/uptime/backups/rdp/zabbix/maintenance).
- * Кожен піддомен — окремий хук у hooks/dashboard/, тут лише композиція.
+ * T6.2: a single entry point for pages that need dashboard data —
+ * combines the initial REST load (servers/downtime/backups/logs) with
+ * live SignalR updates (ping/uptime/backups/rdp/zabbix/maintenance).
+ * Each subdomain is a separate hook in hooks/dashboard/; this is just
+ * the composition.
  *
- * 401/403 більше не рахується тут — це відповідальність AuthProvider
- * (lib/auth/AuthContext.tsx), який блокує рендер усього App ще до того, як
- * ці хуки взагалі встигають змонтуватись (див. фідбек про Flash of
- * Unauthenticated Content).
+ * 401/403 is no longer handled here — that's the responsibility of
+ * AuthProvider (lib/auth/AuthContext.tsx), which blocks rendering the
+ * whole App before these hooks even get a chance to mount (see the
+ * Flash of Unauthenticated Content feedback).
  */
 export function useDashboardData() {
   const serversQuery = useServers()

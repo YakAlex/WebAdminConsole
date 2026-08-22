@@ -10,9 +10,9 @@ export interface HealthRingProps {
 }
 
 /**
- * Круговий progress-indicator (§7: "Health Ring", 120–140px). Незалежний
- * від System Health — придатний для будь-якої майбутньої сторінки
- * (Ping global health, Backup success ring тощо).
+ * Circular progress indicator (§7: "Health Ring", 120–140px). Independent
+ * of System Health — usable on any future page (Ping global health,
+ * Backup success ring, etc.).
  */
 export function HealthRing({ percent, size = 132, strokeWidth = 8, color = 'var(--color-success)', children }: HealthRingProps) {
   const radius = (size - strokeWidth) / 2

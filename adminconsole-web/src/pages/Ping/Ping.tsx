@@ -6,11 +6,11 @@ import { usePingPageViewModel } from './usePingPageViewModel'
 import styles from './Ping.module.scss'
 
 /**
- * §26 брифу: Ping НЕ копіює Overview — власний layout під свою функцію:
- * Global ping health → Hosts table (без окремого page header — прибрано
- * за проханням користувача, 2026-08-22, щоб Global Ping Health піднявся
- * вище). 401/403 обробляється глобально в App.tsx (AuthProvider), сюди
- * не долітає.
+ * Brief §26: Ping does NOT copy Overview — it has its own layout for its
+ * own purpose: Global ping health → Hosts table (no separate page header —
+ * removed at the user's request, 2026-08-22, so Global Ping Health moves
+ * up). 401/403 is handled globally in App.tsx (AuthProvider) and never
+ * reaches here.
  */
 export function Ping() {
   const vm = usePingPageViewModel()

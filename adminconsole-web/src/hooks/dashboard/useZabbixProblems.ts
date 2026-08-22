@@ -9,10 +9,12 @@ import type { ZabbixProblemsPayload, ZabbixProblemsUpdatedEvent } from '@/lib/ap
 const GROUPS = ['logs'] as const
 
 /**
- * GET /api/zabbix (початковий REST-знімок, живий опит) + ZabbixProblemsUpdatedOccurred
- * (SignalR, повний знімок на кожен цикл поллінгу). Крок 11.1 аудиту — раніше
- * тут не було REST-запиту взагалі, сторінка показувала нуль даних до першого
- * SignalR-тіка після заходу/F5 (як і usePingStream до свого фіксу в Кроці 3).
+ * GET /api/zabbix (initial REST snapshot, a live poll) +
+ * ZabbixProblemsUpdatedOccurred (SignalR, full snapshot on every
+ * polling cycle). Audit step 11.1 — previously there was no REST
+ * request here at all, and the page showed zero data until the first
+ * SignalR tick after load/F5 (same as usePingStream before its fix in
+ * Step 3).
  */
 export function useZabbixProblems() {
   const [payload, setPayload] = useState<ZabbixProblemsPayload | null>(null)

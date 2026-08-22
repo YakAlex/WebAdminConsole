@@ -7,7 +7,7 @@ export interface MaintenanceCardProps {
   windows: MaintenanceWindow[]
 }
 
-/** §15 брифу. Дані — з useMaintenanceWindows() (SignalR MaintenanceChangedOccurred, без REST-знімка). */
+/** Brief §15. Data comes from useMaintenanceWindows() (SignalR MaintenanceChangedOccurred, no REST snapshot). */
 export function MaintenanceCard({ windows }: MaintenanceCardProps) {
   return (
     <div className={styles.card}>

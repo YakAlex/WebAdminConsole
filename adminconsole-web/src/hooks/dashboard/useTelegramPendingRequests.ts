@@ -11,20 +11,22 @@ import {
   type TelegramPendingRequest,
 } from '@/lib/api/types'
 
-// TelegramAccessRequestOccurred/TelegramAccessChangedOccurred летять у "logs" (SignalRBroadcastHandler).
+// TelegramAccessRequestOccurred/TelegramAccessChangedOccurred are broadcast to "logs" (SignalRBroadcastHandler).
 const GROUPS = ['logs'] as const
 
 /**
- * Аудит-фікс (2026-08-22, п.2): раніше веб-Settings не мали жодної
- * видимості в pending-запити доступу до бота — TelegramAccessRequestOccurred
- * стріляв, але фронтенд його ігнорував. REST-seed (GET /api/telegramusers/pending)
- * + живі оновлення: нова заявка (/start від неавторизованого) додається в
- * реальному часі, а Approve/Deny (з БУДЬ-ЯКОГО каналу — вебу чи inline-кнопки
- * в самому Telegram) прибирає її з обох UI одночасно.
+ * Audit fix (2026-08-22, item 2): previously web Settings had no
+ * visibility into pending bot access requests at all —
+ * TelegramAccessRequestOccurred fired, but the frontend ignored it.
+ * REST seed (GET /api/telegramusers/pending) + live updates: a new
+ * request (/start from an unauthorized user) is added in real time,
+ * and Approve/Deny (from ANY channel — the web or an inline button in
+ * Telegram itself) removes it from both UIs at once.
  *
- * isPrimaryAdminClaimed навмисно НЕ оновлюється live — прив'язка Primary
- * Admin (через /claim_admin у самому Telegram) не має власної SignalR-події,
- * це одноразова bootstrap-дія; refetch() підхопить зміну.
+ * isPrimaryAdminClaimed is intentionally NOT updated live — claiming
+ * Primary Admin (via /claim_admin in Telegram itself) has no SignalR
+ * event of its own; it's a one-time bootstrap action, and refetch()
+ * will pick up the change.
  */
 export function useTelegramPendingRequests() {
   const [pending, setPending] = useState<TelegramPendingRequest[]>([])
@@ -35,11 +37,12 @@ export function useTelegramPendingRequests() {
 
   const reconnectGeneration = useHubGroups(GROUPS)
 
-  // Аудит Зона 6, Знахідка №1 (2026-08-22): раніше без catch — будь-яка
-  // помилка (мережа, 401/403, 500) ставала unhandled promise rejection,
-  // і, на відміну від усіх інших хуків цього класу, 401/403 тут ніколи не
-  // доходив до reportDenied() — стан авторизації на весь застосунок міг не
-  // дізнатись про прострочену сесію саме через цей ендпоінт.
+  // Audit Zone 6, Finding #1 (2026-08-22): previously there was no
+  // catch here — any error (network, 401/403, 500) became an unhandled
+  // promise rejection, and unlike every other hook in this class, a
+  // 401/403 here never reached reportDenied() — the app-wide auth
+  // state could miss an expired session specifically through this
+  // endpoint.
   const refetch = useCallback(async () => {
     try {
       const data = await getTelegramPending()

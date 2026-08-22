@@ -6,7 +6,7 @@ import type { DowntimeRecord } from '@/lib/api/types'
 import styles from './IncidentsTable.module.scss'
 
 export interface IncidentsTableProps {
-  /** Уже відфільтровано й відсортовано: відкриті зверху, закриті — від нових до старих (useUptimePageViewModel). */
+  /** Already filtered and sorted: open ones on top, closed ones newest to oldest (useUptimePageViewModel). */
   incidents: DowntimeRecord[]
   onDelete: (serverIp: string, fellAt: string) => void
   onClearResolved: () => void
@@ -22,11 +22,12 @@ export interface IncidentsTableProps {
 }
 
 /**
- * Крок 5 (#3): повний список DowntimeRecord (не агрегат, як UptimeDeviceTable
- * вище) — аналог WPF UptimeViewModel.RecordsView. Видалення доступне лише
- * для закритих інцидентів (сервер теж це перевіряє — DowntimeController.Delete).
- * Крок 6 (#10): пошук за іменем сервера + діапазон дат — клієнтський
- * (useDowntimeData уже тримає повний знімок, окремого запиту не треба).
+ * Step 5 (#3): the full list of DowntimeRecord entries (not an aggregate
+ * like UptimeDeviceTable above) — counterpart to WPF
+ * UptimeViewModel.RecordsView. Deletion is only available for closed
+ * incidents (the server enforces this too — DowntimeController.Delete).
+ * Step 6 (#10): search by server name + date range is client-side
+ * (useDowntimeData already holds the full snapshot, no separate request needed).
  */
 export function IncidentsTable({
   incidents,

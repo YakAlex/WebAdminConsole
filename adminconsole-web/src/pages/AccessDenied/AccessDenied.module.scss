@@ -1,6 +1,6 @@
-// Повноекранний вигляд (§ фідбек: раніше рендерився всередині AppLayout —
-// Sidebar/TopBar лишались видимі неавторизованому користувачу). Тепер
-// App.tsx рендерить цей компонент ЗАМІСТЬ усього дерева маршрутів.
+// Full-screen view (§ feedback: previously rendered inside AppLayout —
+// the Sidebar/TopBar stayed visible to an unauthorized user). Now App.tsx
+// renders this component INSTEAD OF the entire route tree.
 .root {
   display: flex;
   flex-direction: column;

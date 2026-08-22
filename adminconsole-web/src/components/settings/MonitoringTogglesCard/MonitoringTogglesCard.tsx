@@ -20,10 +20,10 @@ const ROWS: { key: MonitoredServiceKey; label: string; hint: string }[] = [
 ]
 
 /**
- * Крок 4 (#7): вмикачі фонових сервісів — точний аналог WPF
- * RdpMonitoringEnabled/ZabbixMonitoringEnabled/BackupMonitoringEnabled з
- * UserSettings. Зміна діє негайно (бекенд прокидає відповідний поллер),
- * без рестарту служби.
+ * Step 4 (#7): background service toggles — a direct analog of the WPF
+ * RdpMonitoringEnabled/ZabbixMonitoringEnabled/BackupMonitoringEnabled
+ * from UserSettings. Changes take effect immediately (the backend signals
+ * the corresponding poller), no service restart needed.
  */
 export function MonitoringTogglesCard({
   zabbixEnabled,

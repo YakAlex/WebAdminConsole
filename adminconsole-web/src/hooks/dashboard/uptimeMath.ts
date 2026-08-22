@@ -1,19 +1,19 @@
 import type { DowntimeRecord } from '@/lib/api/types'
 
 export interface UptimeSeries {
-  /** % аптайму за весь період вікна. */
+  /** % uptime for the entire window period. */
   percent: number
-  /** % аптайму по кожному bucket'у — для sparkline-тренду. */
+  /** % uptime per bucket — for the sparkline trend. */
   buckets: number[]
 }
 
 /**
- * Реальний % аптайму та bucketed-тренд з фактичних DowntimeRecord —
- * без жодних захардкоджених/фейкових чисел (Крок 3, заміна моків).
+ * Real uptime % and a bucketed trend from actual DowntimeRecords — no
+ * hardcoded/fake numbers whatsoever (Step 3, replacing mocks).
  *
- * Для кожного bucket рахується сумарний downtime (мс) усіх релевантних
- * інцидентів, що перетинаються з ним, поділений на "ідеальний" час
- * bucket'а (bucketMs * кількість пристроїв — 1, якщо рахуємо один сервер).
+ * For each bucket, we sum the downtime (ms) of every relevant incident
+ * that overlaps it, divided by the bucket's "ideal" time (bucketMs *
+ * device count — 1 if we're computing a single server).
  */
 export function computeUptimeSeries(
   records: DowntimeRecord[],
@@ -54,7 +54,7 @@ export function computeUptimeSeries(
   return { percent, buckets: bucketPercents }
 }
 
-/** Мітки часу для осі під sparkline (5 точок — той самий крок, що в референсі). */
+/** Time labels for the axis under the sparkline (5 points — same step as the reference). */
 export function computeUptimeAxisLabels(hours = 24, points = 5): string[] {
   const now = Date.now()
   const windowStart = now - hours * 60 * 60 * 1000
@@ -65,7 +65,7 @@ export function computeUptimeAxisLabels(hours = 24, points = 5): string[] {
   )
 }
 
-/** Кількість інцидентів, що почались у вікні (за замовчуванням — останні 24г). */
+/** Number of incidents that started within the window (default: the last 24h). */
 export function countIncidentsInWindow(records: DowntimeRecord[], hours = 24, serverIp?: string): number {
   const windowStart = Date.now() - hours * 60 * 60 * 1000
   return records.filter((r) => (!serverIp || r.serverIp === serverIp) && new Date(r.fellAt).getTime() >= windowStart)

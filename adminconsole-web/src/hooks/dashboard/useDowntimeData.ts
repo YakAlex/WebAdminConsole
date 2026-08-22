@@ -8,7 +8,7 @@ import type { DowntimeRecord, UptimeUpdatedEvent } from '@/lib/api/types'
 
 const GROUPS = ['uptime'] as const
 
-/** GET /api/downtime (початковий знімок) + UptimeUpdatedOccurred (повний знімок при кожній зміні). */
+/** GET /api/downtime (initial snapshot) + UptimeUpdatedOccurred (full snapshot on every change). */
 export function useDowntimeData() {
   const [records, setRecords] = useState<DowntimeRecord[]>([])
   const [loading, setLoading] = useState(true)

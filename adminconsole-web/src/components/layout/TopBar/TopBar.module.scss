@@ -12,11 +12,11 @@
   background: var(--color-bg-app);
 }
 
-// Дата/час (перенесено з PageHeader §6) — компактний двострядковий блок,
-// що влазить у 64px topbar без роздування його висоти. UX-фікс (2026-08-22):
-// лівий край замість правого — border-right/padding-right (розділювач із
-// сусіднім блоком статусу) більше не потрібні, обидва блоки тепер на
-// протилежних краях (justify-content: space-between).
+// Date/time (moved from PageHeader §6) — a compact two-line block that
+// fits in the 64px topbar without inflating its height. UX fix
+// (2026-08-22): left edge instead of right — border-right/padding-right (a
+// divider from the adjacent status block) are no longer needed, both
+// blocks now sit on opposite edges (justify-content: space-between).
 .dateTime {
   display: flex;
   flex-direction: column;
@@ -25,8 +25,8 @@
   line-height: var(--line-height-tight);
 }
 
-// UX-фікс (2026-08-22): раніше --color-text-muted (ледь помітний) —
-// піднято до --color-text-primary, щоб дата була так само помітна, як час.
+// UX fix (2026-08-22): previously --color-text-muted (barely visible) —
+// raised to --color-text-primary so the date is as noticeable as the time.
 .date {
   font-size: var(--font-size-micro);
   color: var(--color-text-primary);

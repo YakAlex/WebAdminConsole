@@ -15,9 +15,10 @@ export interface LogsFilterBarProps {
 }
 
 /**
- * Крок 6 (#10) + аудит-фікс п.2: пошук по Source/Message тепер тригериться
- * ЛИШЕ по Enter/кнопці "Пошук" (не на кожне натискання клавіші) — набір
- * тексту в полі більше не викликає рефетч і, відповідно, не втрачає курсор.
+ * Step 6 (#10) + audit fix item 2: search by Source/Message is now
+ * triggered ONLY by Enter/the "Search" button (not on every keystroke) —
+ * typing in the field no longer causes a refetch and, as a result, no
+ * longer loses cursor focus.
  */
 export function LogsFilterBar({
   search,

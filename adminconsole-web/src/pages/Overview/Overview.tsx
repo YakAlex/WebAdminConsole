@@ -12,10 +12,10 @@ import { useOverviewViewModel } from './useOverviewViewModel'
 import styles from './Overview.module.scss'
 
 /**
- * §6–17 брифу: reference implementation Design System. T6.2: дані тепер
- * реальні — REST початковий знімок + SignalR DashboardHub, композиція в
- * useOverviewViewModel(). 401/403 обробляється глобально в App.tsx
- * (AuthProvider) — цей компонент монтується лише коли доступ уже підтверджено.
+ * Brief §6–17: reference implementation of the Design System. T6.2: the data
+ * is now real — an initial REST snapshot plus the SignalR DashboardHub,
+ * composed in useOverviewViewModel(). 401/403 is handled globally in App.tsx
+ * (AuthProvider) — this component only mounts once access has been confirmed.
  */
 export function Overview() {
   const vm = useOverviewViewModel()

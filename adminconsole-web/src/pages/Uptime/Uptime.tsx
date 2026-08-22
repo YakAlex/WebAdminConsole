@@ -1,4 +1,3 @@
-import { PageHeader } from '@/components/ui/PageHeader'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Spinner } from '@/components/ui/Spinner'
 import { GlobalUptimeHealth } from '@/components/uptime/GlobalUptimeHealth/GlobalUptimeHealth'
@@ -9,18 +8,18 @@ import { useUptimePageViewModel } from './useUptimePageViewModel'
 import styles from './Uptime.module.scss'
 
 /**
- * §26 брифу: Uptime НЕ копіює Overview — власний layout під свою функцію:
- * Page header → SLA Report → 99.98% global uptime → Device table (детальніша
- * за Overview). SLA-секція навмисно зверху (аудит-фікс п.3a) — генерація
- * звіту не залежить від initialLoading нижчого блоку.
- * 401/403 обробляється глобально в App.tsx (AuthProvider), сюди не долітає.
+ * Brief §26: Uptime does NOT copy Overview — it has its own layout for its
+ * own purpose: Page header → SLA Report → 99.98% global uptime → Device table
+ * (more detailed than Overview). The SLA section is deliberately at the top
+ * (audit fix §3a) — report generation doesn't depend on the initialLoading
+ * state of the block below it.
+ * 401/403 is handled globally in App.tsx (AuthProvider) and never reaches here.
  */
 export function Uptime() {
   const vm = useUptimePageViewModel()
 
   return (
     <div className={styles.root}>
-      <PageHeader title="Uptime" subtitle="Historical availability and incident tracking across all monitored devices." />
 
       {vm.initialErrors.map(({ context, error }) => (
         <ErrorBanner key={context} context={context} error={error} />

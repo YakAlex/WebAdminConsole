@@ -4,9 +4,10 @@ import { TopBar } from '../TopBar/TopBar'
 import styles from './AppLayout.module.scss'
 
 /**
- * Композиція 4-зонного каркасу (§2 брифу): Sidebar зліва на всю висоту,
- * TopBar зверху правої колонки, під ним — скролований, відцентрований
- * контент сторінки (React Router <Outlet /> — самі сторінки поки заглушки).
+ * Composition of the 4-zone frame (brief §2): Sidebar on the left at full
+ * height, TopBar at the top of the right column, below it — scrollable
+ * page content (React Router <Outlet /> — the pages themselves are still
+ * placeholders for now).
  */
 export function AppLayout() {
   return (

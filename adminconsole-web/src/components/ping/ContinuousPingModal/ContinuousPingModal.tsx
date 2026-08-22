@@ -28,15 +28,16 @@ export interface ContinuousPingModalProps {
 }
 
 /**
- * Веб-нативна заміна WPF "Continuous Ping" (яке відкривало окреме вікно
- * cmd.exe з `ping -t` на комп'ютері адміна — неможливо відтворити з
- * headless-служби, див. RemoteManagementService). Опитує вже готовий
- * GET /api/ping раз на секунду, поки модалка відкрита, і фільтрує відповідь
- * до одного хоста — жодного нового бекенд-ендпоінта не знадобилось.
+ * A web-native replacement for the WPF "Continuous Ping" (which opened a
+ * separate cmd.exe window running `ping -t` on the admin's machine —
+ * impossible to reproduce from a headless service, see
+ * RemoteManagementService). Polls the existing GET /api/ping endpoint once a
+ * second while the modal is open and filters the response down to a single
+ * host — no new backend endpoint was needed.
  *
- * Реальне обмеження вебу (узгоджено з користувачем): на відміну від
- * незалежного cmd.exe-вікна в WPF, цей "живий" пінг зупиняється, щойно
- * модалку закрито або вкладку/розмонтовано компонент.
+ * A real web limitation (agreed with the user): unlike the standalone
+ * cmd.exe window in WPF, this "live" ping stops as soon as the modal is
+ * closed or the component is unmounted.
  */
 export function ContinuousPingModal({ host, onClose }: ContinuousPingModalProps) {
   const [entries, setEntries] = useState<PingEntry[]>([])

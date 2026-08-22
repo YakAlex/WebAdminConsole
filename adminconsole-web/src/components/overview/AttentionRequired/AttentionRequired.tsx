@@ -7,16 +7,16 @@ import styles from './AttentionRequired.module.scss'
 export interface AttentionRequiredProps {
   criticalAlerts: number
   warnings: number
-  /** Аудит-фікс п.4: Zabbix Monitor вимкнено в Settings — значення вище вже занулені викликачем. */
+  /** Audit fix #4: Zabbix Monitor is disabled in Settings — the values above are already zeroed out by the caller. */
   disabled?: boolean
 }
 
 /**
- * §8 брифу: картка поруч із Hero (~300–330px). При нульових значеннях —
- * максимально спокійний стан із рядком "All clear". Якщо critical/warnings
- * > 0, badge отримує колірний glow, а не яскраву заливку.
+ * Brief §8: card next to the Hero (~300–330px). At zero values, shows the
+ * calmest possible state with an "All clear" line. If critical/warnings
+ * > 0, the badge gets a colored glow rather than a bright fill.
  *
- * Дані — з useZabbixProblems() (ZabbixProblemsUpdatedOccurred): High/Disaster
+ * Data comes from useZabbixProblems() (ZabbixProblemsUpdatedOccurred): High/Disaster
  * → critical, Average/Warning → warnings.
  */
 export function AttentionRequired({ criticalAlerts, warnings, disabled }: AttentionRequiredProps) {

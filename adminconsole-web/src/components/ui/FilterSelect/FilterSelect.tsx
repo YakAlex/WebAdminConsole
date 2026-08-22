@@ -13,7 +13,7 @@ export interface FilterSelectProps {
   ariaLabel: string
 }
 
-/** Стилізований нативний `<select>` під вигляд card-header dropdown-trigger (§ design system). */
+/** A native `<select>` styled to look like a card-header dropdown trigger (§ design system). */
 export function FilterSelect({ value, onChange, options, ariaLabel }: FilterSelectProps) {
   return (
     <label className={styles.trigger}>

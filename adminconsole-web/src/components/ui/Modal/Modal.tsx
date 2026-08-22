@@ -11,10 +11,10 @@ export interface ModalProps {
 }
 
 /**
- * Переюзабельна модалка (портал у document.body — уникає обрізання/z-index
- * конфліктів із фіксованими Sidebar/TopBar). Пріоритет 3: перша модалка в
- * проєкті — потрібна і для підтвердження Restart/Shutdown, і для Continuous
- * Ping.
+ * Reusable modal (portaled into document.body — avoids clipping/z-index
+ * conflicts with the fixed Sidebar/TopBar). Priority 3: the first modal in
+ * the project — needed for both Restart/Shutdown confirmation and
+ * Continuous Ping.
  */
 export function Modal({ title, onClose, children, footer }: ModalProps) {
   useEffect(() => {

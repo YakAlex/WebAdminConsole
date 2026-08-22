@@ -16,9 +16,10 @@
   color: var(--color-text-secondary);
 }
 
-// Аудит-фікс (2026-08-22, п.3): раніше загальний розмір бекапів по системі
-// ніде не показувався — WPF Overview мав його, веб — ні. Пришпилено праворуч
-// у тому ж рядку, що й KPI, а не окремою плиткою — не варте власної секції.
+// Audit fix (2026-08-22, item 3): the total backup size across the system
+// was previously shown nowhere — the WPF Overview had it, the web app
+// didn't. Pinned to the right in the same row as the KPI rather than as a
+// separate tile — not worth its own section.
 .totalSize {
   display: flex;
   align-items: center;

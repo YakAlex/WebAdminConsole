@@ -34,15 +34,16 @@ const CONNECTION_TONE: Record<HubConnectionState, StatusTone> = {
 }
 
 /**
- * Глобальна верхня панель (§3 брифу). Крок 1 UX-polish (2026-08-21):
- * прибрано непрацюючі елементи (Search, "Updated just now"+refresh,
- * avatar) — лишається лише дата/час і статус системи.
+ * Global top bar (brief §3). Step 1 UX polish (2026-08-21): removed
+ * non-functional elements (Search, "Updated just now" + refresh, avatar)
+ * — only date/time and system status remain.
  *
- * UX-фікс (2026-08-22): дата/час — тепер лівий край (замість правого),
- * "All systems operational" (раніше — статичний, нічим не підкріплений
- * напис, завжди зелений незалежно від реального стану) замінено на
- * СПРАВЖНІй live-індикатор SignalR-з'єднання (useDashboardConnection) —
- * правий край не порожній, і напис тепер каже правду про стан застосунку.
+ * UX fix (2026-08-22): date/time now sits on the left edge (instead of
+ * the right); "All systems operational" (previously a static label with
+ * no backing data, always green regardless of actual state) was replaced
+ * with a REAL live indicator of the SignalR connection
+ * (useDashboardConnection) — the right edge isn't empty, and the label
+ * now tells the truth about the app's state.
  */
 export function TopBar() {
   const [now, setNow] = useState(() => new Date())

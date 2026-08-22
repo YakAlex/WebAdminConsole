@@ -8,7 +8,7 @@ import { useMonitoringToggles } from '@/hooks/dashboard/useMonitoringToggles'
 import { useBackupsPageViewModel } from './useBackupsPageViewModel'
 import styles from './Backups.module.scss'
 
-/** §26 брифу: Page header → Success rate summary → Jobs table (детальна). */
+/** Brief §26: Page header → Success rate summary → Jobs table (detailed). */
 export function Backups() {
   const vm = useBackupsPageViewModel()
   const toggles = useMonitoringToggles()

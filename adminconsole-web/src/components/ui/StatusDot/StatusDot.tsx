@@ -10,9 +10,9 @@ export interface StatusDotProps {
 }
 
 /**
- * Маленький статус-індикатор (§21: green/amber/red/cyan/gray — semantic,
- * а не decorative). Використовується у sidebar health, Ping, Backups,
- * RDP, Uptime by Device — скрізь, де потрібен статус одного погляду.
+ * Small status indicator (§21: green/amber/red/cyan/gray — semantic,
+ * not decorative). Used in sidebar health, Ping, Backups, RDP, Uptime
+ * by Device — anywhere a status needs to be readable at a glance.
  */
 export function StatusDot({ tone, glow, className }: StatusDotProps) {
   return <span className={clsx(styles.dot, styles[tone], glow && styles.glow, className)} aria-hidden="true" />

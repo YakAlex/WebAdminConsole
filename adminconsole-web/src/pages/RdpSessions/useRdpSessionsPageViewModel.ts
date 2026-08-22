@@ -2,10 +2,11 @@ import { useRdpSessions } from '@/hooks/dashboard/useRdpSessions'
 import { RdpSessionState } from '@/lib/api/types'
 
 /**
- * Крок 3 (#4): data.sessions — плаский список Active + Disconnected (саме
- * так таблиця на сторінці може показати обидва стани разом). Але "Active
- * sessions"/"Unique users" у зведенні мають рахувати ЛИШЕ Active — раніше
- * рахували весь масив, тож відключена сесія помилково збільшувала лічильник.
+ * Step 3 (#4): data.sessions is a flat list of Active + Disconnected (this
+ * is how the table on the page can show both states together). But
+ * "Active sessions"/"Unique users" in the summary must count ONLY Active —
+ * previously they counted the whole array, so a disconnected session would
+ * incorrectly inflate the counter.
  */
 export function useRdpSessionsPageViewModel() {
   const data = useRdpSessions()

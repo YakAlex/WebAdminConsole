@@ -1,9 +1,9 @@
 import { HubConnectionBuilder, LogLevel, type HubConnection } from '@microsoft/signalr'
 
 /**
- * T6.2: клієнт DashboardHub. withCredentials: true — обов'язково, інакше
- * Windows-автентифікація (Negotiate) не долетить до /hubs/dashboard навіть
- * через same-origin Vite-проксі.
+ * T6.2: DashboardHub client. withCredentials: true is mandatory,
+ * otherwise Windows authentication (Negotiate) won't reach
+ * /hubs/dashboard even through the same-origin Vite proxy.
  */
 export function createDashboardConnection(): HubConnection {
   return new HubConnectionBuilder()

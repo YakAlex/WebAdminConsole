@@ -15,9 +15,9 @@ import type { CredentialsStatusResponse, MonitoringToggles, TelegramAllowedUserV
 import type { MonitoredServiceKey } from '@/components/settings/MonitoringTogglesCard/MonitoringTogglesCard'
 
 /**
- * T6.2 (Settings): на відміну від dashboard-хуків тут немає SignalR-потоку —
- * прості REST-запити з ручним refetch після кожної мутації (Save/Clear/
- * Add/Remove). Достатньо для сторінки з рідкісними, явними діями адміна.
+ * T6.2 (Settings): unlike the dashboard hooks, there's no SignalR stream here —
+ * plain REST requests with a manual refetch after every mutation (Save/Clear/
+ * Add/Remove). That's enough for a page with rare, explicit admin actions.
  */
 export function useSettingsViewModel() {
   const [credentials, setCredentials] = useState<CredentialsStatusResponse | null>(null)
@@ -55,8 +55,8 @@ export function useSettingsViewModel() {
     return {
       ok: result.success,
       message: result.success
-        ? `Підключення підтверджено (Zabbix ${result.version}).`
-        : `Токен збережено, але перевірка з'єднання не пройшла: ${result.error}`,
+        ? `Connection verified (Zabbix ${result.version}).`
+        : `Token saved, but the connection check failed: ${result.error}`,
     }
   }
 

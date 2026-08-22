@@ -5,9 +5,9 @@ import { navItems } from './navItems'
 import styles from './Sidebar.module.scss'
 
 /**
- * Фіксована ліва навігаційна панель (§4 брифу). Design-system правило:
- * усі 8 сторінок з'являться тут у Фазі 6 — сам Sidebar більше не міняється,
- * лише роутинг під капотом (React Router NavLink керує active-станом).
+ * Fixed left navigation panel (brief §4). Design system rule: all 8 pages
+ * will appear here in Phase 6 — the Sidebar itself no longer changes, only
+ * the routing under the hood (React Router NavLink manages the active state).
  */
 export function Sidebar() {
   return (
@@ -17,7 +17,7 @@ export function Sidebar() {
         <span className={styles.logoWordmark}>ADMIN CONSOLE</span>
       </div>
 
-      <nav className={styles.nav} aria-label="Основна навігація">
+      <nav className={styles.nav} aria-label="Main navigation">
         {navItems.map(({ path, label, icon: Icon }) => (
           <NavLink
             key={path}

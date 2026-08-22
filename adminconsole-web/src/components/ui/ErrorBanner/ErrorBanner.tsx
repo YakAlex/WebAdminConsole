@@ -3,15 +3,16 @@ import type { ApiError } from '@/lib/api/http'
 import styles from './ErrorBanner.module.scss'
 
 export interface ErrorBannerProps {
-  /** Що саме не завантажилось, напр. "servers", "backups". */
+  /** What exactly failed to load, e.g. "servers", "backups". */
   context: string
   error: ApiError
 }
 
 /**
- * Крок 11.3 аудиту: єдиний банер помилки замість дубльованого інлайн-div'а
- * (раніше однаковий за формою фрагмент жив окремо в Logs/Settings/Uptime).
- * Не ховає решту сторінки — рендериться ПОРУЧ із уже завантаженими даними.
+ * Audit step 11.3: a single error banner instead of a duplicated inline
+ * div (previously the same shape of fragment lived separately in
+ * Logs/Settings/Uptime). Doesn't hide the rest of the page — renders
+ * ALONGSIDE data that's already loaded.
  */
 export function ErrorBanner({ context, error }: ErrorBannerProps) {
   return (

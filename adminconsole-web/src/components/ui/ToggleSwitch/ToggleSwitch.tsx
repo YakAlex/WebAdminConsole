@@ -8,7 +8,7 @@ export interface ToggleSwitchProps {
   ariaLabel: string
 }
 
-/** Стилізований checkbox під вигляд on/off-перемикача (Settings → Monitoring Services, Крок 4 #7). */
+/** A checkbox styled to look like an on/off toggle (Settings → Monitoring Services, Step 4 #7). */
 export function ToggleSwitch({ checked, onChange, disabled, ariaLabel }: ToggleSwitchProps) {
   return (
     <label className={clsx(styles.switch, disabled && styles.disabled)}>

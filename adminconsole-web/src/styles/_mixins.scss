@@ -2,10 +2,10 @@
 // Reusable SCSS mixins — Admin Console Design System
 // ============================================================================
 
-// Базова поверхня картки (§19/§20): тонкий border + ледь помітний
-// top→bottom градієнт замість важкої тіні. Це ЄДИНЕ місце, де визначено,
-// як виглядає "card surface" — Card.tsx і будь-який майбутній компонент
-// (KPI-плашка, ряд таблиці) використовують цей мікшин, а не дублюють CSS.
+// Base card surface (§19/§20): thin border + a barely-visible top→bottom
+// gradient instead of a heavy shadow. This is the ONE place that defines
+// what a "card surface" looks like — Card.tsx and any future component
+// (KPI tile, table row) use this mixin instead of duplicating CSS.
 @mixin card-surface {
   background: linear-gradient(
     180deg,
@@ -24,7 +24,7 @@
   border-color: var(--color-border-hover);
 }
 
-// Секційний заголовок карток: "SYSTEM HEALTH", "RECENT ACTIVITY" (§18).
+// Section title for cards: "SYSTEM HEALTH", "RECENT ACTIVITY" (§18).
 @mixin section-title {
   font-size: var(--font-size-section-title);
   font-weight: var(--font-weight-semibold);
@@ -33,7 +33,7 @@
   color: var(--color-text-secondary);
 }
 
-// Клавіатурний фокус — доступність, той самий стиль скрізь.
+// Keyboard focus — accessibility, the same style everywhere.
 @mixin focus-ring {
   outline: none;
 
@@ -44,8 +44,8 @@
   }
 }
 
-// Тонкий темний скролбар — деталь, яка відрізняє "премальний" застосунок
-// від дефолтного браузерного скролбара на темному фоні.
+// Thin dark scrollbar — the detail that separates a "premium" app
+// from the browser's default scrollbar on a dark background.
 @mixin thin-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
@@ -75,7 +75,7 @@
   white-space: nowrap;
 }
 
-// Великий KPI-показник (§18: "Large KPI 30–40px / 600") — Uptime %, health ring цифри тощо.
+// Large KPI figure (§18: "Large KPI 30–40px / 600") — Uptime %, health ring numbers, etc.
 @mixin kpi-value {
   font-size: var(--font-size-kpi);
   font-weight: var(--font-weight-semibold);
@@ -83,8 +83,8 @@
   line-height: 1;
 }
 
-// Малий текстовий лінк-дія у заголовку картки: "View all", "Schedule maintenance",
-// "View all activity" (§13/§14/§15/§16) — однаковий по всьому dashboard.
+// Small text action link in a card header: "View all", "Schedule maintenance",
+// "View all activity" (§13/§14/§15/§16) — consistent across the whole dashboard.
 @mixin link-action {
   display: inline-flex;
   align-items: center;
@@ -99,9 +99,9 @@
   }
 }
 
-// Картка-обгортка для операційних таблиць (Uptime by Device, Ping Hosts,
-// Uptime Devices) — card-surface без padding (рядки йдуть до самого краю)
-// + стандартний header-рядок з eyebrow/filter-тригером.
+// Wrapper card for operational tables (Uptime by Device, Ping Hosts,
+// Uptime Devices) — a card-surface with no padding (rows run edge to
+// edge) + a standard header row with an eyebrow/filter trigger.
 @mixin table-card {
   @include card-surface;
   display: flex;
@@ -119,8 +119,8 @@
   padding: var(--card-padding);
 }
 
-// Сама <table>: uppercase-заголовки, тонкі роздільники між рядками, легкий
-// hover — один спільний вигляд для будь-якої операційної таблиці в системі.
+// The <table> itself: uppercase headers, thin row separators, a subtle
+// hover — one shared look for any operational table in the system.
 @mixin data-table {
   width: 100%;
   border-collapse: collapse;
@@ -158,7 +158,7 @@
   }
 }
 
-// Тригер псевдо-dropdown у заголовку картки: "24h ⌄", "All Systems ⌄" (§11/§16/§17).
+// Pseudo-dropdown trigger in a card header: "24h ⌄", "All Systems ⌄" (§11/§16/§17).
 @mixin dropdown-trigger {
   display: inline-flex;
   align-items: center;

@@ -18,28 +18,28 @@ import type {
 
 export const getServers = () => apiGet<ServerEntry[]>('/api/servers')
 
-/** Живий знімок ping-статусів ЗАРАЗ (реально пінгує сервери на бекенді) — для початкового завантаження сторінки. */
+/** Live snapshot of ping statuses RIGHT NOW (actually pings the servers on the backend) — for the page's initial load. */
 export const getPing = () => apiGet<PingBatchPayload>('/api/ping')
 
-/** Живий знімок активних Zabbix-проблем ЗАРАЗ — Крок 11.1 аудиту (раніше сторінка мала лише SignalR, без REST). */
+/** Live snapshot of active Zabbix problems RIGHT NOW — audit step 11.1 (previously the page only had SignalR, no REST). */
 export const getZabbixProblems = () => apiGet<ZabbixProblemsPayload>('/api/zabbix')
 
-/** Живий знімок RDP-сесій ЗАРАЗ (реально опитує термінальні сервери) — Крок 11.2 аудиту. */
+/** Live snapshot of RDP sessions RIGHT NOW (actually polls the terminal servers) — audit step 11.2. */
 export const getRdpSessions = () => apiGet<RdpSnapshotPayload>('/api/rdp-sessions')
 
-// ── Server actions (Пріоритет 3, #3.1) ──────────────────────────────────────
+// ── Server actions (Priority 3, #3.1) ────────────────────────────────────────
 
 export const restartServer = (ip: string) => apiPost<ServerActionResult>(`/api/servers/${encodeURIComponent(ip)}/restart`)
 
 export const shutdownServer = (ip: string) => apiPost<ServerActionResult>(`/api/servers/${encodeURIComponent(ip)}/shutdown`)
 
-/** URL для .rdp-файлу — використовується напряму як href="" (той самий origin, Windows-авторизація йде через cookie/negotiate так само, як і звичайна навігація). */
+/** URL for the .rdp file — used directly as href="" (same origin, Windows auth flows through cookie/negotiate the same as regular navigation). */
 export const rdpFileUrl = (ip: string) => `/api/servers/${encodeURIComponent(ip)}/rdp-file`
 
-// ── SLA Report (Пріоритет 3, #3.2) ──────────────────────────────────────────
+// ── SLA Report (Priority 3, #3.2) ────────────────────────────────────────────
 
 export interface SlaReportQuery {
-  /** ISO рядок. */
+  /** ISO string. */
   from: string
   to: string
   group?: string
@@ -53,24 +53,24 @@ function slaParams(query: SlaReportQuery): URLSearchParams {
   return params
 }
 
-/** Той самий готовий HTML-рендер, що й у щотижневій Hangfire-джобі — просто на вимогу. */
+/** The same pre-rendered HTML that the weekly Hangfire job produces — just on demand. */
 export const slaReportHtmlUrl = (query: SlaReportQuery) => `/api/sla/html?${slaParams(query).toString()}`
 
 export const getDowntime = () => apiGet<DowntimeRecord[]>('/api/downtime')
 
-/** Видаляє один закритий інцидент (Крок 5, #3 — аналог WPF UptimeViewModel.DeleteRecord). */
+/** Deletes a single closed incident (Step 5, #3 — equivalent to WPF UptimeViewModel.DeleteRecord). */
 export const deleteDowntimeRecord = (serverIp: string, fellAt: string) =>
   apiDelete(`/api/downtime?serverIp=${encodeURIComponent(serverIp)}&fellAt=${encodeURIComponent(fellAt)}`)
 
-/** Масово видаляє всі закриті інциденти (аналог WPF "Clear History"). Повертає кількість видалених. */
+/** Bulk-deletes all closed incidents (equivalent to WPF "Clear History"). Returns the count deleted. */
 export const clearResolvedDowntime = () => apiDelete<number>('/api/downtime/resolved')
 
 export const getBackups = () => apiGet<BackupCheckState[]>('/api/backups')
 
 export interface LogQuery {
-  /** ISO рядок — нижня межа (включно), Крок 6 (#10). */
+  /** ISO string — lower bound (inclusive), Step 6 (#10). */
   from?: string
-  /** ISO рядок — верхня межа (виключно). */
+  /** ISO string — upper bound (exclusive). */
   to?: string
   search?: string
 }
@@ -102,14 +102,14 @@ export const getTelegramUsers = () => apiGet<TelegramAllowedUserView[]>('/api/te
 
 export const removeTelegramUser = (chatId: number) => apiDelete(`/api/telegramusers/${chatId}`)
 
-// ── Telegram access — claim code + pending requests (Аудит-фікс 2026-08-22, п.2) ──
+// ── Telegram access — claim code + pending requests (Audit fix 2026-08-22, item 2) ──
 
 export interface ClaimCodeResponse {
   code: string
   expiresAt: string
 }
 
-/** Адмін і далі сам надсилає /claim_admin <код> в Telegram — тут лише генерація коду. */
+/** The admin still has to send /claim_admin <code> in Telegram themselves — this only generates the code. */
 export const generateTelegramClaimCode = () => apiPost<ClaimCodeResponse>('/api/telegramusers/claim-code')
 
 export interface TelegramPendingStatus {
@@ -130,15 +130,15 @@ export const getMonitoringToggles = () => apiGet<MonitoringToggles>('/api/monito
 export const updateMonitoringToggles = (toggles: MonitoringToggles) =>
   apiPut<MonitoringToggles>('/api/monitoring/toggles', toggles)
 
-// ── Maintenance windows (Аудит-фікс 2026-08-22, п.1) ────────────────────────
+// ── Maintenance windows (Audit fix 2026-08-22, item 1) ──────────────────────
 
 export const getMaintenanceWindows = () => apiGet<MaintenanceWindow[]>('/api/maintenance')
 
 export interface StartMaintenanceRequest {
-  /** Рівно одне з serverIp/targetGroup. */
+  /** Exactly one of serverIp/targetGroup. */
   serverIp?: string
   targetGroup?: string
-  /** Відсутнє — без обмеження часу (до ручного завершення). */
+  /** Absent — no time limit (until manually ended). */
   durationMinutes?: number
   reason?: string
 }
@@ -146,5 +146,5 @@ export interface StartMaintenanceRequest {
 export const startMaintenance = (request: StartMaintenanceRequest) =>
   apiPost<MaintenanceWindow>('/api/maintenance', request)
 
-/** key — MaintenanceWindow.serverIp або "group:{targetGroup}". */
+/** key — MaintenanceWindow.serverIp or "group:{targetGroup}". */
 export const endMaintenance = (key: string) => apiDelete(`/api/maintenance?key=${encodeURIComponent(key)}`)

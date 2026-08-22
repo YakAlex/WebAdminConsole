@@ -7,16 +7,18 @@ import { MonitoredService, type MonitoringToggledEvent, type MonitoringToggles }
 const GROUPS = ['logs'] as const
 
 /**
- * Аудит-фікс п.4: жодна сторінка не звірялась зі станом тумблерів
- * моніторингу з Settings — вимкнення сервісу (напр. Zabbix) не приховувало
- * вже завантажені/застарілі дані деінде в застосунку (Overview продовжував
- * показувати останній відомий "12 problems"). REST-знімок (уже готовий
- * GET /api/monitoring/toggles) + живе оновлення через MonitoringToggledOccurred
- * (MonitoringController уже публікує цю подію на кожен Save — просто досі
- * ніхто на фронтенді її не слухав).
+ * Audit fix item 4: no page checked the monitoring toggle state from
+ * Settings — disabling a service (e.g. Zabbix) didn't hide already
+ * loaded/stale data elsewhere in the app (Overview kept showing the
+ * last known "12 problems"). REST snapshot (the existing
+ * GET /api/monitoring/toggles) + a live update via
+ * MonitoringToggledOccurred (MonitoringController already published
+ * this event on every Save — nobody on the frontend was listening to
+ * it yet).
  *
- * `null` — тумблери ще не завантажені; свідомо НЕ гейтимо нічого до першої
- * відповіді, щоб не блимати "вимкнено" на кожному F5.
+ * `null` means the toggles haven't loaded yet; we deliberately gate
+ * NOTHING until the first response, to avoid flashing "disabled" on
+ * every F5.
  */
 export function useMonitoringToggles(): MonitoringToggles | null {
   const [toggles, setToggles] = useState<MonitoringToggles | null>(null)
@@ -30,9 +32,10 @@ export function useMonitoringToggles(): MonitoringToggles | null {
         if (!cancelled) setToggles(data)
       })
       .catch(() => {
-        // Тумблери — не критичні дані сторінки: якщо цей запит впав, просто
-        // нічого не гейтимо (лишається null) — основна помилка сторінки й
-        // так покажеться через fetchError відповідного *Data-хука.
+        // Toggles are non-critical page data: if this request fails,
+        // we simply gate nothing (stays null) — the page's main error
+        // will still surface via the corresponding *Data hook's
+        // fetchError.
       })
     return () => {
       cancelled = true

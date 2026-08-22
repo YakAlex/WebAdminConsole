@@ -1,24 +1,25 @@
 // ============================================================================
 // Design tokens — Admin Console Design System
 //
-// Єдине джерело правди для кольорів/типографіки/spacing/radius/тіней/
-// переходів. Кожен компонент (Card, Sidebar, TopBar, Ping/Uptime/RDP/
-// Zabbix/Backups/Logs) читає ЛИШЕ ці змінні — ніхто не хардкодить
-// hex-кольори напряму. Це і є "Design System", а не просто набір сторінок.
+// Single source of truth for colors/typography/spacing/radius/shadows/
+// transitions. Every component (Card, Sidebar, TopBar, Ping/Uptime/RDP/
+// Zabbix/Backups/Logs) reads ONLY these variables — nobody hardcodes
+// hex colors directly. This is what makes it a "Design System" rather
+// than just a collection of pages.
 //
-// Значення взяті буквально з дизайн-брифу (розділи 3, 18, 19, 20, 23, 2).
+// Values taken literally from the design brief (sections 3, 18, 19, 20, 23, 2).
 // ============================================================================
 
 :root {
-  // ── Backgrounds (брифа §3) ────────────────────────────────────────────────
-  --color-bg-app: #080d12; // dark graphite, НЕ чистий чорний
+  // ── Backgrounds (brief §3) ─────────────────────────────────────────────────
+  --color-bg-app: #080d12; // dark graphite, NOT pure black
   --color-bg-sidebar: #0d141c;
 
-  // Cards мають ледь помітний внутрішній градієнт (§19: top → світліше,
-  // bottom → темніше) — це і дає "premium depth" без важких тіней.
+  // Cards have a barely-visible inner gradient (§19: top → lighter,
+  // bottom → darker) — this is what gives "premium depth" without heavy shadows.
   --color-bg-card-top: #111c25;
   --color-bg-card-bottom: #101923;
-  --color-bg-card-elevated: #14202a; // hover / піднятий стан картки
+  --color-bg-card-elevated: #14202a; // hover / elevated card state
 
   // ── Borders ──────────────────────────────────────────────────────────────
   --color-border: #1e303a;
@@ -29,9 +30,9 @@
   --color-text-secondary: #8799a4;
   --color-text-muted: #53656f;
 
-  // ── Brand (§21: cyan — це НЕ semantic-колір, а брендовий/інформаційний) ──
+  // ── Brand (§21: cyan is NOT a semantic color — it's brand/informational) ──
   --color-brand-cyan: #36c8d5;
-  --color-brand-cyan-bg: rgba(54, 200, 213, 0.1); // фон активного nav-пункту
+  --color-brand-cyan-bg: rgba(54, 200, 213, 0.1); // active nav item background
   --color-brand-cyan-border: rgba(54, 200, 213, 0.24);
 
   // ── Semantic status colors (§3, §21) ─────────────────────────────────────
@@ -45,14 +46,14 @@
 
   --color-critical: #ff5c61;
   --color-critical-bg: rgba(255, 92, 97, 0.12);
-  --color-critical-glow: rgba(255, 92, 97, 0.2); // §8: "дуже слабкий red glow"
+  --color-critical-glow: rgba(255, 92, 97, 0.2); // §8: "a very subtle red glow"
 
   --color-info: var(--color-brand-cyan);
   --color-info-bg: var(--color-brand-cyan-bg);
 
   --color-inactive: var(--color-text-muted);
 
-  // ── Glass / overlay effect (§20 — "дуже обережно", НЕ blur(30px)) ───────
+  // ── Glass / overlay effect (§20 — "very cautious", NOT blur(30px)) ───────
   --color-glass-bg: rgba(16, 25, 35, 0.88);
   --color-glass-border: rgba(100, 180, 200, 0.1);
 
@@ -85,22 +86,22 @@
   --space-8: 32px;
   --space-10: 40px;
 
-  // ── Radius (§19: 10–12px; §25: НЕ 24px) ──────────────────────────────────
+  // ── Radius (§19: 10–12px; §25: NOT 24px) ─────────────────────────────────
   --radius-card: 12px;
   --radius-control: 8px;
   --radius-pill: 999px;
 
-  // ── Density (NOC dashboard: максимум інформації на екран без скролу) ────
-  // Окремі семантичні токени від базової spacing-шкали — щоб глобально
-  // підкрутити щільність картки/сітки в одному місці, не займаючи --space-*,
-  // які й далі використовуються під загальні (не card-специфічні) відступи.
+  // ── Density (NOC dashboard: maximum information on screen without scrolling) ──
+  // Separate semantic tokens from the base spacing scale — so card/grid
+  // density can be tuned globally in one place, without touching --space-*,
+  // which is still used for general (non-card-specific) spacing.
   --card-padding: 16px;
   --card-gap: 10px;
   --grid-gap: 16px;
 
-  // ── Elevation (§19/§25: без сильних тіней — лише border + слабкий градієнт) ──
+  // ── Elevation (§19/§25: no heavy shadows — just border + a subtle gradient) ──
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
-  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.36); // лише для dropdown/popover, НЕ для звичайних card
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.36); // only for dropdown/popover, NOT for regular cards
 
   // ── Motion (§23: 150–200ms) ───────────────────────────────────────────────
   --transition-fast: 150ms ease;
@@ -108,7 +109,7 @@
 
   // ── Layout (§2) ───────────────────────────────────────────────────────────
   --sidebar-width: 205px;
-  --sidebar-width-narrow: 64px; // §24, 1024px breakpoint — ікони без лейблів
+  --sidebar-width-narrow: 64px; // §24, 1024px breakpoint — icons without labels
   --topbar-height: 64px;
   --content-padding-x: 32px;
 }

@@ -49,9 +49,9 @@ export interface UptimeDeviceTableProps {
 }
 
 /**
- * §26 брифу (Uptime): "Device table" — детальніша за компактну версію з
- * Overview: додано Group та Incidents (24h), рахований з реальних
- * DowntimeRecord (hooks/dashboard/uptimeMath.ts).
+ * Brief §26 (Uptime): "Device table" — more detailed than the compact
+ * version on Overview: adds Group and Incidents (24h), computed from real
+ * DowntimeRecord data (hooks/dashboard/uptimeMath.ts).
  */
 export function UptimeDeviceTable({ rows }: UptimeDeviceTableProps) {
   const [group, setGroup] = useState(ALL_GROUPS)

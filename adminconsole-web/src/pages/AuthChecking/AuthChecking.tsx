@@ -2,10 +2,10 @@ import { Loader2 } from 'lucide-react'
 import styles from './AuthChecking.module.scss'
 
 /**
- * Повноекранний блокуючий стан на час первинної перевірки доступу
- * (AuthProvider.status === 'checking') — App.tsx не рендерить ні AppLayout,
- * ні маршрути, доки не прийде відповідь від REST canary або SignalR
- * negotiate. Виправляє "Flash of Unauthenticated Content".
+ * Full-screen blocking state during the initial access check
+ * (AuthProvider.status === 'checking') — App.tsx renders neither AppLayout
+ * nor the routes until a response arrives from the REST canary or SignalR
+ * negotiate. Fixes "Flash of Unauthenticated Content".
  */
 export function AuthChecking() {
   return (

@@ -16,9 +16,9 @@ export interface GlobalPingHealthProps {
 }
 
 /**
- * §26 брифу (Ping): "Global ping health" — великий KPI-блок вгорі
- * вкладки. Перевикористовує HealthRing/StatusDot/Card з Design System
- * замість власної card-surface розмітки.
+ * Brief §26 (Ping): "Global ping health" — a large KPI block at the top of
+ * the tab. Reuses HealthRing/StatusDot/Card from the Design System instead
+ * of its own card-surface markup.
  */
 export function GlobalPingHealth({ online, total, offline, successRate, avgLatencyMs, hasData }: GlobalPingHealthProps) {
   const healthPercent = total > 0 ? (online / total) * 100 : 0

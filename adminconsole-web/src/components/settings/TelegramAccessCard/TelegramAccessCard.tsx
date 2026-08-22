@@ -12,16 +12,17 @@ function formatCountdown(seconds: number): string {
 }
 
 /**
- * Аудит-фікс (2026-08-22, п.2): дві раніше відсутні у веб-Settings дії —
- * генерація claim-коду для Primary Admin (WPF мав кнопку, веб — ні) і
- * видимість/керування pending-запитами доступу (веб взагалі не бачив
- * TelegramAccessRequestOccurred). Адмін і далі сам надсилає
- * /claim_admin <код> в самому Telegram — тут лише генерація коду.
+ * Audit fix (2026-08-22, item 2): two actions previously missing from web
+ * Settings — generating a claim code for the Primary Admin (the WPF app
+ * had a button for this, the web app didn't) and visibility/management of
+ * pending access requests (the web app never saw
+ * TelegramAccessRequestOccurred at all). The admin still sends
+ * /claim_admin <code> in Telegram themselves — this only generates the code.
  *
- * На відміну від WPF (лише Deny в десктопних Settings, Approve — тільки
- * inline-кнопки в самому Telegram), тут навмисно є ОБИДВІ дії — узгоджено
- * з користувачем: увесь застосунок і так за тим самим Windows AD-group
- * гейтом, що й довіра до Telegram-схвалення.
+ * Unlike WPF (only Deny in the desktop Settings, Approve only via inline
+ * buttons in Telegram itself), both actions are deliberately present here
+ * — agreed with the user: the whole app already sits behind the same
+ * Windows AD group gate that Telegram approval trust relies on.
  */
 export function TelegramAccessCard() {
   const { pending, isPrimaryAdminClaimed, loading, error, refetch } = useTelegramPendingRequests()

@@ -30,7 +30,7 @@ export function RecentActivity({ entries }: RecentActivityProps) {
         <div className={styles.empty}>No activity yet</div>
       ) : (
         <div className={styles.list}>
-          {entries.slice(0, 5).map((entry) => {
+          {entries.slice(0, 8).map((entry) => {
             const { icon: Icon, tone } = SEVERITY_MAP[entry.severity]
             return (
               <div className={styles.row} key={`${entry.timestamp}-${entry.source}`}>

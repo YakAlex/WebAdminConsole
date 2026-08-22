@@ -15,7 +15,7 @@ export function useOverviewViewModel() {
   const pingResults = data.pingPayload?.results ?? []
   const ping = computeGlobalPingStats(data.servers, pingResults)
 
-  const uptime = computeUptimeSeries(data.downtimeRecords, data.servers.length, { hours: 24, buckets: 12 })
+  const uptime = computeUptimeSeries(data.downtimeRecords, data.servers.length, { hours: 24, buckets: 24 })
   const uptimeAxisLabels = computeUptimeAxisLabels(24, 5)
 
   // Audit fix §4: disabling a service in Settings must clear ITS data

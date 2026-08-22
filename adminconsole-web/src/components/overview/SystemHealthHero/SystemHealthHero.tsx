@@ -93,7 +93,7 @@ export function SystemHealthHero({
           {allHealthy ? 'All systems are operational' : 'Some systems need attention'}
         </span>
         <span className={styles.footerCaption}>
-          {allHealthy ? 'No issues detected across your infrastructure.' : 'Review Attention Required for details.'}
+          {allHealthy ? 'No issues detected across your infrastructure.' : 'Review Zabbix Monitor for details.'}
         </span>
       </div>
     </div>

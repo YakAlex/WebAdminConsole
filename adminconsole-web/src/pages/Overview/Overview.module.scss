@@ -2,17 +2,29 @@
 // vertical space — a bit more "breathing room" between blocks
 // (--space-4/--grid-gap → --space-5, 16px → 20px), deliberately modest so as
 // not to force page scroll on a typical viewport.
+//
+// UX fix (2026-08-22, "empty space at the bottom on a full-height
+// viewport"): a second pass, scoped to Overview only — cards here (unlike
+// Ping/Uptime/Backups/Logs) don't hold scrollable tables that naturally
+// grow to fill the page, so on a tall/fullscreen window row 2 left a lot
+// of dead air below it. --card-padding/--card-gap are read by every card
+// in components/overview/* via var(...), so overriding them here bumps
+// every card's internal breathing room without touching the global
+// tokens (which also drive the denser table-heavy pages).
 .root {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-8);
+  --card-padding: var(--space-8);
+  --card-gap: var(--space-4);
+  --font-size-kpi: 38px; // still within the documented 30-40px range (tokens.scss)
 }
 
 // §7: Hero (~65-70%) + Attention Required (the rest).
 .heroRow {
   display: grid;
   grid-template-columns: minmax(0, 2.15fr) minmax(280px, 1fr);
-  gap: var(--space-5);
+  gap: var(--space-8);
   align-items: stretch;
 }
 
@@ -20,7 +32,7 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--space-5);
+  gap: var(--space-8);
 }
 
 .ping {

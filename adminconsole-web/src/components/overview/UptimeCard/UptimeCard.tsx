@@ -30,7 +30,7 @@ export function UptimeCard({ overallPercent, monitoredDevices, trend, axisLabels
         data={trend}
         variant="area"
         width={400}
-        height={42}
+        height={64}
         strokeWidth={1.5}
         color="var(--color-brand-cyan)"
         className={styles.chart}

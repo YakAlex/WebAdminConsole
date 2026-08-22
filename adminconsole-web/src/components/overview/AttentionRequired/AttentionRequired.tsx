@@ -26,7 +26,7 @@ export function AttentionRequired({ criticalAlerts, warnings, disabled }: Attent
   return (
     <div className={styles.card}>
       <button type="button" className={styles.header} onClick={() => navigate('/zabbix-alerts')}>
-        <span className={styles.eyebrow}>Attention Required</span>
+        <span className={styles.eyebrow}>Zabbix Monitor</span>
         <ChevronRight size={16} strokeWidth={1.75} className={styles.chevron} />
       </button>
 

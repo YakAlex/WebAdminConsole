@@ -19,10 +19,19 @@ public sealed class BackupCheckState
     /// </summary>
     public BackupOutcome Outcome { get; set; } = BackupOutcome.Unknown;
 
-    /// <summary>When the last confirmed non-Unknown result occurred.</summary>
+    /// <summary>
+    /// When Stage A last successfully reached the data source (raw.Outcome
+    /// != Unknown) — updated on EVERY such cycle, not only when it causes an
+    /// anti-flapping-confirmed transition. Despite the name, this is "last
+    /// time we could check at all", not "last time the confirmed Outcome
+    /// changed" — e.g. it keeps advancing every cycle while a Stale result
+    /// hasn't yet accumulated MinConsecutiveForAlert repeats to flip
+    /// Outcome. Shown in the UI as "Last run" (BackupJobsTable), which is
+    /// the accurate way to read it.
+    /// </summary>
     public DateTimeOffset? LastConfirmedAt { get; set; }
 
-    /// <summary>What that last confirmed non-Unknown result actually was.</summary>
+    /// <summary>The raw Outcome from that same last successful Stage-A cycle — see LastConfirmedAt.</summary>
     public BackupOutcome? LastConfirmedOutcome { get; set; }
 
     /// <summary>How many consecutive cycles the check has failed to reach its source (Stage A).</summary>

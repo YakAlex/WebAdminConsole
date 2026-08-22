@@ -176,7 +176,18 @@ public sealed class TelegramBotService(
     {
         if (_client is null) return;
 
-        string icon = message.Current == BackupOutcome.Missing ? "🚫" : "⏰";
+        // Bug fix (2026-08-22, backup service audit): Current can now also
+        // be Unknown (BackupMonitorJob.OnConfirmedTransitionAsync started
+        // pushing this alert for confirmed-Unknown transitions too, not just
+        // Stale/Missing) — give it its own icon instead of falling through
+        // to Stale's "⏰", which would misleadingly imply an old-but-present
+        // backup file rather than "we can't reach this check at all".
+        string icon = message.Current switch
+        {
+            BackupOutcome.Missing => "🚫",
+            BackupOutcome.Unknown => "❓",
+            _                     => "⏰",
+        };
         string text = $"{icon} BACKUP {message.Current.ToString().ToUpperInvariant()}\n" +
                       $"{message.ServerName} ({message.Kind})\n" +
                       $"Was: {message.Previous}";

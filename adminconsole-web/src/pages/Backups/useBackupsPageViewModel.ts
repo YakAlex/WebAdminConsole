@@ -11,9 +11,12 @@ export function useBackupsPageViewModel() {
 
   const successful = states.filter((j) => j.outcome === BackupOutcome.Ok).length
   const warnings = states.filter((j) => j.outcome === BackupOutcome.SizeWarning).length
-  const failed = states.filter(
-    (j) => j.outcome === BackupOutcome.Stale || j.outcome === BackupOutcome.Missing || j.outcome === BackupOutcome.Unknown,
-  ).length
+  // Bug fix (2026-08-22, backup service audit): Unknown ("we couldn't reach
+  // the check") used to be lumped in with Stale/Missing ("we reached it and
+  // the backup is genuinely broken") — exactly the false-alarm conflation
+  // BackupOutcome's own doc comment warns against. A transient share
+  // hiccup no longer inflates the Failed count.
+  const failed = states.filter((j) => j.outcome === BackupOutcome.Stale || j.outcome === BackupOutcome.Missing).length
   const successRate = states.length > 0 ? Math.round((successful / states.length) * 100) : 0
 
   // Audit fix (2026-08-22, §3): the latest known size of each job, summed

@@ -42,9 +42,10 @@ export function BackupsCard({ jobs, disabled }: BackupsCardProps) {
   const navigate = useNavigate()
   const successful = jobs.filter((j) => j.outcome === BackupOutcome.Ok).length
   const warnings = jobs.filter((j) => j.outcome === BackupOutcome.SizeWarning).length
-  const failed = jobs.filter(
-    (j) => j.outcome === BackupOutcome.Stale || j.outcome === BackupOutcome.Missing || j.outcome === BackupOutcome.Unknown,
-  ).length
+  // Bug fix (2026-08-22, backup service audit): Unknown ("couldn't reach
+  // the check") is not the same as a genuinely broken backup — don't count
+  // it as Failed (see useBackupsPageViewModel for the matching fix).
+  const failed = jobs.filter((j) => j.outcome === BackupOutcome.Stale || j.outcome === BackupOutcome.Missing).length
 
   return (
     <div className={styles.card}>

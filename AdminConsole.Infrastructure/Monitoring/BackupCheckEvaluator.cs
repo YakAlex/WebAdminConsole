@@ -93,7 +93,16 @@ public sealed class BackupCheckEvaluator
         if (age.TotalHours > maxAgeHours)
             return BackupCheckResult.Stale(sample);
 
-        if (history.Count < definition.MinSamplesForBaseline)
+        // Bug fix (2026-08-22, backup service audit): `history.Count == 0`
+        // guards independently of MinSamplesForBaseline — a misconfigured
+        // BackupCheckDefinition.MinSamplesForBaseline of 0 made
+        // `history.Count < 0` always false, falling through to
+        // history.Average() on an EMPTY sequence below, which throws
+        // InvalidOperationException every single cycle for that check
+        // (caught by BackupMonitorJob.CheckKindSafeAsync, so it didn't crash
+        // anything, but it silently spammed the error log forever and never
+        // once evaluated size for that server).
+        if (history.Count == 0 || history.Count < definition.MinSamplesForBaseline)
             return BackupCheckResult.Ok(sample); // not enough history yet to honestly evaluate the size
 
         var average = history.Average(s => (double)s.SizeBytes);

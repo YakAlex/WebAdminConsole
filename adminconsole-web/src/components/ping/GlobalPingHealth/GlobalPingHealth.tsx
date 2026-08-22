@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { HealthRing } from '@/components/ui/HealthRing'
 import { StatusDot } from '@/components/ui/StatusDot'
+import pingIcon from '@/assets/ping-icon.png'
 import styles from './GlobalPingHealth.module.scss'
 
 export interface GlobalPingHealthProps {
@@ -24,7 +25,8 @@ export function GlobalPingHealth({ online, total, offline, successRate, avgLaten
   const allOnline = hasData && offline === 0
 
   return (
-    <Card>
+    <Card className={styles.card}>
+      <img src={pingIcon} alt="" className={styles.signalArt} />
       <CardHeader eyebrow="Global Ping Health" icon={<Activity size={14} strokeWidth={1.75} />} />
 
       <div className={styles.body}>

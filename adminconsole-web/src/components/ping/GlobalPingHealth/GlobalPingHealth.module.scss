@@ -1,6 +1,33 @@
 @use '@/styles/mixins' as *;
 
+.card {
+  position: relative;
+  overflow: hidden;
+}
+
+// Приліплена до правого краю картки (той самий принцип, що server-icon.png
+// на System Health / Overview) — position:absolute виносить її з потоку,
+// місце під неї резервується явно нижче (.stats padding-right), лише на
+// ширших екранах, щоб на вузьких не тіснити метрики.
+.signalArt {
+  display: none;
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  height: 112px;
+  width: auto;
+  pointer-events: none;
+  user-select: none;
+
+  @media (min-width: 960px) {
+    display: block;
+  }
+}
+
 .body {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: var(--space-8);
@@ -41,6 +68,10 @@
   gap: var(--space-8);
   padding-left: var(--space-8);
   border-left: 1px solid var(--color-border);
+
+  @media (min-width: 960px) {
+    padding-right: 400px;
+  }
 }
 
 .stat {
@@ -61,6 +92,8 @@
 }
 
 .footer {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: var(--space-2);

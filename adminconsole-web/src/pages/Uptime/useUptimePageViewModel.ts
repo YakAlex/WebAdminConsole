@@ -119,6 +119,7 @@ export function useUptimePageViewModel() {
     trend: overall.buckets,
     axisLabels,
     monitoredDevices: serversQuery.servers.length,
+    servers: serversQuery.servers,
     incidentsInWindow,
     deviceRows,
     incidents: sortIncidents(filterIncidents(downtimeQuery.records, incidentSearch, incidentFrom, incidentTo)),

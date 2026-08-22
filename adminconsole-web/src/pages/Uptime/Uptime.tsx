@@ -26,7 +26,7 @@ export function Uptime() {
         <ErrorBanner key={context} context={context} error={error} />
       ))}
 
-      <SlaReportSection />
+      <SlaReportSection servers={vm.servers} />
 
       {vm.initialLoading ? (
         <Spinner label="Loading uptime data…" />

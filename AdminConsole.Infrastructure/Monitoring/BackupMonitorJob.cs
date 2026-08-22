@@ -2,6 +2,7 @@ using AdminConsole.Domain.Abstractions;
 using AdminConsole.Domain.Events;
 using AdminConsole.Domain.Models;
 using AdminConsole.Infrastructure.Configuration;
+using Hangfire;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -54,7 +55,19 @@ public sealed class BackupMonitorJob(
     /// <summary>Скільки циклів поспіль Unknown, перш ніж один раз надіслати попередження (без спаму).</summary>
     private const int UnknownEscalationThreshold = 3;
 
-    /// <summary>Точка входу для RecurringJob.AddOrUpdate (Program.cs, T4.5).</summary>
+    /// <summary>
+    /// Точка входу для RecurringJob.AddOrUpdate (Program.cs, T4.5).
+    /// Аудит Зона 1, Знахідка №7 (2026-08-22): BackupChecks читає файли по
+    /// UNC-шляхах (Зона 3 — без гарантованого таймауту), тож один запуск
+    /// теоретично може тривати довше за BackupPollIntervalMinutes. Без цього
+    /// атрибута Hangfire за замовчуванням МІГ БИ запустити наступний цикл
+    /// паралельно з ще не завершеним попереднім — обидва одночасно писали б
+    /// у ту саму таблицю BackupCheckState. timeoutInSeconds=10: якщо
+    /// попередній запуск ще тримає лок довше 10с очікування — цей запуск
+    /// просто пропускається (не чекає й не падає), наступний за розкладом
+    /// спробує знову.
+    /// </summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 10)]
     public async Task RunAsync(CancellationToken ct = default)
     {
         if (_definitions.Count == 0)

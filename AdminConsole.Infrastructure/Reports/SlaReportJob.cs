@@ -1,5 +1,6 @@
 using AdminConsole.Domain.Events;
 using AdminConsole.Domain.Models.Reports;
+using Hangfire;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -23,6 +24,8 @@ public sealed class SlaReportJob(
 {
     private const string LogSource = "SlaReport";
 
+    /// <summary>Аудит Зона 1, Знахідка №7 (2026-08-22): захист від паралельного запуску, як BackupMonitorJob.</summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 10)]
     public async Task RunWeeklyAsync(CancellationToken ct = default)
     {
         var to   = DateTimeOffset.Now;

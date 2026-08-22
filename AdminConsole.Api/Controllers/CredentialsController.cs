@@ -98,7 +98,15 @@ public sealed class CredentialsController(
         if (string.IsNullOrWhiteSpace(request.Token))
             return BadRequest(new { error = "Token обов'язковий." });
 
-        await credentials.StoreZabbixTokenAsync(request.Token, ct);
+        try
+        {
+            await credentials.StoreZabbixTokenAsync(request.Token, ct);
+        }
+        catch (CredentialProtectionException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+
         await mediator.Publish(new CredentialsChangedOccurred(CredentialTarget.Zabbix, CredentialAction.Saved), ct);
 
         var result = await TestAndLogAsync(request.Token, ct);
@@ -111,7 +119,15 @@ public sealed class CredentialsController(
         if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
             return BadRequest(new { error = "Username і Password обов'язкові." });
 
-        await credentials.StoreZabbixCredentialsAsync(request.Username, request.Password, ct);
+        try
+        {
+            await credentials.StoreZabbixCredentialsAsync(request.Username, request.Password, ct);
+        }
+        catch (CredentialProtectionException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+
         await mediator.Publish(new CredentialsChangedOccurred(CredentialTarget.Zabbix, CredentialAction.Saved), ct);
 
         var url = monitoringSettings.Value.ZabbixUrl;
@@ -146,7 +162,15 @@ public sealed class CredentialsController(
         if (string.IsNullOrWhiteSpace(request.BotToken))
             return BadRequest(new { error = "BotToken обов'язковий." });
 
-        await credentials.StoreTelegramTokenAsync(request.BotToken, ct);
+        try
+        {
+            await credentials.StoreTelegramTokenAsync(request.BotToken, ct);
+        }
+        catch (CredentialProtectionException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+
         // TelegramBotService (T5.3) слухає CredentialsChangedOccurred(Telegram, Saved)
         // і перезапускає long-polling з новим токеном без перезапуску процесу.
         await mediator.Publish(new CredentialsChangedOccurred(CredentialTarget.Telegram, CredentialAction.Saved), ct);

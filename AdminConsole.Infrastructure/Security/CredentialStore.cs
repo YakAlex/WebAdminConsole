@@ -183,7 +183,28 @@ public sealed class CredentialStore
 
     // ── Data Protection ──────────────────────────────────────────────────────
 
-    private byte[] Protect(string plaintext) => _protector.Protect(Encoding.UTF8.GetBytes(plaintext));
+    /// <summary>
+    /// Аудит Зона 4, Знахідка №2 (2026-08-22): на відміну від Unprotect()
+    /// нижче (яка вже роками коректно деградує до "секрет недоступний" при
+    /// зламаному/ротованому key ring), запис раніше НЕ мав жодного захисту —
+    /// CryptographicException летів неспійманим аж до голого HTTP 500 без
+    /// пояснення. Найімовірніший реальний сценарій — саме той момент, коли
+    /// адмін намагається "полагодити" ситуацію, зберігаючи токен наново.
+    /// </summary>
+    private byte[] Protect(string plaintext)
+    {
+        try
+        {
+            return _protector.Protect(Encoding.UTF8.GetBytes(plaintext));
+        }
+        catch (CryptographicException ex)
+        {
+            throw new CredentialProtectionException(
+                "Не вдалося зашифрувати секрет — ключі шифрування (DPAPI-NG) недоступні або " +
+                "пошкоджені. Можливо, службу переналаштовано на інший обліковий запис, або тека " +
+                "ключів шифрування втрачена. Зверніться до адміністратора.", ex);
+        }
+    }
 
     /// <summary>
     /// Ротація/втрата ключів шифрування — цілком реальний сценарій (напр.

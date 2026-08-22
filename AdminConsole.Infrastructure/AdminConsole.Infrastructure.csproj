@@ -6,6 +6,11 @@
 
   <ItemGroup>
     <PackageReference Include="Hangfire.Core" Version="1.8.24" />
+    <!-- Явний override: Hangfire.Core 1.8.24 тягне вразливий Newtonsoft.Json
+         11.0.1 (GHSA-5crp-9r3c-p9vr) транзитивно — NuGet резолвить
+         "найближчу" явну версію, тож цей рядок піднімає її для всього
+         дерева залежностей без потреби чіпати сам Hangfire. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="MediatR" Version="14.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="8.0.30" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30">

@@ -11,11 +11,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <!-- Версії піднято 2026-08-22: Rider/NuGet повідомляли про вразливості в
+         транзитивних System.Net.Http/System.Text.RegularExpressions 4.3.0,
+         які тягнув старий xunit 2.5.3 (через NETStandard.Library 1.6.1) —
+         сучасний xunit таргетить net8.0 напряму й більше не має цього
+         ланцюжка. coverlet.collector піднято окремо (Rider позначив 6.0.0). -->
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
-    <PackageReference Include="xunit" Version="2.5.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
 
   <ItemGroup>

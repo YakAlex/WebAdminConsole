@@ -173,6 +173,13 @@ public sealed class MaintenanceService(
         logger.LogInformation("MaintenanceService started. {Count} активних вікон завантажено.",
             _windows.Count);
 
+        // Аудит Зона 1 (2026-08-22): раніше саме тіло циклу (читання/видалення
+        // прострочених вікон, публікація подій) не мало ЖОДНОГО try/catch —
+        // захищений був лише сам Task.Delay. Будь-який транзієнтний виняток БД
+        // під час завершення maintenance-вікна вилітав необхопленим і клав
+        // увесь хост (BackgroundServiceExceptionBehavior). Один цикл, що впав
+        // з винятком, тепер лише пропускається — наступний цикл (через
+        // CheckIntervalSeconds) спробує знову.
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -182,20 +189,28 @@ public sealed class MaintenanceService(
             }
             catch (OperationCanceledException) { break; }
 
-            var now = DateTimeOffset.Now;
-            var expired = _windows.Where(kv => kv.Value.To is not null && kv.Value.To < now).ToList();
-            if (expired.Count == 0) continue;
-
-            foreach (var (key, window) in expired)
+            try
             {
-                if (!_windows.TryRemove(key, out _)) continue;
+                var now = DateTimeOffset.Now;
+                var expired = _windows.Where(kv => kv.Value.To is not null && kv.Value.To < now).ToList();
+                if (expired.Count == 0) continue;
 
-                await WithRepositoryAsync(r => r.RemoveAsync(key, stoppingToken));
+                foreach (var (key, window) in expired)
+                {
+                    if (!_windows.TryRemove(key, out _)) continue;
 
-                await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                    $"Maintenance для {window.DisplayName} завершено (час вийшов)."), stoppingToken);
+                    await WithRepositoryAsync(r => r.RemoveAsync(key, stoppingToken));
 
-                await mediator.Publish(new MaintenanceChangedOccurred(MaintenanceAction.Ended, window), stoppingToken);
+                    await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
+                        $"Maintenance для {window.DisplayName} завершено (час вийшов)."), stoppingToken);
+
+                    await mediator.Publish(new MaintenanceChangedOccurred(MaintenanceAction.Ended, window), stoppingToken);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "MaintenanceService: помилка в циклі завершення вікон — пропускаємо цей цикл.");
             }
         }
     }

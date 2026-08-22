@@ -212,18 +212,25 @@ public sealed class RdpMonitorService(
             }
         }
 
-        bool rdpMonitoringEnabled = await EvaluateMonitoringToggleAsync(stoppingToken);
-
-        if (rdpMonitoringEnabled)
-        {
-            await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                $"RDP monitor запущено — {_terminalServers.Count} сервер(ів). " +
-                $"Використовуємо доменні імена для quser."), stoppingToken);
-        }
-
-        await PollAllServersAsync(stoppingToken);
+        // Аудит Зона 1 (2026-08-22): усе тіло методу — під одним try/catch.
+        // Раніше EvaluateMonitoringToggleAsync/PollAllServersAsync виконувались
+        // ДО try-блоку (взагалі без захисту), а сам try ловив лише
+        // OperationCanceledException — будь-який транзієнтний виняток БД
+        // (напр. SQLITE_BUSY з IAppSettingsRepository.GetAsync) вилітав
+        // необхопленим і клав увесь хост (BackgroundServiceExceptionBehavior).
         try
         {
+            bool rdpMonitoringEnabled = await EvaluateMonitoringToggleAsync(stoppingToken);
+
+            if (rdpMonitoringEnabled)
+            {
+                await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
+                    $"RDP monitor запущено — {_terminalServers.Count} сервер(ів). " +
+                    $"Використовуємо доменні імена для quser."), stoppingToken);
+            }
+
+            await PollAllServersAsync(stoppingToken);
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 using var delayCts = CancellationTokenSource
@@ -254,6 +261,16 @@ public sealed class RdpMonitorService(
             }
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "RdpMonitorService: критична помилка циклу — моніторинг зупинено, застосунок продовжує працювати.");
+            try
+            {
+                await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
+                    $"RDP monitor: критична помилка, моніторинг зупинено: {ex.GetType().Name}: {ex.Message}"), CancellationToken.None);
+            }
+            catch { /* навіть аварійний лог не пройшов — ILogger вище вже зафіксував головне */ }
+        }
         finally
         {
             _wakeUpCts = null;

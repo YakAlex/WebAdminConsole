@@ -204,21 +204,34 @@ public sealed class TelegramBotService(
     {
         _hostToken = stoppingToken;
 
-        await access.InitializeAsync(stoppingToken);
-
+        // Аудит Зона 1 (2026-08-22): InitializeAsync/RestartPollingAsync раніше
+        // виконувались без жодного try/catch на цьому рівні — RestartPollingAsync
+        // усередині має try/finally (звільняє лок), АЛЕ без catch, тож виняток
+        // (напр. з credentials.HasTelegramCredentials/GetTelegramToken) летів
+        // далі необхопленим і клав увесь хост.
         try
         {
-            await credentials.LoadTelegramFromStoreAsync(stoppingToken);
+            await access.InitializeAsync(stoppingToken);
+
+            try
+            {
+                await credentials.LoadTelegramFromStoreAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "TelegramBotService: не вдалось завантажити токен.");
+            }
+
+            foreach (var r in uptimeTracker.GetSnapshot().Where(r => !r.IsResolved))
+                _knownOpenIncidents[IncidentKey(r)] = 0;
+
+            await RestartPollingAsync(stoppingToken);
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            logger.LogError(ex, "TelegramBotService: не вдалось завантажити токен.");
+            logger.LogError(ex, "TelegramBotService: критична помилка старту — бот не запущено, застосунок продовжує працювати.");
         }
-
-        foreach (var r in uptimeTracker.GetSnapshot().Where(r => !r.IsResolved))
-            _knownOpenIncidents[IncidentKey(r)] = 0;
-
-        await RestartPollingAsync(stoppingToken);
 
         try
         {
@@ -226,9 +239,16 @@ public sealed class TelegramBotService(
         }
         catch (OperationCanceledException) { }
 
-        await _restartLock.WaitAsync();
-        try { await StopPollingAsync(); }
-        finally { _restartLock.Release(); }
+        try
+        {
+            await _restartLock.WaitAsync();
+            try { await StopPollingAsync(); }
+            finally { _restartLock.Release(); }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "TelegramBotService: помилка під час зупинки бота.");
+        }
     }
 
     private async Task RestartPollingAsync(CancellationToken hostToken)

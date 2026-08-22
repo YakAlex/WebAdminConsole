@@ -140,31 +140,37 @@ public sealed class ZabbixPollerService(
             return;
         }
 
-        bool zabbixMonitoringEnabled = await EvaluateMonitoringToggleAsync(stoppingToken);
-
-        if (zabbixMonitoringEnabled && !credentials.HasZabbixCredentials)
-        {
-            await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-                "Zabbix: credentials відсутні — очікуємо збереження через Settings API."), stoppingToken);
-        }
-
-        // Credentials є і моніторинг увімкнено — запускаємось повноцінно
-        if (zabbixMonitoringEnabled && credentials.HasZabbixCredentials)
-        {
-            await LogStartedAsync(stoppingToken);
-            _hasLoggedStart = true;
-
-            if (!credentials.ZabbixUsesApiToken)
-            {
-                await AuthenticateAsync(stoppingToken).ConfigureAwait(false);
-                if (_sessionToken is null && stoppingToken.IsCancellationRequested) return;
-            }
-
-            await PollAsync(stoppingToken).ConfigureAwait(false);
-        }
-
+        // Аудит Зона 1 (2026-08-22): усе тіло методу — під одним try/catch.
+        // Раніше EvaluateMonitoringToggleAsync/AuthenticateAsync/PollAsync
+        // виконувались ДО try-блоку (взагалі без захисту), а сам try ловив
+        // лише OperationCanceledException — будь-який транзієнтний виняток
+        // БД (напр. SQLITE_BUSY з IAppSettingsRepository.GetAsync) вилітав
+        // необхопленим і клав увесь хост (BackgroundServiceExceptionBehavior).
         try
         {
+            bool zabbixMonitoringEnabled = await EvaluateMonitoringToggleAsync(stoppingToken);
+
+            if (zabbixMonitoringEnabled && !credentials.HasZabbixCredentials)
+            {
+                await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
+                    "Zabbix: credentials відсутні — очікуємо збереження через Settings API."), stoppingToken);
+            }
+
+            // Credentials є і моніторинг увімкнено — запускаємось повноцінно
+            if (zabbixMonitoringEnabled && credentials.HasZabbixCredentials)
+            {
+                await LogStartedAsync(stoppingToken);
+                _hasLoggedStart = true;
+
+                if (!credentials.ZabbixUsesApiToken)
+                {
+                    await AuthenticateAsync(stoppingToken).ConfigureAwait(false);
+                    if (_sessionToken is null && stoppingToken.IsCancellationRequested) return;
+                }
+
+                await PollAsync(stoppingToken).ConfigureAwait(false);
+            }
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 using var delayCts = CancellationTokenSource
@@ -225,6 +231,16 @@ public sealed class ZabbixPollerService(
         catch (OperationCanceledException)
         {
             // Нормальне завершення при StopAsync — ігноруємо.
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "ZabbixPollerService: критична помилка циклу — моніторинг зупинено, застосунок продовжує працювати.");
+            try
+            {
+                await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
+                    $"Zabbix poller: критична помилка, моніторинг зупинено: {ex.GetType().Name}: {ex.Message}"), CancellationToken.None);
+            }
+            catch { /* навіть аварійний лог не пройшов — ILogger вище вже зафіксував головне */ }
         }
         finally
         {

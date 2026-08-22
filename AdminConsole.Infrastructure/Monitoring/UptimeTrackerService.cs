@@ -95,10 +95,23 @@ public sealed class UptimeTrackerService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await PublishSnapshotAsync(stoppingToken);
-        logger.LogInformation("UptimeTrackerService started.");
-        await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            "Uptime tracker started — відстеження переходів Online/Offline запущено."), stoppingToken);
+        // Аудит Зона 1 (2026-08-22): раніше без жодного try/catch — якщо
+        // PublishSnapshotAsync кине виняток (напр. проблема БД), застосунок
+        // взагалі не піднявся б (BackgroundServiceExceptionBehavior). Сам
+        // трекінг переходів (Handle(PingBatchResultOccurred)) не постраждає —
+        // це окремий шлях виклику через MediatR, не ExecuteAsync.
+        try
+        {
+            await PublishSnapshotAsync(stoppingToken);
+            logger.LogInformation("UptimeTrackerService started.");
+            await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
+                "Uptime tracker started — відстеження переходів Online/Offline запущено."), stoppingToken);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "UptimeTrackerService: помилка старту — початковий знімок не опубліковано.");
+        }
     }
 
     // ── INotificationHandler<MaintenanceChangedOccurred> ───────────────────

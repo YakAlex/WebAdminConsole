@@ -52,6 +52,16 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 // launchSettings.json/ASPNETCORE_URLS (localhost) — безпечно за замовчуванням.
 builder.Host.UseWindowsService();
 
+// Аудит Зона 1 (2026-08-22): за замовчуванням у .NET 6+ необроблений виняток
+// із ExecuteAsync будь-якого BackgroundService зупиняє ВЕСЬ хост
+// (HostOptions.BackgroundServiceExceptionBehavior.StopHost) — один зламаний
+// сервіс (RDP/Zabbix/Maintenance/...) кладе весь застосунок. Кожен сервіс
+// нижче тепер має власний top-level try/catch (перша лінія захисту) — це
+// налаштування лише страхувальна сітка про всяк випадок, якщо десь
+// лишився необхоплений шлях.
+builder.Services.Configure<HostOptions>(options =>
+    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
+
 // ── T3.2: Windows Integrated Authentication (Negotiate), без IIS ────────────
 builder.Services
     .AddAuthentication(NegotiateDefaults.AuthenticationScheme)

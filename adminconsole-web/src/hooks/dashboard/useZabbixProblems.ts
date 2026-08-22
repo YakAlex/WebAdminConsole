@@ -15,6 +15,12 @@ const GROUPS = ['logs'] as const
  * request here at all, and the page showed zero data until the first
  * SignalR tick after load/F5 (same as usePingStream before its fix in
  * Step 3).
+ *
+ * Both the REST snapshot and every SignalR push carry their own
+ * fetchedAt — like usePingStream (bug report, 2026-08-22), we keep
+ * whichever is newer instead of unconditionally overwriting, so a
+ * slow on-demand REST response that resolves after a fresher
+ * background-poll SignalR push can't roll the list back to stale data.
  */
 export function useZabbixProblems() {
   const [payload, setPayload] = useState<ZabbixProblemsPayload | null>(null)
@@ -24,12 +30,16 @@ export function useZabbixProblems() {
 
   const reconnectGeneration = useHubGroups(GROUPS)
 
+  const applyIfNewer = (next: ZabbixProblemsPayload) => {
+    setPayload((prev) => (prev && prev.fetchedAt > next.fetchedAt ? prev : next))
+  }
+
   useEffect(() => {
     let cancelled = false
 
     getZabbixProblems()
       .then((data) => {
-        if (!cancelled) setPayload(data)
+        if (!cancelled) applyIfNewer(data)
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -46,7 +56,7 @@ export function useZabbixProblems() {
     }
   }, [reportDenied, reconnectGeneration])
 
-  useHubEvent<ZabbixProblemsUpdatedEvent>('ZabbixProblemsUpdatedOccurred', (evt) => setPayload(evt.payload))
+  useHubEvent<ZabbixProblemsUpdatedEvent>('ZabbixProblemsUpdatedOccurred', (evt) => applyIfNewer(evt.payload))
 
   return { payload, loading, error }
 }

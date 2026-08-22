@@ -19,6 +19,19 @@ const GROUPS = ['ping'] as const
  * cycleCompletedAt on every update (from REST AND SignalR) so a slow
  * REST response that arrives AFTER a fresher SignalR push doesn't roll
  * the data back.
+ *
+ * PingMonitorService's recovery loop (PingMonitorService.RunRecoveryLoopAsync)
+ * re-pings ONLY the currently-offline servers and publishes a
+ * PingBatchResultOccurred containing JUST that subset, on a shorter
+ * interval than the main loop. Its cycleCompletedAt is always newer than
+ * the main loop's last full batch, so naively replacing the whole payload
+ * (by cycleCompletedAt alone) collapsed the fleet-wide view down to only
+ * the offline hosts every recovery cycle — global stats briefly read
+ * "0/2 online" and every other host's row flipped to Unknown, until the
+ * next full main-loop batch arrived and overwrote it back (bug report,
+ * 2026-08-22). We merge results by host IP instead, keeping each host's
+ * own latest entry (by its own lastChecked) rather than replacing the
+ * entire results array.
  */
 export function usePingStream() {
   const [payload, setPayload] = useState<PingBatchPayload | null>(null)
@@ -29,7 +42,22 @@ export function usePingStream() {
   const reconnectGeneration = useHubGroups(GROUPS)
 
   const applyIfNewer = (next: PingBatchPayload) => {
-    setPayload((prev) => (prev && prev.cycleCompletedAt > next.cycleCompletedAt ? prev : next))
+    setPayload((prev) => {
+      if (!prev) return next
+
+      const byIp = new Map(prev.results.map((r) => [r.ip, r]))
+      for (const result of next.results) {
+        const existing = byIp.get(result.ip)
+        if (!existing || existing.lastChecked <= result.lastChecked) {
+          byIp.set(result.ip, result)
+        }
+      }
+
+      return {
+        results: Array.from(byIp.values()),
+        cycleCompletedAt: prev.cycleCompletedAt > next.cycleCompletedAt ? prev.cycleCompletedAt : next.cycleCompletedAt,
+      }
+    })
   }
 
   useEffect(() => {

@@ -79,6 +79,24 @@ public sealed class RdpMonitorService(
         _previousSessions = new();
     private readonly ConcurrentDictionary<string, bool> _firstPollDone = new();
 
+    /// <summary>
+    /// Per-server lock — mirrors PingMonitorService._perServerLocks. The
+    /// background loop's own timer-driven poll and an on-demand REST
+    /// snapshot (GetSnapshotNowAsync, only throttled AGAINST OTHER
+    /// on-demand calls via _onDemandThrottle, not against the background
+    /// loop) can otherwise call quser.exe against the SAME server
+    /// concurrently — both read/write _previousSessions[ip] and diff
+    /// against it independently, which can duplicate a connect/disconnect
+    /// AppLogEntry and let whichever quser call happens to finish LAST
+    /// (not first) win, regardless of which one actually reflects the
+    /// current state. Serializes exactly at "one server" granularity —
+    /// different servers still poll fully in parallel with each other.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _perServerLocks = new();
+
+    private SemaphoreSlim GetServerLock(string ip) =>
+        _perServerLocks.GetOrAdd(ip, _ => new SemaphoreSlim(1, 1));
+
     // ── Global state for Overview
     private int             _globalDailyPeak;
     private DateTime        _peakResetDate;
@@ -306,9 +324,14 @@ public sealed class RdpMonitorService(
     private async Task PollServerOnceAsync(ServerEntry server, CancellationToken ct)
     {
         string hostname = server.Name;
+        var serverLock = GetServerLock(server.IP);
+        var serverLockAcquired = false;
 
         try
         {
+            await serverLock.WaitAsync(ct).ConfigureAwait(false);
+            serverLockAcquired = true;
+
             // quser.exe runs in the process's own context (the service runs
             // as DOMAIN\svc_adminconsole via Kerberos) — no credential
             // registration is needed before the call.
@@ -381,6 +404,10 @@ public sealed class RdpMonitorService(
             await mediator.Publish(AppLogEntryOccurred.Error(LogSource, $"{hostname}: {ex.GetType().Name}: {ex.Message}"), ct);
             await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
                 server.Name, server.IP, [], ex.Message, ct)), ct);
+        }
+        finally
+        {
+            if (serverLockAcquired) serverLock.Release();
         }
     }
 
@@ -775,5 +802,13 @@ public sealed class RdpMonitorService(
         {
             logger.LogWarning(ex, "RdpMonitorService: failed to save RdpDailyPeak to AppSettings.");
         }
+    }
+
+    // ── IDisposable ───────────────────────────────────────────────────────────
+
+    public override void Dispose()
+    {
+        foreach (var l in _perServerLocks.Values) l.Dispose();
+        base.Dispose();
     }
 }

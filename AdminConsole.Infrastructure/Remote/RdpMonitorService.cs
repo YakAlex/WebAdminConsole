@@ -676,51 +676,72 @@ public sealed class RdpMonitorService(
         }
     }
 
+    // Аудит Зона 1, Знахідка №8 (2026-08-22): раніше обчислення нового піку
+    // (під _stateLock) і його персистенція (await PersistDailyPeakAsync, ПОЗА
+    // _stateLock — lock не може огортати await) були двома окремими кроками.
+    // Якщо кілька серверів опитуються паралельно (Task.WhenAll у
+    // PollAllServersAsync) і їхні асинхронні DB-записи завершуються не в
+    // тому порядку, в якому обчислювались — новіший (більший) пік теоретично
+    // міг бути затертий старішим значенням, записаним пізніше. _peakGate
+    // серіалізує ВЕСЬ "обчисли+збережи" ланцюжок як одну атомарну одиницю —
+    // жодні два виклики більше не можуть перекластись у неправильному порядку.
+    private readonly SemaphoreSlim _peakGate = new(1, 1);
+
     /// <summary>
-    /// Розраховує глобальний пік і формує Payload.
-    /// Це гарантує, що клієнт отримає консистентні історичні дані.
-    /// Асинхронна — при НОВОМУ піку одразу персистить його в AppSettings
-    /// (поза lock, бо lock не може огортати await), щоб "Peak today" пережив
-    /// рестарт сервісу протягом тієї ж доби (див. EvaluateMonitoringToggleAsync).
+    /// Розраховує глобальний пік і формує Payload. Це гарантує, що клієнт
+    /// отримає консистентні історичні дані, а "Peak today" переживе рестарт
+    /// сервісу протягом тієї ж доби (див. EvaluateMonitoringToggleAsync).
     /// </summary>
     private async Task<RdpSessionsPayload> CreatePayloadAsync(
         string serverName, string serverIp, IReadOnlyList<RdpSessionInfo> sessions, string? errorMessage,
         CancellationToken ct)
     {
-        bool peakChanged;
-        int  peakToPersist;
-        DateTime dateToPersist;
-        RdpSessionsPayload payload;
+        int globalPeak;
+
+        await _peakGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            bool peakChanged;
+            int  peakToPersist;
+            DateTime dateToPersist;
+
+            lock (_stateLock)
+            {
+                var today = DateTime.Now.Date;
+                if (_peakResetDate != today)
+                {
+                    _peakResetDate = today;
+                    _globalDailyPeak = 0;
+                }
+
+                int currentTotalActive = _previousSessions.Values
+                    .SelectMany(dict => dict.Values)
+                    .Count(s => s.State == RdpSessionState.Active);
+
+                peakChanged = currentTotalActive > _globalDailyPeak;
+                if (peakChanged)
+                    _globalDailyPeak = currentTotalActive;
+
+                peakToPersist = _globalDailyPeak;
+                dateToPersist = _peakResetDate;
+            }
+
+            if (peakChanged)
+                await PersistDailyPeakAsync(peakToPersist, dateToPersist, ct).ConfigureAwait(false);
+
+            globalPeak = peakToPersist;
+        }
+        finally
+        {
+            _peakGate.Release();
+        }
 
         lock (_stateLock)
         {
-            var today = DateTime.Now.Date;
-            if (_peakResetDate != today)
-            {
-                _peakResetDate = today;
-                _globalDailyPeak = 0;
-            }
-
-            int currentTotalActive = _previousSessions.Values
-                .SelectMany(dict => dict.Values)
-                .Count(s => s.State == RdpSessionState.Active);
-
-            peakChanged = currentTotalActive > _globalDailyPeak;
-            if (peakChanged)
-                _globalDailyPeak = currentTotalActive;
-
-            peakToPersist  = _globalDailyPeak;
-            dateToPersist  = _peakResetDate;
-
-            payload = new RdpSessionsPayload(
+            return new RdpSessionsPayload(
                 serverName, serverIp, sessions, errorMessage,
-                _globalDailyPeak, _lastLogoutUsername, _lastLogoutServer, _lastLogoutAt);
+                globalPeak, _lastLogoutUsername, _lastLogoutServer, _lastLogoutAt);
         }
-
-        if (peakChanged)
-            await PersistDailyPeakAsync(peakToPersist, dateToPersist, ct).ConfigureAwait(false);
-
-        return payload;
     }
 
     private async Task PersistDailyPeakAsync(int peak, DateTime date, CancellationToken ct)

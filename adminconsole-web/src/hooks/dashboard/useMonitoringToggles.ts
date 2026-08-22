@@ -21,7 +21,7 @@ const GROUPS = ['logs'] as const
 export function useMonitoringToggles(): MonitoringToggles | null {
   const [toggles, setToggles] = useState<MonitoringToggles | null>(null)
 
-  useHubGroups(GROUPS)
+  const reconnectGeneration = useHubGroups(GROUPS)
 
   useEffect(() => {
     let cancelled = false
@@ -37,7 +37,7 @@ export function useMonitoringToggles(): MonitoringToggles | null {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reconnectGeneration])
 
   useHubEvent<MonitoringToggledEvent>('MonitoringToggledOccurred', (evt) => {
     setToggles((prev) => {

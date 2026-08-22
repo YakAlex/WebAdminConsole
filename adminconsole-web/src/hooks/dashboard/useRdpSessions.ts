@@ -41,7 +41,7 @@ export function useRdpSessions(): RdpSessionsData {
   const [error, setError] = useState<ApiError | null>(null)
   const { reportDenied } = useAuth()
 
-  useHubGroups(GROUPS)
+  const reconnectGeneration = useHubGroups(GROUPS)
 
   useEffect(() => {
     let cancelled = false
@@ -63,7 +63,7 @@ export function useRdpSessions(): RdpSessionsData {
     return () => {
       cancelled = true
     }
-  }, [reportDenied])
+  }, [reportDenied, reconnectGeneration])
 
   useHubEvent<RdpSessionsUpdatedEvent>('RdpSessionsUpdatedOccurred', (evt) => {
     setByServer((prev) => ({ ...prev, [evt.payload.serverIp]: evt.payload }))

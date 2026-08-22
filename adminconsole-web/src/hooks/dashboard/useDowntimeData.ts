@@ -15,7 +15,7 @@ export function useDowntimeData() {
   const [error, setError] = useState<ApiError | null>(null)
   const { reportDenied } = useAuth()
 
-  useHubGroups(GROUPS)
+  const reconnectGeneration = useHubGroups(GROUPS)
 
   useEffect(() => {
     let cancelled = false
@@ -37,7 +37,7 @@ export function useDowntimeData() {
     return () => {
       cancelled = true
     }
-  }, [reportDenied])
+  }, [reportDenied, reconnectGeneration])
 
   useHubEvent<UptimeUpdatedEvent>('UptimeUpdatedOccurred', (evt) => setRecords(evt.snapshot))
 

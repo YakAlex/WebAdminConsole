@@ -29,7 +29,7 @@ export function useTelegramPendingRequests() {
   const [isPrimaryAdminClaimed, setIsPrimaryAdminClaimed] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  useHubGroups(GROUPS)
+  const reconnectGeneration = useHubGroups(GROUPS)
 
   const refetch = useCallback(async () => {
     try {
@@ -43,7 +43,7 @@ export function useTelegramPendingRequests() {
 
   useEffect(() => {
     refetch()
-  }, [refetch])
+  }, [refetch, reconnectGeneration])
 
   useHubEvent<TelegramAccessRequestEvent>('TelegramAccessRequestOccurred', (evt) => {
     setPending((prev) => (prev.some((p) => p.id === evt.request.id) ? prev : [...prev, evt.request]))

@@ -22,7 +22,7 @@ function windowKey(window: MaintenanceWindow): string {
 export function useMaintenanceWindows(): MaintenanceWindow[] {
   const [windows, setWindows] = useState<Record<string, MaintenanceWindow>>({})
 
-  useHubGroups(GROUPS)
+  const reconnectGeneration = useHubGroups(GROUPS)
 
   useEffect(() => {
     let cancelled = false
@@ -38,7 +38,7 @@ export function useMaintenanceWindows(): MaintenanceWindow[] {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reconnectGeneration])
 
   useHubEvent<MaintenanceChangedEvent>('MaintenanceChangedOccurred', (evt) => {
     setWindows((prev) => {

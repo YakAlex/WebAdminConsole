@@ -30,7 +30,7 @@ export function useAppLogEntries(take = 20, query: LogQuery = {}) {
   const { reportDenied } = useAuth()
   const isFiltered = Boolean(query.search || query.from || query.to)
 
-  useHubGroups(GROUPS)
+  const reconnectGeneration = useHubGroups(GROUPS)
 
   useEffect(() => {
     let cancelled = false
@@ -55,7 +55,7 @@ export function useAppLogEntries(take = 20, query: LogQuery = {}) {
     return () => {
       cancelled = true
     }
-  }, [take, query.search, query.from, query.to, reportDenied])
+  }, [take, query.search, query.from, query.to, reportDenied, reconnectGeneration])
 
   useHubEvent<AppLogEntryEvent>('AppLogEntryOccurred', (evt) => {
     if (isFiltered) return

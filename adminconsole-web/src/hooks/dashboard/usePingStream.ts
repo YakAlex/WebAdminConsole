@@ -24,7 +24,7 @@ export function usePingStream() {
   const [error, setError] = useState<ApiError | null>(null)
   const { reportDenied } = useAuth()
 
-  useHubGroups(GROUPS)
+  const reconnectGeneration = useHubGroups(GROUPS)
 
   const applyIfNewer = (next: PingBatchPayload) => {
     setPayload((prev) => (prev && prev.cycleCompletedAt > next.cycleCompletedAt ? prev : next))
@@ -50,7 +50,7 @@ export function usePingStream() {
     return () => {
       cancelled = true
     }
-  }, [reportDenied])
+  }, [reportDenied, reconnectGeneration])
 
   useHubEvent<PingBatchResultEvent>('PingBatchResultOccurred', (evt) => applyIfNewer(evt.payload))
 

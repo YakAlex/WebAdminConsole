@@ -20,7 +20,7 @@ export function useZabbixProblems() {
   const [error, setError] = useState<ApiError | null>(null)
   const { reportDenied } = useAuth()
 
-  useHubGroups(GROUPS)
+  const reconnectGeneration = useHubGroups(GROUPS)
 
   useEffect(() => {
     let cancelled = false
@@ -42,7 +42,7 @@ export function useZabbixProblems() {
     return () => {
       cancelled = true
     }
-  }, [reportDenied])
+  }, [reportDenied, reconnectGeneration])
 
   useHubEvent<ZabbixProblemsUpdatedEvent>('ZabbixProblemsUpdatedOccurred', (evt) => setPayload(evt.payload))
 

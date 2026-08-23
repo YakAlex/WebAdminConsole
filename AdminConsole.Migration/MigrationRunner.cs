@@ -38,33 +38,55 @@ public sealed class MigrationRunner(
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
+    // Bug fix (2026-08-23, audit Finding 1.1): each of the four steps now
+    // has its own marker, checked and written independently, right after
+    // that specific step succeeds — not one shared marker written only
+    // after all four succeed. A crash between steps 2 and 3, followed by a
+    // retry, now correctly re-runs only steps 3 and 4 instead of silently
+    // re-running everything (including MigrateUserSettingsAsync, which
+    // used to be able to revert live AppSettings changes made in between).
     public async Task<MigrationSummary> RunAsync(MigrationOptions options, CancellationToken ct = default)
     {
-        var marker = await db.MigrationMarkers.FirstOrDefaultAsync(ct);
-        if (marker?.CompletedAtUtc is not null)
+        bool downtimeDone    = await IsStepCompletedAsync("Downtime", ct);
+        bool maintenanceDone = await IsStepCompletedAsync("Maintenance", ct);
+        bool backupsDone     = await IsStepCompletedAsync("Backups", ct);
+        bool settingsDone    = await IsStepCompletedAsync("UserSettings", ct);
+
+        if (downtimeDone && maintenanceDone && backupsDone && settingsDone)
         {
-            logger.LogInformation(
-                "Migration was already completed at {CompletedAt} — re-running does nothing.",
-                marker.CompletedAtUtc);
+            logger.LogInformation("Migration was already completed for every step — re-running does nothing.");
             return new MigrationSummary(true, 0, 0, 0, false, 0);
         }
 
-        int downtimeCount    = await MigrateDowntimeAsync(options.OldLogsDirectory, ct);
-        int maintenanceCount = await MigrateMaintenanceAsync(options.OldLogsDirectory, ct);
-        int backupCount      = await MigrateBackupsAsync(options.OldLogsDirectory, ct);
-        var (settingsMigrated, telegramCount) = await MigrateUserSettingsAsync(options.OldUserSettingsPath, ct);
+        int downtimeCount = downtimeDone ? 0 : await MigrateDowntimeAsync(options.OldLogsDirectory, ct);
+        if (!downtimeDone) await MarkStepCompletedAsync("Downtime", ct);
 
-        marker ??= new MigrationMarker();
-        marker.CompletedAtUtc = DateTimeOffset.UtcNow;
-        if (marker.Id == 0) db.MigrationMarkers.Add(marker);
-        await db.SaveChangesAsync(ct);
+        int maintenanceCount = maintenanceDone ? 0 : await MigrateMaintenanceAsync(options.OldLogsDirectory, ct);
+        if (!maintenanceDone) await MarkStepCompletedAsync("Maintenance", ct);
+
+        int backupCount = backupsDone ? 0 : await MigrateBackupsAsync(options.OldLogsDirectory, ct);
+        if (!backupsDone) await MarkStepCompletedAsync("Backups", ct);
+
+        var (settingsMigrated, telegramCount) = settingsDone
+            ? (false, 0)
+            : await MigrateUserSettingsAsync(options.OldUserSettingsPath, ct);
+        if (!settingsDone) await MarkStepCompletedAsync("UserSettings", ct);
 
         logger.LogInformation(
-            "Migration completed: {Downtime} downtime, {Maintenance} maintenance, {Backups} backup state(s), " +
-            "settings={Settings}, {Telegram} telegram user(s).",
+            "Migration step summary: {Downtime} downtime, {Maintenance} maintenance, {Backups} backup state(s), " +
+            "settings={Settings}, {Telegram} telegram user(s). (0/false for any step already completed on a prior run.)",
             downtimeCount, maintenanceCount, backupCount, settingsMigrated, telegramCount);
 
         return new MigrationSummary(false, downtimeCount, maintenanceCount, backupCount, settingsMigrated, telegramCount);
+    }
+
+    private async Task<bool> IsStepCompletedAsync(string step, CancellationToken ct) =>
+        await db.MigrationMarkers.AnyAsync(m => m.Step == step && m.CompletedAtUtc != null, ct);
+
+    private async Task MarkStepCompletedAsync(string step, CancellationToken ct)
+    {
+        db.MigrationMarkers.Add(new MigrationMarker { Step = step, CompletedAtUtc = DateTimeOffset.UtcNow });
+        await db.SaveChangesAsync(ct);
     }
 
     // ── DowntimeRecord: merges all uptime-*.json files, dedup by (ServerIp, FellAt) ──

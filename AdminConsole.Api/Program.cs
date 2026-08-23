@@ -155,11 +155,6 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<PingMonitorService
 builder.Services.AddSingleton<INotificationHandler<MaintenanceChangedOccurred>>(
     sp => sp.GetRequiredService<PingMonitorService>());
 
-// T4.7 — EventLogService (BackgroundService) + WinEventLogReader (static, no DI) + RemoteEventLogService (on-demand).
-builder.Services.AddSingleton<EventLogService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<EventLogService>());
-builder.Services.AddSingleton<RemoteEventLogService>();
-
 // T4.9 — Remote management: on-demand, without an ExecuteAsync loop (WMI
 // load only for the node currently being viewed). ResourceMonitorService/
 // RemoteResourceService (System Resources) was removed entirely on
@@ -200,6 +195,10 @@ builder.Services.AddSingleton<INotificationHandler<MonitoringToggledOccurred>>(
 // NOT Singleton — Scoped, since Hangfire creates a new instance on every run).
 builder.Services.AddSingleton<BackupCheckEvaluator>();
 builder.Services.AddScoped<BackupMonitorJob>();
+
+// Bug fix (2026-08-23, audit Finding 6.1): AppLogEntries had no retention
+// policy — this daily job caps it at 90 days.
+builder.Services.AddScoped<AppLogRetentionJob>();
 
 // T4.12 — SLA: on-demand service (Singleton, the same UptimeTrackerService
 // instance) + a scheduled Hangfire job.
@@ -255,6 +254,12 @@ var app = builder.Build();
         "sla-report-weekly",
         job => job.RunWeeklyAsync(CancellationToken.None),
         Cron.Weekly());
+
+    // Bug fix (2026-08-23, audit Finding 6.1).
+    recurringJobs.AddOrUpdate<AppLogRetentionJob>(
+        "app-log-retention",
+        job => job.RunAsync(CancellationToken.None),
+        Cron.Daily());
 }
 
 // The cron minutes-field step must be 1-59 (Cronos rejects "*/60" as

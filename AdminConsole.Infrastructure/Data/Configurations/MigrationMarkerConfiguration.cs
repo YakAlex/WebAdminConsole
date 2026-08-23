@@ -10,5 +10,10 @@ public sealed class MigrationMarkerConfiguration : IEntityTypeConfiguration<Migr
     {
         builder.ToTable("MigrationMarker");
         builder.HasKey(m => m.Id);
+
+        // SQLite allows multiple NULLs in a unique index (they're never
+        // considered equal to each other) — the pre-existing legacy row
+        // (Step == null) coexists fine alongside the four new named rows.
+        builder.HasIndex(m => m.Step).IsUnique();
     }
 }

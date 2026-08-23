@@ -12,6 +12,12 @@ namespace AdminConsole.Api.Controllers;
 /// </summary>
 public sealed class LogsController(IAppLogRepository repository) : AdminConsoleControllerBase
 {
+    // Bug fix (2026-08-23, audit Finding 5.1): take had no upper bound and
+    // flowed straight into EF Core's Take() against a table with no
+    // retention policy of its own (see AppLogRetentionJob) — a single
+    // request with an absurd take forced a full-table sort+serialize.
+    private const int MaxTake = 5000;
+
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<AppLogEntry>>> Get(
         [FromQuery] int take = 1000,
@@ -19,5 +25,5 @@ public sealed class LogsController(IAppLogRepository repository) : AdminConsoleC
         [FromQuery] DateTimeOffset? after = null,
         [FromQuery] string? search = null,
         CancellationToken ct = default) =>
-        Ok(await repository.GetRecentAsync(take, before, after, search, ct));
+        Ok(await repository.GetRecentAsync(Math.Clamp(take, 1, MaxTake), before, after, search, ct));
 }

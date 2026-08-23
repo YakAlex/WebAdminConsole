@@ -38,20 +38,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('checking')
   const resolvedRef = useRef(false)
 
-  // reportDenied always fires (even after an initial 'authorized' —
-  // e.g. the session became invalid later) and "freezes" resolvedRef
-  // so a late reportAuthorized from another channel can't roll denied
-  // back.
+  // Bug fix (2026-08-23, audit Finding 8.1): reportDenied used to
+  // permanently freeze the app in 'denied' for the rest of the session —
+  // this app polls many independent REST/SignalR channels, and every one
+  // of them calls reportDenied on its own 401/403. A single transient
+  // hiccup on any one of them (a dropped connection during Kerberos
+  // ticket renewal, a brief reverse-proxy blip) used to lock the whole UI
+  // behind a full-screen "Access Denied" for the rest of the session, with
+  // no way back short of a manual reload. Denial and authorization are now
+  // symmetric, ordinary status transitions: whichever channel reports
+  // last wins. resolvedRef still serves its original purpose — ending the
+  // initial 'checking' loading state on the FIRST signal from any
+  // channel — it just no longer also acts as a permanent one-way lock.
   const reportDenied = useCallback(() => {
     resolvedRef.current = true
     setStatus('denied')
   }, [])
 
-  // reportAuthorized only resolves the initial race (checking →
-  // authorized) — if the state is already resolved (by anyone), a
-  // repeat call is a no-op.
   const reportAuthorized = useCallback(() => {
-    if (resolvedRef.current) return
     resolvedRef.current = true
     setStatus('authorized')
   }, [])

@@ -132,7 +132,29 @@ public sealed class UptimeTrackerService(
         }
     }
 
+    // Bug fix (2026-08-23, audit Finding 7.1): same reasoning as
+    // HandlePingBatchResultAsync above — this is called from
+    // Handle(MaintenanceChangedOccurred), which had the identical gap.
     private async Task HandleMaintenanceStartedAsync(MaintenanceWindow window, CancellationToken ct)
+    {
+        try
+        {
+            await HandleMaintenanceStartedInternalAsync(window, ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "UptimeTrackerService: HandleMaintenanceStartedAsync failed for {Window}.", window.DisplayName);
+            try
+            {
+                await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
+                    $"Uptime tracker: failed to process Maintenance start for {window.DisplayName} — {ex.GetType().Name}: {ex.Message}."), CancellationToken.None);
+            }
+            catch { /* best effort */ }
+        }
+    }
+
+    private async Task HandleMaintenanceStartedInternalAsync(MaintenanceWindow window, CancellationToken ct)
     {
         var touched = new List<DowntimeRecord>();
 
@@ -213,7 +235,36 @@ public sealed class UptimeTrackerService(
 
     // ── INotificationHandler<PingBatchResultOccurred> ──────────────────────
 
+    // Bug fix (2026-08-23, audit Finding 7.1): this handler used to have no
+    // exception protection at all — an unhandled DB failure here propagated
+    // back through PingMonitorService.PingServersAsync into its loop guard,
+    // which cancels BOTH the main and recovery ping loops together by
+    // design (a subscriber crashing its publisher). In a pub/sub MediatR
+    // handler, a subscriber must never take down the publisher this way —
+    // one missed write to the downtime table is a much smaller problem than
+    // permanently halting all ping/uptime monitoring until a service
+    // restart. OperationCanceledException still propagates (normal
+    // shutdown); anything else is logged and swallowed.
     public async Task Handle(PingBatchResultOccurred notification, CancellationToken ct)
+    {
+        try
+        {
+            await HandlePingBatchResultAsync(notification, ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "UptimeTrackerService: Handle(PingBatchResultOccurred) failed.");
+            try
+            {
+                await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
+                    $"Uptime tracker: failed to process a ping batch — {ex.GetType().Name}: {ex.Message}."), CancellationToken.None);
+            }
+            catch { /* best effort — the ILogger call above already recorded what matters */ }
+        }
+    }
+
+    private async Task HandlePingBatchResultAsync(PingBatchResultOccurred notification, CancellationToken ct)
     {
         bool changed = false;
         var touched = new List<DowntimeRecord>();

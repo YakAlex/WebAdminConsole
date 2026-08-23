@@ -1,0 +1,74 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- publish.ps1 fix (2026-08-23): a plain PackageReference "Version" pin
+         (e.g. Infrastructure's old Newtonsoft.Json override) only wins
+         against a LOWER transitive requirement elsewhere in the graph — a
+         HIGHER one (e.g. from Hangfire.AspNetCore/MediatR in
+         AdminConsole.Api's own graph) still overrides it. That's exactly how
+         AdminConsole.Api ended up resolving Newtonsoft.Json 13.0.4 while
+         AdminConsole.Infrastructure/Migration resolved the pinned 13.0.3 —
+         publish.ps1's new staged-merge hash check caught the two apps'
+         self-contained outputs disagreeing on this file. Transitive pinning
+         makes every PackageVersion below an ABSOLUTE pin across the whole
+         dependency graph, closing that gap for good.
+    -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Shared across multiple projects -->
+    <!-- Api needs these as real NuGet packages (not just the runtime pack):
+         Microsoft.AspNetCore.Authentication.Negotiate has a hard floor of
+         Connections.Abstractions >= 8.0.30 (confirmed: pinning down to
+         8.0.28 to match the installed runtime pack hits NU1109, a genuine
+         downgrade conflict, not a false alarm). Migration has no such
+         requirement and would otherwise only pick up the framework-pack
+         copies (8.0.28): explicit PackageReferences in Migration.csproj
+         pull the same 8.0.30 NuGet packages Api uses, so both projects'
+         self-contained outputs agree. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Connections.Abstractions" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.Extensions.Features" Version="8.0.30" />
+    <PackageVersion Include="MediatR" Version="14.2.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+    <!-- Bumped from the old 13.0.3 override to 13.0.4 (still fixes the
+         Hangfire-transitive GHSA-5crp-9r3c-p9vr vulnerability the original
+         override targeted): 13.0.4 is what AdminConsole.Api's own graph
+         already required as a floor, so this is the only version that's
+         simultaneously >= every project's real requirement. -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
+
+    <!-- AdminConsole.Domain -->
+    <PackageVersion Include="MediatR.Contracts" Version="2.0.1" />
+
+    <!-- AdminConsole.Infrastructure -->
+    <PackageVersion Include="Hangfire.Core" Version="1.8.24" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
+    <PackageVersion Include="Polly" Version="8.7.0" />
+    <PackageVersion Include="System.Diagnostics.EventLog" Version="8.0.1" />
+    <PackageVersion Include="System.Diagnostics.PerformanceCounter" Version="8.0.1" />
+    <PackageVersion Include="System.Management" Version="8.0.0" />
+    <PackageVersion Include="Telegram.Bot" Version="22.6.0" />
+
+    <!-- AdminConsole.Api -->
+    <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.24" />
+    <PackageVersion Include="Hangfire.Storage.SQLite" Version="0.4.3" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <PackageVersion Include="System.DirectoryServices.AccountManagement" Version="8.0.1" />
+
+    <!-- AdminConsole.Migration -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="8.0.1" />
+
+    <!-- AdminConsole.Tests -->
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+</Project>

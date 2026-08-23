@@ -5,25 +5,29 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hangfire.Core" Version="1.8.24" />
-    <!-- Явний override: Hangfire.Core 1.8.24 тягне вразливий Newtonsoft.Json
-         11.0.1 (GHSA-5crp-9r3c-p9vr) транзитивно — NuGet резолвить
-         "найближчу" явну версію, тож цей рядок піднімає її для всього
-         дерева залежностей без потреби чіпати сам Hangfire. -->
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="MediatR" Version="14.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" Version="8.0.30" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30">
+    <PackageReference Include="Hangfire.Core" />
+    <!-- Version pinned centrally in Directory.Packages.props (CentralPackageTransitivePinningEnabled);
+         originally an explicit override here because Hangfire.Core 1.8.24 pulls
+         a vulnerable Newtonsoft.Json 11.0.1 (GHSA-5crp-9r3c-p9vr) transitively;
+         moved central 2026-08-23 after publish.ps1's staged-merge hash check
+         caught AdminConsole.Api resolving a DIFFERENT Newtonsoft.Json version
+         than this project/Migration: a plain per-project override can't
+         win against a higher transitive floor from another project's own
+         graph, only a solution-wide pin can. -->
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.1" />
-    <PackageReference Include="Polly" Version="8.7.0" />
-    <PackageReference Include="System.Diagnostics.EventLog" Version="8.0.1" />
-    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.1" />
-    <PackageReference Include="System.Management" Version="8.0.0" />
-    <PackageReference Include="Telegram.Bot" Version="22.6.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Polly" />
+    <PackageReference Include="System.Diagnostics.EventLog" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" />
+    <PackageReference Include="System.Management" />
+    <PackageReference Include="Telegram.Bot" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -6,9 +6,34 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <!-- Not used directly by Migration: pulled explicitly so it resolves
+         the same NuGet packages (8.0.30) as AdminConsole.Api's
+         Microsoft.AspNetCore.Authentication.Negotiate dependency does,
+         instead of picking up the FrameworkReference-provided 8.0.28 copies
+         below. See Directory.Packages.props for the full explanation. -->
+    <PackageReference Include="Microsoft.AspNetCore.Connections.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Features" />
+  </ItemGroup>
+
+  <!-- publish.ps1 fix (2026-08-23): without this, Microsoft.Extensions.*
+       (Logging/DependencyInjection/Configuration/Options/...) and
+       System.Diagnostics.EventLog* come from ordinary NuGet package
+       resolution here (transitively via Hangfire.Core/MediatR/EF Core in
+       AdminConsole.Infrastructure), while AdminConsole.Api (Sdk="Microsoft.
+       NET.Sdk.Web") gets the SAME-NAMED assemblies from the
+       Microsoft.AspNetCore.App shared framework instead: two different
+       provenances that don't produce byte-identical files even at a
+       matching version number. That's what publish.ps1's staged-merge hash
+       check was actually catching for 17 of the 18 conflicting files
+       (Newtonsoft.Json, the 18th, is a separate pure-NuGet version skew,
+       fixed via Directory.Packages.props). Referencing the same shared
+       framework here makes both projects resolve these assemblies from the
+       identical source, so their self-contained publish outputs agree. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <PropertyGroup>

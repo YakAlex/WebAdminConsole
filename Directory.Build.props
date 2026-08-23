@@ -1,0 +1,21 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- publish.ps1 fix (2026-08-23): AdminConsole.Api (Sdk="Microsoft.NET.Sdk.Web")
+         resolves its Microsoft.AspNetCore.App runtime pack for self-contained
+         publish differently than AdminConsole.Migration's manually-added
+         FrameworkReference (plain Microsoft.NET.Sdk): Api rolled forward to
+         a NEWER patch (8.0.3026.37304) pulled via NuGet, not what's actually
+         installed locally ("dotnet list-runtimes" shows only 8.0.28,
+         file version 8.0.2826.26913, which is what Migration correctly used).
+         This caused the last 2 of 18 file conflicts publish.ps1's staged-merge
+         hash check found (Microsoft.AspNetCore.Connections.Abstractions.dll,
+         Microsoft.Extensions.Features.dll): CPM/PackageVersion pins have no
+         effect here, since runtime-pack resolution isn't a PackageReference.
+         Pinning both projects to the version actually installed on this
+         machine makes them agree deterministically, with no NuGet download
+         needed for either. -->
+    <RuntimeFrameworkVersion Condition="'$(TargetFramework)' == 'net8.0-windows'">8.0.28</RuntimeFrameworkVersion>
+  </PropertyGroup>
+
+</Project>

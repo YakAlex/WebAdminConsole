@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace AdminConsole.Api.Controllers;
 
-public sealed record AddTelegramUserRequest(long ChatId, string? Username);
 public sealed record ClaimCodeResponse(string Code, DateTimeOffset ExpiresAt);
 public sealed record TelegramPendingStatusResponse(
     IReadOnlyList<TelegramPendingRequest> Pending,
@@ -33,16 +32,6 @@ public sealed class TelegramUsersController(TelegramAccessControlService accessC
     [HttpGet]
     public ActionResult<IReadOnlyList<TelegramAllowedUserView>> Get() =>
         Ok(accessControl.GetAllowedUsers());
-
-    [HttpPost]
-    public async Task<IActionResult> Add([FromBody] AddTelegramUserRequest request, CancellationToken ct)
-    {
-        if (request.ChatId == 0)
-            return BadRequest(new { error = "ChatId is required." });
-
-        await accessControl.AddAllowedUserAsync(request.ChatId, request.Username, ct);
-        return NoContent();
-    }
 
     [HttpDelete("{chatId:long}")]
     public async Task<IActionResult> Remove(long chatId, CancellationToken ct)

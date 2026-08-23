@@ -175,26 +175,6 @@ public sealed class TelegramAccessControlService(
                 .ToList();
     }
 
-    /// <summary>
-    /// Adds a user directly (Settings UI, T6.2 item 3) — without going through the
-    /// approval flow via a pending request. Same effect as
-    /// ApproveAsync, just initiated by the admin instead of an incoming /start.
-    /// Idempotent: a repeat call for an already-allowed chat_id just
-    /// updates the username.
-    /// </summary>
-    public async Task AddAllowedUserAsync(long chatId, string? username, CancellationToken ct = default)
-    {
-        lock (_stateLock) _allowedUsers[chatId] = username;
-
-        await WithAppSettingsAsync(r => r.UpsertTelegramAllowedUserAsync(chatId, username, ct));
-
-        await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Telegram access added manually via Settings: chat_id={chatId}" +
-            (username is null ? "." : $", @{username}.")), ct);
-        await mediator.Publish(new TelegramAccessChangedOccurred(
-            TelegramAccessAction.Approved, chatId, username), ct);
-    }
-
     public async Task<bool> RevokeAsync(long chatId, CancellationToken ct = default)
     {
         bool removed;

@@ -14,7 +14,7 @@ namespace AdminConsole.Api.Realtime;
 ///
 /// Handles events carried over from Core/Messages. Four of them have a
 /// direct, unambiguous UI counterpart (ping/uptime/backups); the rest — RDP,
-/// Zabbix, credentials/monitoring-toggle, Telegram access — don't
+/// Zabbix, monitoring-toggle, Telegram access — don't
 /// have their own page in the current Phase 6 scope
 /// (Dashboard/Uptime/Backups/Logs/Maintenance/Settings), so they go into
 /// "logs" as a general stream of administrative activity — the same
@@ -24,18 +24,22 @@ namespace AdminConsole.Api.Realtime;
 /// (ResourceSnapshotUpdatedOccurred/ResourceMonitorService was removed
 /// entirely on 2026-08-22 along with the frontend Resources tab;
 /// EventLogUpdatedOccurred/EventLogService removed 2026-08-23, audit
-/// Finding 3.1 — a fully-built feature with zero consumers anywhere.)
+/// Finding 3.1 — a fully-built feature with zero consumers anywhere.
+/// CredentialsChangedOccurred/BackupTransitionOccurred broadcast legs
+/// removed 2026-08-23, dead-code audit — no frontend ever subscribed to
+/// either by name; the underlying MediatR events are still published and
+/// still have real backend subscribers — ZabbixPollerService's wake-up on
+/// credential save, TelegramBotService's backup-transition alerts — this
+/// class was just never one of their consumers.)
 /// </summary>
 public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub, ILogger<SignalRBroadcastHandler> logger) :
     INotificationHandler<AppLogEntryOccurred>,
     INotificationHandler<PingBatchResultOccurred>,
     INotificationHandler<MaintenanceChangedOccurred>,
     INotificationHandler<BackupStatusUpdatedOccurred>,
-    INotificationHandler<BackupTransitionOccurred>,
     INotificationHandler<UptimeUpdatedOccurred>,
     INotificationHandler<RdpSessionsUpdatedOccurred>,
     INotificationHandler<ZabbixProblemsUpdatedOccurred>,
-    INotificationHandler<CredentialsChangedOccurred>,
     INotificationHandler<MonitoringToggledOccurred>,
     INotificationHandler<TelegramAccessChangedOccurred>,
     INotificationHandler<TelegramAccessRequestOccurred>
@@ -57,15 +61,11 @@ public sealed class SignalRBroadcastHandler(IHubContext<DashboardHub> hub, ILogg
 
     public Task Handle(BackupStatusUpdatedOccurred n, CancellationToken ct) => Send(Backups, n, ct);
 
-    public Task Handle(BackupTransitionOccurred n, CancellationToken ct) => Send(Backups, n, ct);
-
     public Task Handle(UptimeUpdatedOccurred n, CancellationToken ct) => Send(Uptime, n, ct);
 
     public Task Handle(RdpSessionsUpdatedOccurred n, CancellationToken ct) => Send(Logs, n, ct);
 
     public Task Handle(ZabbixProblemsUpdatedOccurred n, CancellationToken ct) => Send(Logs, n, ct);
-
-    public Task Handle(CredentialsChangedOccurred n, CancellationToken ct) => Send(Logs, n, ct);
 
     public Task Handle(MonitoringToggledOccurred n, CancellationToken ct) => Send(Logs, n, ct);
 

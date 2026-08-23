@@ -18,7 +18,7 @@ export function MaintenanceCard({ windows }: MaintenanceCardProps) {
 
       <div className={styles.headline}>
         <span className={styles.count}>{windows.length}</span>
-        <span className={styles.countLabel}>Upcoming windows</span>
+        <span className={styles.countLabel}>Active windows</span>
       </div>
 
       <div className={styles.divider} />

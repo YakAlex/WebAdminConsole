@@ -50,4 +50,11 @@ public sealed class AppSettings
 
     /// <summary>The date (no time) that RdpDailyPeak applies to. A different date means a new day, and the peak resets.</summary>
     public DateTime RdpDailyPeakDate { get; set; }
+
+    /// <summary>
+    /// Minimum Zabbix severity ZabbixPollerService fetches (ZabbixSeverity enum
+    /// value: 0=NotClassified .. 5=Disaster). Default 4 (High) preserves the
+    /// behavior from before this setting existed (High/Disaster only).
+    /// </summary>
+    public int ZabbixMinSeverity { get; set; } = 4;
 }

@@ -58,6 +58,13 @@ public sealed class AppSettingsRepository(AdminConsoleDbContext context)
         await SaveChangesAsync(ct);
     }
 
+    public async Task UpdateZabbixMinSeverityAsync(int minSeverity, CancellationToken ct = default)
+    {
+        var settings = await GetTrackedAsync(ct);
+        settings.ZabbixMinSeverity = minSeverity;
+        await SaveChangesAsync(ct);
+    }
+
     private async Task<AppSettings> GetTrackedAsync(CancellationToken ct)
     {
         var existing = await Context.AppSettings.FirstOrDefaultAsync(ct);
@@ -121,6 +128,7 @@ public sealed class AppSettingsRepository(AdminConsoleDbContext context)
         existing.TelegramPrimaryAdminChatId = settings.TelegramPrimaryAdminChatId;
         existing.RdpDailyPeak               = settings.RdpDailyPeak;
         existing.RdpDailyPeakDate           = settings.RdpDailyPeakDate;
+        existing.ZabbixMinSeverity          = settings.ZabbixMinSeverity;
     }
 
     public async Task<IReadOnlyList<TelegramAllowedUser>> GetTelegramAllowedUsersAsync(CancellationToken ct = default) =>

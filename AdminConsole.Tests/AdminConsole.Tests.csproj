@@ -31,6 +31,7 @@
     <ProjectReference Include="..\AdminConsole.Domain\AdminConsole.Domain.csproj" />
     <ProjectReference Include="..\AdminConsole.Infrastructure\AdminConsole.Infrastructure.csproj" />
     <ProjectReference Include="..\AdminConsole.Migration\AdminConsole.Migration.csproj" />
+    <ProjectReference Include="..\AdminConsole.Api\AdminConsole.Api.csproj" />
   </ItemGroup>
 
 </Project>

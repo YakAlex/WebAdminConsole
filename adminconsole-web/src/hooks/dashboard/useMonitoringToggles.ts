@@ -48,6 +48,7 @@ export function useMonitoringToggles(): MonitoringToggles | null {
         rdpMonitoringEnabled: true,
         zabbixMonitoringEnabled: true,
         backupMonitoringEnabled: true,
+        zabbixMinSeverity: 4,
       }
       switch (evt.service) {
         case MonitoredService.Rdp:

@@ -36,6 +36,14 @@ export function useOverviewViewModel() {
   const warnings = zabbixDisabled
     ? 0
     : data.zabbixProblems.filter((p) => p.severity === ZabbixSeverity.Average || p.severity === ZabbixSeverity.Warning).length
+  // Reachable now that the Zabbix severity threshold (Settings) can go as low
+  // as 1 (Information) — same bucketing already used by ZabbixSeveritySummary/
+  // useZabbixAlertsPageViewModel on the Zabbix Alerts page.
+  const info = zabbixDisabled
+    ? 0
+    : data.zabbixProblems.filter(
+        (p) => p.severity === ZabbixSeverity.Information || p.severity === ZabbixSeverity.NotClassified,
+      ).length
 
   // Audit step 11.3: Overview — the main landing page — had neither a
   // loading indicator nor an error banner, even though useDashboardData()
@@ -64,7 +72,7 @@ export function useOverviewViewModel() {
       axisLabels: uptimeAxisLabels,
       monitoredDevices: data.servers.length,
     },
-    attention: { criticalAlerts, warnings },
+    attention: { criticalAlerts, warnings, info },
     backups: backupsDisabled ? [] : data.backups,
     backupsSummary: { successful: backupsSuccessful, total: backupsTotal },
     recentActivity: data.logEntries,

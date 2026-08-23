@@ -1,4 +1,4 @@
-import { ShieldAlert, TriangleAlert, ChevronRight, CircleCheck } from 'lucide-react'
+import { ShieldAlert, TriangleAlert, Info, ChevronRight, CircleCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { ServiceDisabledNotice } from '@/components/ui/ServiceDisabledNotice'
@@ -7,6 +7,7 @@ import styles from './AttentionRequired.module.scss'
 export interface AttentionRequiredProps {
   criticalAlerts: number
   warnings: number
+  info: number
   /** Audit fix #4: Zabbix Monitor is disabled in Settings — the values above are already zeroed out by the caller. */
   disabled?: boolean
 }
@@ -17,11 +18,14 @@ export interface AttentionRequiredProps {
  * > 0, the badge gets a colored glow rather than a bright fill.
  *
  * Data comes from useZabbixProblems() (ZabbixProblemsUpdatedOccurred): High/Disaster
- * → critical, Average/Warning → warnings.
+ * → critical, Average/Warning → warnings, Information/NotClassified → info
+ * (bug fix, 2026-08-23: "info" is reachable now that the Zabbix severity
+ * threshold in Settings can go as low as 1 — this card used to drop those
+ * problems on the floor and could claim "All clear" while they were active).
  */
-export function AttentionRequired({ criticalAlerts, warnings, disabled }: AttentionRequiredProps) {
+export function AttentionRequired({ criticalAlerts, warnings, info, disabled }: AttentionRequiredProps) {
   const navigate = useNavigate()
-  const isClear = criticalAlerts === 0 && warnings === 0
+  const isClear = criticalAlerts === 0 && warnings === 0 && info === 0
 
   return (
     <div className={styles.card}>
@@ -48,6 +52,14 @@ export function AttentionRequired({ criticalAlerts, warnings, disabled }: Attent
             </span>
             <span className={styles.count}>{warnings}</span>
             <span className={styles.label}>Warnings</span>
+          </div>
+
+          <div className={styles.row}>
+            <span className={clsx(styles.iconBadge, styles.info, info > 0 && styles.attention)}>
+              <Info size={16} strokeWidth={1.75} />
+            </span>
+            <span className={styles.count}>{info}</span>
+            <span className={styles.label}>Informational</span>
           </div>
 
           {isClear && (

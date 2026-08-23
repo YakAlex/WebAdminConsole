@@ -36,6 +36,9 @@ public interface IAppSettingsRepository
     /// <summary>Targeted update of just the Telegram Primary Admin chat_id (claim-admin).</summary>
     Task UpdateTelegramPrimaryAdminAsync(long chatId, CancellationToken ct = default);
 
+    /// <summary>Targeted update of just the minimum Zabbix severity to poll for (Settings UI).</summary>
+    Task UpdateZabbixMinSeverityAsync(int minSeverity, CancellationToken ct = default);
+
     Task<IReadOnlyList<TelegramAllowedUser>> GetTelegramAllowedUsersAsync(CancellationToken ct = default);
 
     /// <summary>Insert or update by ChatId (approving a new user / refreshing the username on a repeat /start).</summary>

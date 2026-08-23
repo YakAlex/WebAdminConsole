@@ -270,6 +270,8 @@ export interface MonitoringToggles {
   rdpMonitoringEnabled: boolean
   zabbixMonitoringEnabled: boolean
   backupMonitoringEnabled: boolean
+  /** Minimum ZabbixSeverity to poll for (0=NotClassified .. 5=Disaster). Matches the ZabbixSeverity enum below. */
+  zabbixMinSeverity: number
 }
 
 export const MonitoredService = {

@@ -1,5 +1,6 @@
 using AdminConsole.Domain.Abstractions;
 using AdminConsole.Domain.Events;
+using AdminConsole.Domain.Models;
 using AdminConsole.Infrastructure.Configuration;
 using AdminConsole.Infrastructure.Monitoring;
 using AdminConsole.Infrastructure.Security;
@@ -34,13 +35,29 @@ public sealed class ZabbixPollerService(
 {
     private readonly MonitoringSettings _settings = settings.Value;
 
-    private static readonly int[] WatchedSeverities = [4, 5];
     private const string LogSource = "ZabbixPoller";
     private CancellationTokenSource? _wakeUpCts;
     private bool _hasLoggedStart;
 
     // Cache of the previous toggle state (null = never checked yet).
     private bool? _monitoringWasEnabled;
+
+    // Refreshed on every EvaluateMonitoringToggleAsync call (every poll cycle
+    // and every on-demand request) — unlike _monitoringWasEnabled, this is
+    // updated unconditionally, not just on a transition, so a threshold change
+    // saved in Settings is picked up without needing its own wake-up event.
+    private volatile int _currentMinSeverity = 4;
+
+    /// <summary>
+    /// Expands a minimum-severity threshold (ZabbixSeverity enum value) into
+    /// the full list of severities problem.get should fetch — e.g. 4 (High)
+    /// -&gt; [4, 5]. Clamped to the valid ZabbixSeverity range [0, 5].
+    /// </summary>
+    public static int[] BuildWatchedSeverities(int minSeverity)
+    {
+        int clamped = Math.Clamp(minSeverity, 0, 5);
+        return Enumerable.Range(clamped, 5 - clamped + 1).ToArray();
+    }
 
     // Audit fix (2026-08-22): throttling for the on-demand REST snapshot — same
     // window as the background loop (ZabbixPollIntervalSeconds).
@@ -101,6 +118,7 @@ public sealed class ZabbixPollerService(
             current = await scope.ServiceProvider.GetRequiredService<IAppSettingsRepository>().GetAsync(ct);
 
         bool enabled = current.ZabbixMonitoringEnabled;
+        _currentMinSeverity = current.ZabbixMinSeverity;
 
         if (_monitoringWasEnabled == enabled)
             return enabled; // state unchanged — stay quiet, don't spam the logs
@@ -252,21 +270,30 @@ public sealed class ZabbixPollerService(
         {
             var problems = await client.GetActiveProblemsAsync(
                 _settings.ZabbixUrl, auth,
-                WatchedSeverities, ct).ConfigureAwait(false);
+                BuildWatchedSeverities(_currentMinSeverity), ct).ConfigureAwait(false);
 
             _consecutiveAuthFailures = 0;
 
             if (_lastPollSucceeded != true)
             {
                 await mediator.Publish(AppLogEntryOccurred.Success(LogSource,
-                    $"Zabbix: connection working, found {problems.Count} active problems (severity High/Disaster)."), ct);
+                    $"Zabbix: connection working, found {problems.Count} active problems (severity {(ZabbixSeverity)_currentMinSeverity}+)."), ct);
             }
             _lastPollSucceeded = true;
 
-            await mediator.Publish(new ZabbixProblemsUpdatedOccurred(new ZabbixProblemsPayload(
+            var successPayload = new ZabbixProblemsPayload(
                 Problems: problems,
                 ErrorMessage: null,
-                FetchedAt: DateTimeOffset.Now)), ct);
+                FetchedAt: DateTimeOffset.Now);
+
+            // Keeps the on-demand REST cache (GET /api/zabbix) in sync with
+            // whatever this loop iteration just found — otherwise a page
+            // load right after a wake-up-triggered poll (e.g. a severity
+            // change) can still serve a pre-change snapshot from
+            // _onDemandThrottle's own independent timer for up to
+            // ZabbixPollIntervalSeconds.
+            await _onDemandThrottle.SetResultAsync(successPayload, ct);
+            await mediator.Publish(new ZabbixProblemsUpdatedOccurred(successPayload), ct);
 
             return;
         }
@@ -292,10 +319,13 @@ public sealed class ZabbixPollerService(
             _consecutiveAuthFailures++;
             _lastPollSucceeded = false;
 
-            await mediator.Publish(new ZabbixProblemsUpdatedOccurred(new ZabbixProblemsPayload(
+            var authFailurePayload = new ZabbixProblemsPayload(
                 Problems: [],
                 ErrorMessage: $"Zabbix rejected the token: {ex.Message}",
-                FetchedAt: DateTimeOffset.Now)), ct);
+                FetchedAt: DateTimeOffset.Now);
+
+            await _onDemandThrottle.SetResultAsync(authFailurePayload, ct);
+            await mediator.Publish(new ZabbixProblemsUpdatedOccurred(authFailurePayload), ct);
 
             if (_consecutiveAuthFailures >= MaxAuthRetries)
             {
@@ -318,10 +348,13 @@ public sealed class ZabbixPollerService(
             await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
                 $"Zabbix poll failed: {ex.Message}"), ct);
 
-            await mediator.Publish(new ZabbixProblemsUpdatedOccurred(new ZabbixProblemsPayload(
+            var failurePayload = new ZabbixProblemsPayload(
                 Problems: null,
                 ErrorMessage: $"Connection error: {ex.Message}",
-                FetchedAt: DateTimeOffset.Now)), ct);
+                FetchedAt: DateTimeOffset.Now);
+
+            await _onDemandThrottle.SetResultAsync(failurePayload, ct);
+            await mediator.Publish(new ZabbixProblemsUpdatedOccurred(failurePayload), ct);
 
             return;
         }
@@ -365,7 +398,7 @@ public sealed class ZabbixPollerService(
         try
         {
             var problems = await client.GetActiveProblemsAsync(
-                _settings.ZabbixUrl, auth, WatchedSeverities, ct).ConfigureAwait(false);
+                _settings.ZabbixUrl, auth, BuildWatchedSeverities(_currentMinSeverity), ct).ConfigureAwait(false);
             return new ZabbixProblemsPayload(problems, null, DateTimeOffset.Now);
         }
         // Audit fix (2026-08-22, on-demand throttling): the catch (Exception) below

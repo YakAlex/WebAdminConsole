@@ -50,4 +50,29 @@ public sealed class OnDemandSnapshotThrottle<T>(TimeSpan window)
             _gate.Release();
         }
     }
+
+    /// <summary>
+    /// Hands the cache a result fetched OUTSIDE GetOrRunAsync — e.g. a
+    /// background poll loop that ran early because of a wake-up event (a
+    /// Settings change), not through the on-demand REST path. Without this,
+    /// the background loop and the on-demand REST snapshot are two
+    /// independent timers: the loop can fetch fresh data seconds after a
+    /// Settings change while a page load/F5 still serves a pre-change
+    /// snapshot from this cache for up to the rest of `window`, because
+    /// nothing ever told THIS cache that anything happened.
+    /// </summary>
+    public async Task SetResultAsync(T result, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            _lastResult = result;
+            _hasResult = true;
+            _lastRunAt = DateTimeOffset.UtcNow;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 }

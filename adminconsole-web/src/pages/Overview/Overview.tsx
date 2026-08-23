@@ -41,10 +41,12 @@ export function Overview() {
               backupsTotal={vm.backupsSummary.total}
               criticalAlerts={vm.attention.criticalAlerts}
               warnings={vm.attention.warnings}
+              info={vm.attention.info}
             />
             <AttentionRequired
               criticalAlerts={vm.attention.criticalAlerts}
               warnings={vm.attention.warnings}
+              info={vm.attention.info}
               disabled={vm.toggles?.zabbixMonitoringEnabled === false}
             />
           </div>

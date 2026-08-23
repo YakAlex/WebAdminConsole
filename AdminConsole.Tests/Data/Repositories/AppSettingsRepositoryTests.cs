@@ -43,6 +43,7 @@ public sealed class AppSettingsRepositoryTests : IAsyncLifetime
         Assert.True(settings.RdpMonitoringEnabled);
         Assert.True(settings.ZabbixMonitoringEnabled);
         Assert.True(settings.BackupMonitoringEnabled);
+        Assert.Equal(4, settings.ZabbixMinSeverity);
     }
 
     [Fact]
@@ -72,7 +73,8 @@ public sealed class AppSettingsRepositoryTests : IAsyncLifetime
             BackupMonitoringEnabled = false,
             TelegramPrimaryAdminChatId = 12345,
             RdpDailyPeak = 7,
-            RdpDailyPeakDate = new DateTime(2026, 1, 1)
+            RdpDailyPeakDate = new DateTime(2026, 1, 1),
+            ZabbixMinSeverity = 2
         });
 
         var reloaded = await repo.GetAsync();
@@ -81,6 +83,41 @@ public sealed class AppSettingsRepositoryTests : IAsyncLifetime
         Assert.False(reloaded.BackupMonitoringEnabled);
         Assert.Equal(12345, reloaded.TelegramPrimaryAdminChatId);
         Assert.Equal(7, reloaded.RdpDailyPeak);
+        Assert.Equal(2, reloaded.ZabbixMinSeverity);
+    }
+
+    [Fact]
+    public async Task UpdateZabbixMinSeverityAsync_PersistsTheNewThreshold()
+    {
+        await using var scope = _provider.CreateAsyncScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IAppSettingsRepository>();
+        await repo.GetAsync(); // creates the default row (ZabbixMinSeverity = 4)
+
+        await repo.UpdateZabbixMinSeverityAsync(2);
+
+        var reloaded = await repo.GetAsync();
+        Assert.Equal(2, reloaded.ZabbixMinSeverity);
+    }
+
+    [Fact]
+    public async Task UpdateZabbixMinSeverityAsync_AndUpdateMonitoringTogglesAsync_ConcurrentlyOnDifferentFields_NeitherLosesTheOthersChange()
+    {
+        await using (var seedScope = _provider.CreateAsyncScope())
+            await seedScope.ServiceProvider.GetRequiredService<IAppSettingsRepository>().GetAsync();
+
+        await using var scopeA = _provider.CreateAsyncScope();
+        await using var scopeB = _provider.CreateAsyncScope();
+        var repoA = scopeA.ServiceProvider.GetRequiredService<IAppSettingsRepository>();
+        var repoB = scopeB.ServiceProvider.GetRequiredService<IAppSettingsRepository>();
+
+        await Task.WhenAll(
+            repoA.UpdateZabbixMinSeverityAsync(2),
+            repoB.UpdateMonitoringTogglesAsync(rdpEnabled: false, zabbixEnabled: false, backupEnabled: false));
+
+        await using var verifyScope = _provider.CreateAsyncScope();
+        var settings = await verifyScope.ServiceProvider.GetRequiredService<IAppSettingsRepository>().GetAsync();
+        Assert.Equal(2, settings.ZabbixMinSeverity);
+        Assert.False(settings.ZabbixMonitoringEnabled);
     }
 
     [Fact]

@@ -14,6 +14,7 @@ export interface SystemHealthHeroProps {
   backupsTotal: number
   criticalAlerts: number
   warnings: number
+  info: number
 }
 
 /**
@@ -31,9 +32,10 @@ export function SystemHealthHero({
   backupsTotal,
   criticalAlerts,
   warnings,
+  info,
 }: SystemHealthHeroProps) {
   const healthPercent = total > 0 ? (online / total) * 100 : 0
-  const allHealthy = hasPingData && online === total && criticalAlerts === 0 && warnings === 0
+  const allHealthy = hasPingData && online === total && criticalAlerts === 0 && warnings === 0 && info === 0
 
   return (
     <div className={styles.card}>

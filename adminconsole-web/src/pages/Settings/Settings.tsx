@@ -32,7 +32,9 @@ export function Settings() {
               zabbixEnabled={vm.toggles.zabbixMonitoringEnabled}
               rdpEnabled={vm.toggles.rdpMonitoringEnabled}
               backupEnabled={vm.toggles.backupMonitoringEnabled}
+              zabbixMinSeverity={vm.toggles.zabbixMinSeverity}
               onToggle={vm.toggleMonitoring}
+              onZabbixMinSeverityChange={vm.setZabbixMinSeverity}
               saving={vm.togglesSaving}
             />
           )}

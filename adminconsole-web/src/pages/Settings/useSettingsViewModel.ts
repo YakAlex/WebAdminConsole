@@ -98,6 +98,20 @@ export function useSettingsViewModel() {
     }
   }
 
+  const setZabbixMinSeverity = async (zabbixMinSeverity: number): Promise<boolean> => {
+    if (!toggles) return false
+    setTogglesSaving(true)
+    try {
+      setToggles(await updateMonitoringToggles({ ...toggles, zabbixMinSeverity }))
+      return true
+    } catch (err) {
+      setError(err instanceof ApiError ? err : new ApiError(0, 'Unknown error'))
+      return false
+    } finally {
+      setTogglesSaving(false)
+    }
+  }
+
   return {
     credentials,
     users,
@@ -111,5 +125,6 @@ export function useSettingsViewModel() {
     clearTelegram,
     removeUser,
     toggleMonitoring,
+    setZabbixMinSeverity,
   }
 }

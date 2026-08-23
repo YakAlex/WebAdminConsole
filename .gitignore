@@ -503,3 +503,7 @@ $RECYCLE.BIN/
 !adminconsole-web/src/components/backups/BackupJobsTable/
 !adminconsole-web/src/components/backups/BackupsSummary/
 !adminconsole-web/src/components/overview/BackupsCard/
+
+# AdminConsole — робочі нотатки superpowers (плани брейнштормінгу,
+# аудит-звіти воркдерева) — локальний робочий контекст, не джерело проєкту.
+docs/

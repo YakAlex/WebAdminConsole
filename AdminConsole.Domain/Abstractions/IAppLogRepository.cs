@@ -24,4 +24,7 @@ public interface IAppLogRepository
         DateTimeOffset? after  = null,
         string?         search = null,
         CancellationToken ct   = default);
+
+    /// <summary>Deletes every entry with Timestamp strictly older than cutoff. Returns the count removed.</summary>
+    Task<int> DeleteOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default);
 }

@@ -201,6 +201,10 @@ builder.Services.AddSingleton<INotificationHandler<MonitoringToggledOccurred>>(
 builder.Services.AddSingleton<BackupCheckEvaluator>();
 builder.Services.AddScoped<BackupMonitorJob>();
 
+// Bug fix (2026-08-23, audit Finding 6.1): AppLogEntries had no retention
+// policy — this daily job caps it at 90 days.
+builder.Services.AddScoped<AppLogRetentionJob>();
+
 // T4.12 — SLA: on-demand service (Singleton, the same UptimeTrackerService
 // instance) + a scheduled Hangfire job.
 builder.Services.AddSingleton<SlaReportService>();
@@ -255,6 +259,12 @@ var app = builder.Build();
         "sla-report-weekly",
         job => job.RunWeeklyAsync(CancellationToken.None),
         Cron.Weekly());
+
+    // Bug fix (2026-08-23, audit Finding 6.1).
+    recurringJobs.AddOrUpdate<AppLogRetentionJob>(
+        "app-log-retention",
+        job => job.RunAsync(CancellationToken.None),
+        Cron.Daily());
 }
 
 // The cron minutes-field step must be 1-59 (Cronos rejects "*/60" as

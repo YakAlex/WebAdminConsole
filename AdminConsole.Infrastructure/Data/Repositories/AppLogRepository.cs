@@ -36,4 +36,16 @@ public sealed class AppLogRepository(AdminConsoleDbContext context)
 
         return await query.OrderByDescending(e => e.Timestamp).Take(take).ToListAsync(ct);
     }
+
+    // Bug fix (2026-08-23, audit Finding 6.1): AppLogEntries had no
+    // retention policy and grew forever — every background service logs to
+    // it every cycle. ExecuteDeleteAsync (EF Core bulk delete) avoids
+    // loading however many million rows might match into memory first.
+    // Routed through the same Polly retry pipeline as SaveChangesAsync —
+    // bulk operations bypass the change tracker and SaveChangesAsync
+    // entirely, so they need their own retry wrapping.
+    public Task<int> DeleteOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default) =>
+        SqliteRetryPolicy.Pipeline.ExecuteAsync(
+            async token => await Context.AppLogEntries.Where(e => e.Timestamp < cutoff).ExecuteDeleteAsync(token),
+            ct).AsTask();
 }

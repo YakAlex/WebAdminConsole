@@ -155,11 +155,6 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<PingMonitorService
 builder.Services.AddSingleton<INotificationHandler<MaintenanceChangedOccurred>>(
     sp => sp.GetRequiredService<PingMonitorService>());
 
-// T4.7 — EventLogService (BackgroundService) + WinEventLogReader (static, no DI) + RemoteEventLogService (on-demand).
-builder.Services.AddSingleton<EventLogService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<EventLogService>());
-builder.Services.AddSingleton<RemoteEventLogService>();
-
 // T4.9 — Remote management: on-demand, without an ExecuteAsync loop (WMI
 // load only for the node currently being viewed). ResourceMonitorService/
 // RemoteResourceService (System Resources) was removed entirely on

@@ -18,7 +18,6 @@ public sealed record ZabbixCredentialsStatus(
 public sealed record TelegramCredentialsStatus(bool HasCredentials, string MaskedToken);
 
 public sealed record StoreZabbixTokenRequest(string Token);
-public sealed record StoreZabbixCredentialsRequest(string Username, string Password);
 public sealed record StoreTelegramTokenRequest(string BotToken);
 
 /// <summary>
@@ -84,11 +83,14 @@ public sealed class CredentialsController(
     public ActionResult<CredentialsStatusResponse> Get()
     {
         return Ok(new CredentialsStatusResponse(
+            // Username/password Zabbix auth was retired (2026-08-23) — API
+            // tokens are the only supported auth mode now, so these two
+            // fields are permanently fixed rather than read from CredentialStore.
             new ZabbixCredentialsStatus(
                 credentials.HasZabbixCredentials,
-                credentials.ZabbixUsesApiToken,
+                UsesApiToken: true,
                 credentials.GetZabbixTokenMasked(),
-                credentials.GetZabbix().Username),
+                Username: string.Empty),
             new TelegramCredentialsStatus(credentials.HasTelegramCredentials, credentials.GetTelegramTokenMasked())));
     }
 
@@ -112,39 +114,6 @@ public sealed class CredentialsController(
         await mediator.Publish(new CredentialsChangedOccurred(CredentialTarget.Zabbix, CredentialAction.Saved), ct);
 
         var result = await TestAndLogAsync(request.Token, ct);
-        return Ok(result);
-    }
-
-    [HttpPost("zabbix/password")]
-    public async Task<ActionResult<ZabbixTestResult>> SaveZabbixCredentials([FromBody] StoreZabbixCredentialsRequest request, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-            return BadRequest(new { error = "Username and Password are required." });
-
-        try
-        {
-            await credentials.StoreZabbixCredentialsAsync(request.Username, request.Password, ct);
-        }
-        catch (CredentialProtectionException ex)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
-        }
-
-        await mediator.Publish(new CredentialsChangedOccurred(CredentialTarget.Zabbix, CredentialAction.Saved), ct);
-
-        var url = monitoringSettings.Value.ZabbixUrl;
-        var sessionToken = string.IsNullOrWhiteSpace(url)
-            ? null
-            : await zabbixClient.LoginAsync(url, request.Username, request.Password, ct);
-
-        if (sessionToken is null)
-        {
-            const string msg = "Failed to authenticate with Zabbix — check the username/password.";
-            await mediator.Publish(AppLogEntryOccurred.Warning(ZabbixLogSource, $"Zabbix: {msg}"), ct);
-            return Ok(new ZabbixTestResult(false, null, msg));
-        }
-
-        var result = await TestAndLogAsync(sessionToken, ct);
         return Ok(result);
     }
 

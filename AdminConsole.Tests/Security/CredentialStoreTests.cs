@@ -64,24 +64,7 @@ public sealed class CredentialStoreTests : IAsyncLifetime
         await reloaded.LoadZabbixFromStoreAsync();
 
         Assert.True(reloaded.HasZabbixCredentials);
-        Assert.True(reloaded.ZabbixUsesApiToken);
-        var (username, token) = reloaded.GetZabbix();
-        Assert.Equal(string.Empty, username);
-        Assert.Equal("api-token-123", token);
-    }
-
-    [Fact]
-    public async Task StoreZabbixCredentials_UsernameAndPassword_ZabbixUsesApiToken_IsFalse()
-    {
-        await NewStore().StoreZabbixCredentialsAsync("DOMAIN\\svc", "hunter2");
-
-        var reloaded = NewStore();
-        await reloaded.LoadZabbixFromStoreAsync();
-
-        Assert.False(reloaded.ZabbixUsesApiToken);
-        var (username, token) = reloaded.GetZabbix();
-        Assert.Equal("DOMAIN\\svc", username);
-        Assert.Equal("hunter2", token);
+        Assert.Equal("api-token-123", reloaded.GetZabbixToken());
     }
 
     [Fact]

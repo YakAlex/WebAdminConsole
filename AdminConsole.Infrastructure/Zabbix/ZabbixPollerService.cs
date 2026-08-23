@@ -36,7 +36,6 @@ public sealed class ZabbixPollerService(
 
     private static readonly int[] WatchedSeverities = [4, 5];
     private const string LogSource = "ZabbixPoller";
-    private string? _sessionToken;
     private CancellationTokenSource? _wakeUpCts;
     private bool _hasLoggedStart;
 
@@ -162,12 +161,6 @@ public sealed class ZabbixPollerService(
                 await LogStartedAsync(stoppingToken);
                 _hasLoggedStart = true;
 
-                if (!credentials.ZabbixUsesApiToken)
-                {
-                    await AuthenticateAsync(stoppingToken).ConfigureAwait(false);
-                    if (_sessionToken is null && stoppingToken.IsCancellationRequested) return;
-                }
-
                 await PollAsync(stoppingToken).ConfigureAwait(false);
             }
 
@@ -208,21 +201,12 @@ public sealed class ZabbixPollerService(
                 }
 
                 // First successful wake-up after starting without credentials — log
-                // the startup ONCE (regardless of auth mode: previously this call was
-                // gated behind `!ZabbixUsesApiToken`, so with API-token auth — the very
-                // mode the admin actually uses — after saving the token via Settings
-                // NOTHING appeared in the logs until the first successful/failed poll.
-                // UX backlog #5.
+                // the startup ONCE. UX backlog #5: previously nothing appeared in
+                // the logs until the first successful/failed poll.
                 if (!_hasLoggedStart)
                 {
                     await LogStartedAsync(stoppingToken);
                     _hasLoggedStart = true;
-                }
-
-                if (!credentials.ZabbixUsesApiToken && _sessionToken is null)
-                {
-                    await AuthenticateAsync(stoppingToken).ConfigureAwait(false);
-                    if (_sessionToken is null) continue;
                 }
 
                 await PollAsync(stoppingToken).ConfigureAwait(false);
@@ -248,36 +232,6 @@ public sealed class ZabbixPollerService(
         }
     }
 
-    // ── Authentication (user/password mode only) ─────────────────────────────
-
-    private async Task AuthenticateAsync(CancellationToken ct)
-    {
-        try
-        {
-            var (username, password) = credentials.GetZabbix();
-            _sessionToken = await client.LoginAsync(
-                _settings.ZabbixUrl, username, password, ct)
-                .ConfigureAwait(false);
-
-            if (_sessionToken is null)
-            {
-                await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
-                    "Zabbix login failed — credentials removed."), ct);
-            }
-            else
-            {
-                await mediator.Publish(AppLogEntryOccurred.Success(LogSource,
-                    "Zabbix authentication successful."), ct);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "ZabbixPollerService: login exception.");
-            await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
-                $"Zabbix login exception: {ex.Message}"), ct);
-        }
-    }
-
     // ── Poll ─────────────────────────────────────────────────────────────────
 
     private const int MaxAuthRetries = 3;
@@ -291,15 +245,13 @@ public sealed class ZabbixPollerService(
 
     private async Task PollAsync(CancellationToken ct)
     {
-        bool useApiToken = credentials.ZabbixUsesApiToken;
-
-        var (_, tokenUsedForRequest) = credentials.GetZabbix();
-        string auth = useApiToken ? tokenUsedForRequest : _sessionToken ?? string.Empty;
+        var tokenUsedForRequest = credentials.GetZabbixToken();
+        string auth = tokenUsedForRequest;
 
         try
         {
             var problems = await client.GetActiveProblemsAsync(
-                _settings.ZabbixUrl, auth, useApiToken,
+                _settings.ZabbixUrl, auth,
                 WatchedSeverities, ct).ConfigureAwait(false);
 
             _consecutiveAuthFailures = 0;
@@ -325,9 +277,8 @@ public sealed class ZabbixPollerService(
         catch (ZabbixAuthException ex)
         {
             logger.LogWarning("ZabbixPollerService: auth rejected — {Msg}", ex.Message);
-            var (_, currentTokenInVault) = credentials.GetZabbix();
-            if (useApiToken
-                && !string.IsNullOrWhiteSpace(currentTokenInVault)
+            var currentTokenInVault = credentials.GetZabbixToken();
+            if (!string.IsNullOrWhiteSpace(currentTokenInVault)
                 && currentTokenInVault != tokenUsedForRequest)
             {
                 logger.LogInformation(
@@ -338,7 +289,6 @@ public sealed class ZabbixPollerService(
 
             // Do NOT delete the token — the background service has no right to erase
             // credentials. Only the user can remove the token via Settings.
-            _sessionToken = null;
             _consecutiveAuthFailures++;
             _lastPollSucceeded = false;
 
@@ -372,9 +322,6 @@ public sealed class ZabbixPollerService(
                 Problems: null,
                 ErrorMessage: $"Connection error: {ex.Message}",
                 FetchedAt: DateTimeOffset.Now)), ct);
-
-            if (!useApiToken && ex is not HttpRequestException)
-                await AuthenticateAsync(ct).ConfigureAwait(false);
 
             return;
         }
@@ -413,21 +360,12 @@ public sealed class ZabbixPollerService(
         if (!credentials.HasZabbixCredentials)
             return new ZabbixProblemsPayload(null, "Credentials are not saved (Settings → Zabbix Token).", DateTimeOffset.Now);
 
-        bool useApiToken = credentials.ZabbixUsesApiToken;
-        var (username, secret) = credentials.GetZabbix();
-        string auth = useApiToken ? secret : _sessionToken ?? string.Empty;
-
-        if (!useApiToken && string.IsNullOrEmpty(auth))
-        {
-            auth = await client.LoginAsync(_settings.ZabbixUrl, username, secret, ct).ConfigureAwait(false) ?? string.Empty;
-            if (string.IsNullOrEmpty(auth))
-                return new ZabbixProblemsPayload(null, "Failed to authenticate with Zabbix.", DateTimeOffset.Now);
-        }
+        string auth = credentials.GetZabbixToken();
 
         try
         {
             var problems = await client.GetActiveProblemsAsync(
-                _settings.ZabbixUrl, auth, useApiToken, WatchedSeverities, ct).ConfigureAwait(false);
+                _settings.ZabbixUrl, auth, WatchedSeverities, ct).ConfigureAwait(false);
             return new ZabbixProblemsPayload(problems, null, DateTimeOffset.Now);
         }
         // Audit fix (2026-08-22, on-demand throttling): the catch (Exception) below
@@ -452,15 +390,12 @@ public sealed class ZabbixPollerService(
 
     private async Task LogStartedAsync(CancellationToken ct)
     {
-        bool useApiToken = credentials.ZabbixUsesApiToken;
         logger.LogInformation(
-            "ZabbixPollerService started. Auth: {Mode}. Interval: {Interval}s.",
-            useApiToken ? "API Token" : "User/Password",
+            "ZabbixPollerService started. Auth: API Token. Interval: {Interval}s.",
             _settings.ZabbixPollIntervalSeconds);
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
-            $"Zabbix poller started " +
-            $"({(useApiToken ? "API token" : "user/password")} auth). " +
+            $"Zabbix poller started (API token auth). " +
             $"Polling every {_settings.ZabbixPollIntervalSeconds}s."), ct);
     }
 }

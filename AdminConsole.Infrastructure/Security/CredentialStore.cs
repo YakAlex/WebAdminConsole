@@ -39,7 +39,6 @@ public sealed class CredentialStore
     private readonly IDataProtector       _protector;
 
     private string? _zabbixToken;
-    private string? _zabbixUsername;
     private string? _telegramToken;
     private readonly object _lock = new();
 
@@ -64,15 +63,9 @@ public sealed class CredentialStore
         get { lock (_lock) return !string.IsNullOrWhiteSpace(_zabbixToken); }
     }
 
-    public bool ZabbixUsesApiToken
+    public string GetZabbixToken()
     {
-        get { lock (_lock) return string.IsNullOrWhiteSpace(_zabbixUsername) &&
-                                  !string.IsNullOrWhiteSpace(_zabbixToken); }
-    }
-
-    public (string Username, string Token) GetZabbix()
-    {
-        lock (_lock) return (_zabbixUsername ?? string.Empty, _zabbixToken ?? string.Empty);
+        lock (_lock) return _zabbixToken ?? string.Empty;
     }
 
     public async Task LoadZabbixFromStoreAsync(CancellationToken ct = default)
@@ -80,40 +73,20 @@ public sealed class CredentialStore
         var cred = await WithRepositoryAsync(r => r.GetAsync(ZabbixTarget, ct));
         if (cred is null) return;
 
-        lock (_lock)
-        {
-            _zabbixUsername = cred.Username;
-            _zabbixToken    = Unprotect(cred.ProtectedSecret);
-        }
+        lock (_lock) _zabbixToken = Unprotect(cred.ProtectedSecret);
     }
 
     public async Task StoreZabbixTokenAsync(string apiToken, CancellationToken ct = default)
     {
         lock (_lock)
         {
-            _zabbixUsername           = string.Empty;
             _zabbixToken              = apiToken;
             UserCancelledZabbixPrompt = false;
         }
 
         await WithRepositoryAsync(r => r.UpsertAsync(new StoredCredential
         {
-            Target = ZabbixTarget, Username = string.Empty, ProtectedSecret = Protect(apiToken)
-        }, ct));
-    }
-
-    public async Task StoreZabbixCredentialsAsync(string username, string password, CancellationToken ct = default)
-    {
-        lock (_lock)
-        {
-            _zabbixUsername           = username;
-            _zabbixToken              = password;
-            UserCancelledZabbixPrompt = false;
-        }
-
-        await WithRepositoryAsync(r => r.UpsertAsync(new StoredCredential
-        {
-            Target = ZabbixTarget, Username = username, ProtectedSecret = Protect(password)
+            Target = ZabbixTarget, Username = null, ProtectedSecret = Protect(apiToken)
         }, ct));
     }
 
@@ -121,7 +94,6 @@ public sealed class CredentialStore
     {
         lock (_lock)
         {
-            _zabbixUsername = null;
             _zabbixToken    = null;
             _userCancelledZabbixPrompt = false;
         }

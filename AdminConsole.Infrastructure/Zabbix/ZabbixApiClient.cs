@@ -6,9 +6,10 @@ using AdminConsole.Domain.Models;
 namespace AdminConsole.Infrastructure.Zabbix;
 
 /// <summary>
-/// Thin JSON-RPC 2.0 client for the Zabbix API.
-/// Supports both API-token auth (Zabbix 5.4+) and
-/// user/password session-token auth (older versions).
+/// Thin JSON-RPC 2.0 client for the Zabbix API. API-token auth only
+/// (Zabbix 5.4+) — username/password session-token auth was retired
+/// 2026-08-23 (never reachable from the UI; API tokens are the modern,
+/// secure standard).
 ///
 /// All methods are async and allocate minimally.
 /// This class is stateless except for the injected HttpClient.
@@ -21,27 +22,6 @@ public sealed class ZabbixApiClient(HttpClient http)
     {
         PropertyNameCaseInsensitive = true
     };
-
-    // ── Authentication ────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Authenticates with username + password and returns a session token.
-    /// Used for Zabbix versions older than 5.4 that do not support API tokens.
-    /// Returns null if authentication fails.
-    /// </summary>
-    public async Task<string?> LoginAsync(
-        string url, string user, string password,
-        CancellationToken ct = default)
-    {
-        var request = BuildRequest("user.login", new JsonObject
-        {
-            ["username"] = user,
-            ["password"] = password
-        });
-
-        var response = await PostAsync(url, request, ct).ConfigureAwait(false);
-        return response?["result"]?.GetValue<string>();
-    }
 
     // ── Connection test ───────────────────────────────────────────────────────
 
@@ -106,13 +86,11 @@ public sealed class ZabbixApiClient(HttpClient http)
 
     /// <summary>
     /// Fetches active problems filtered to the given severities.
-    /// auth: API token string (Zabbix 5.4+ set in Authorization header),
-    ///       OR a session token obtained from LoginAsync.
+    /// auth: API token string, set in the Authorization header (Zabbix 5.4+).
     /// </summary>
     public async Task<List<ZabbixProblem>> GetActiveProblemsAsync(
         string  url,
         string  auth,
-        bool    useApiToken,
         int[]   severities,
         CancellationToken ct = default)
     {
@@ -128,7 +106,7 @@ public sealed class ZabbixApiClient(HttpClient http)
         };
 
         var request  = BuildRequest("problem.get", parameters, auth);
-        var response = await PostAsync(url, request, ct, useApiToken ? auth : null).ConfigureAwait(false);
+        var response = await PostAsync(url, request, ct, auth).ConfigureAwait(false);
         if (response is null) return [];
 
         // ── Check whether Zabbix returned an error in the response body ──────────
@@ -266,7 +244,9 @@ public sealed class ZabbixApiClient(HttpClient http)
 /// <summary>
 /// Thrown by ZabbixApiClient when Zabbix returns an authentication error
 /// in the response body (HTTP 200 + error field) or HTTP 401/403.
-/// Caught in ZabbixPollerService.PollAsync to request a new token.
+/// Caught in ZabbixPollerService.PollAsync — logs a warning and asks the
+/// admin to update the token in Settings (only a human can fix an invalid
+/// API token; the poller has no credentials of its own to fall back to).
 /// Moved out of a nested class in ZabbixPollerService into its own file —
 /// avoids the circular dependency of "the client throws an exception defined in the poller".
 /// </summary>

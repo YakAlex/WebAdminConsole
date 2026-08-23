@@ -959,11 +959,20 @@ The generated `Up()` method will contain an `AddColumn` call for `Step` and a `C
             // before this schema change, seed all four new per-step markers
             // as completed too — otherwise an already-migrated production
             // database would look like it needs to re-run every step from
-            // scratch the next time the tool is invoked.
+            // scratch the next time the tool is invoked. SQLite has no "AS
+            // alias(column-name)" derived-table syntax (unlike Postgres/
+            // standard SQL — confirmed the hard way: it raises 'near "(":
+            // syntax error') — the step names are named via the SELECT
+            // itself instead of a VALUES(...) table alias.
             migrationBuilder.Sql("""
                 INSERT INTO MigrationMarker (Step, CompletedAtUtc)
                 SELECT v.step, m.CompletedAtUtc
-                FROM (VALUES ('Downtime'), ('Maintenance'), ('Backups'), ('UserSettings')) AS v(step), MigrationMarker m
+                FROM (
+                    SELECT 'Downtime' AS step
+                    UNION ALL SELECT 'Maintenance'
+                    UNION ALL SELECT 'Backups'
+                    UNION ALL SELECT 'UserSettings'
+                ) AS v, MigrationMarker m
                 WHERE m.Step IS NULL AND m.CompletedAtUtc IS NOT NULL;
                 """);
 ```

@@ -122,6 +122,50 @@ public sealed class MigrationRunnerTests : IAsyncLifetime
         Assert.Equal(2, await db.TelegramAllowedUsers.CountAsync());
     }
 
+    [Fact]
+    public async Task PartialCompletion_AppSettingsAlreadyMigrated_SurvivesAdminChangeOnRetry()
+    {
+        // Simulate: everything except Backups completed on an earlier,
+        // interrupted run (Downtime/Maintenance/UserSettings all marked done).
+        await using (var scope = _provider.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AdminConsoleDbContext>();
+            db.MigrationMarkers.AddRange(
+                new AdminConsole.Infrastructure.Data.Entities.MigrationMarker { Step = "Downtime", CompletedAtUtc = DateTimeOffset.UtcNow },
+                new AdminConsole.Infrastructure.Data.Entities.MigrationMarker { Step = "Maintenance", CompletedAtUtc = DateTimeOffset.UtcNow },
+                new AdminConsole.Infrastructure.Data.Entities.MigrationMarker { Step = "UserSettings", CompletedAtUtc = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        // The admin, now using the live app after the "crash", flips a
+        // toggle manually — deliberately the OPPOSITE of the legacy
+        // fixture's "RdpMonitoringEnabled": false.
+        await using (var scope = _provider.CreateAsyncScope())
+        {
+            var appSettings = scope.ServiceProvider.GetRequiredService<AdminConsole.Domain.Abstractions.IAppSettingsRepository>();
+            var current = await appSettings.GetAsync();
+            current.RdpMonitoringEnabled = true;
+            await appSettings.SaveAsync(current);
+        }
+
+        await using (var scope = _provider.CreateAsyncScope())
+        {
+            var runner = scope.ServiceProvider.GetRequiredService<MigrationRunner>();
+            var summary = await runner.RunAsync(Options);
+
+            Assert.False(summary.AlreadyCompleted);   // Backups still ran — not everything was done
+            Assert.False(summary.AppSettingsMigrated); // UserSettings step was correctly SKIPPED this time
+            Assert.Equal(0, summary.DowntimeRecords);
+            Assert.Equal(0, summary.MaintenanceWindows);
+            Assert.Equal(2, summary.BackupCheckStates); // the one step that hadn't run yet
+        }
+
+        await using var verifyScope = _provider.CreateAsyncScope();
+        var verifyDb = verifyScope.ServiceProvider.GetRequiredService<AdminConsoleDbContext>();
+        var settings = await verifyDb.AppSettings.SingleAsync();
+        Assert.True(settings.RdpMonitoringEnabled); // the admin's manual change survived — NOT reverted to the legacy "false"
+    }
+
     private void WriteFixtures()
     {
         // ── uptime: two monthly files, one duplicate record between them ────

@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { Server, RotateCw, Power, MonitorUp, Radar, Wrench } from 'lucide-react'
+import { Server, RotateCw, Power, Radar, Wrench } from 'lucide-react'
 import clsx from 'clsx'
 import { StatusDot, type StatusTone } from '@/components/ui/StatusDot'
 import { Modal } from '@/components/ui/Modal'
 import { PingStatus, ServerType, type MaintenanceWindow } from '@/lib/api/types'
 import { formatClockWithSeconds } from '@/lib/format'
-import { restartServer, shutdownServer, rdpFileUrl } from '@/lib/api/endpoints'
+import { restartServer, shutdownServer } from '@/lib/api/endpoints'
 import type { HostRow } from '@/hooks/dashboard/pingMath'
 import { ContinuousPingModal } from '@/components/ping/ContinuousPingModal/ContinuousPingModal'
 import { MaintenanceModal } from '@/components/ping/MaintenanceModal/MaintenanceModal'
@@ -72,7 +72,7 @@ function findActiveWindow(host: HostRow, windows: MaintenanceWindow[]): Maintena
 
 /**
  * Brief §26 (Ping): "Hosts table" — all servers with status, IP, response time.
- * Priority 3, #3.1: Actions column — Restart/Shutdown/RDP (Windows only,
+ * Priority 3, #3.1: Actions column — Restart/Shutdown (Windows only,
  * same principle as WPF PingResultViewModel.IsWindows) + Continuous
  * Ping (all device types). Audit fix (2026-08-22, #1): +Maintenance
  * toggle — also for all device types (this is Ping/Backup alerting, not
@@ -175,14 +175,6 @@ export function PingHostsTable({ hosts, maintenanceWindows }: PingHostsTableProp
                     </button>
                     {host.type === ServerType.Windows && (
                       <>
-                        <a
-                          className={styles.actionButton}
-                          href={rdpFileUrl(host.ip)}
-                          title="Start RDP session"
-                          aria-label={`Start RDP session to ${host.name}`}
-                        >
-                          <MonitorUp size={14} strokeWidth={1.75} />
-                        </a>
                         <button
                           type="button"
                           className={styles.actionButton}

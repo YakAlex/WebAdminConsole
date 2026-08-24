@@ -33,9 +33,6 @@ export const restartServer = (ip: string) => apiPost<ServerActionResult>(`/api/s
 
 export const shutdownServer = (ip: string) => apiPost<ServerActionResult>(`/api/servers/${encodeURIComponent(ip)}/shutdown`)
 
-/** URL for the .rdp file — used directly as href="" (same origin, Windows auth flows through cookie/negotiate the same as regular navigation). */
-export const rdpFileUrl = (ip: string) => `/api/servers/${encodeURIComponent(ip)}/rdp-file`
-
 // ── SLA Report (Priority 3, #3.2) ────────────────────────────────────────────
 
 export interface SlaReportQuery {

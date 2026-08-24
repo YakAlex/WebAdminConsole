@@ -189,7 +189,6 @@ A single Overview page rolls up system health, ping success rate, live uptime pe
 ### Ping & Server Management
 A dual-cadence background loop pings every configured host (a faster recovery loop re-checks only currently-offline hosts, so recovery is detected quickly without hammering healthy servers). From the same table, Windows hosts support:
 - **Restart / Shutdown** — a WMI call against the remote machine, confirmed through a modal, with no interactive process spawned on the server (the service runs headless, so there's no desktop session to open a window on).
-- **RDP** — generates a ready-to-open `.rdp` file on the fly (target address prefilled, no stored credentials — Windows prompts for them locally), the closest thing to a one-click launch a browser can safely do.
 - **Continuous ping** — an in-browser modal that polls the live ping endpoint once a second for as long as it's open, replacing the desktop app's ability to spawn its own terminal window.
 
 ### RDP Sessions
@@ -467,7 +466,7 @@ Everything the service needs to run lives in one `appsettings.json`, deployed al
 }
 ```
 
-- **`Servers`** drives every per-host feature — Ping, Uptime, and which action buttons appear: `"Type": "Windows"` unlocks Restart/Shutdown/RDP, while `"Linux"` and `"Network"` entries get ping-only monitoring. Only servers placed in the `"Terminal Servers"` group are polled for RDP sessions.
+- **`Servers`** drives every per-host feature — Ping, Uptime, and which action buttons appear: `"Type": "Windows"` unlocks Restart/Shutdown, while `"Linux"` and `"Network"` entries get ping-only monitoring. Only servers placed in the `"Terminal Servers"` group are polled for RDP sessions.
 - **`BackupChecks`** — one entry per job. `Path` accepts either a local or a UNC path; `DiffPattern` can be left as an empty string for a server that has no differential backups to track.
 - **No credentials live in this file.** The Zabbix API token and the Telegram bot token are entered through the web **Settings** page after the service is already running, and are encrypted at rest with the Windows Data Protection API (DPAPI-NG) before being written to SQLite — `appsettings.json` never sees them. The Zabbix minimum-severity threshold is likewise a runtime setting, changed from the same Settings page, not a config file entry.
 
@@ -515,14 +514,13 @@ Configuration (`appsettings.json`) lives outside the publish artifact by design 
 
 ## API Reference
 
-There is no Swagger/OpenAPI UI — `AddEndpointsApiExplorer`/`AddSwaggerGen` were deliberately never wired into `Program.cs` for an API with exactly one consumer (this repo's own SPA). The table below is the complete surface: **29 endpoints** across 12 controllers, every one gated by the same `[Authorize(Policy = "Viewer")]` policy from `AdminConsoleControllerBase` (Windows Integrated Auth + AD group membership — see [Security & Architecture](#security--architecture)). Default routing is `api/[controller]` (the controller class name, minus `Controller`, lowercased) unless a route override is noted.
+There is no Swagger/OpenAPI UI — `AddEndpointsApiExplorer`/`AddSwaggerGen` were deliberately never wired into `Program.cs` for an API with exactly one consumer (this repo's own SPA). The table below is the complete surface: **28 endpoints** across 12 controllers, every one gated by the same `[Authorize(Policy = "Viewer")]` policy from `AdminConsoleControllerBase` (Windows Integrated Auth + AD group membership — see [Security & Architecture](#security--architecture)). Default routing is `api/[controller]` (the controller class name, minus `Controller`, lowercased) unless a route override is noted.
 
 | Method & Path | Controller | Purpose |
 |---|---|---|
 | `GET /api/servers` | `ServersController` | Configured server list (from `appsettings.json`) |
 | `POST /api/servers/{ip}/restart` | `ServersController` | WMI restart — Windows servers only |
 | `POST /api/servers/{ip}/shutdown` | `ServersController` | WMI shutdown — Windows servers only |
-| `GET /api/servers/{ip}/rdp-file` | `ServersController` | Downloads a ready-to-open `.rdp` file, no stored credentials |
 | `GET /api/ping` | `PingController` | On-demand ping sweep of every server (throttled — see `PingMonitorService`) |
 | `GET /api/downtime` | `DowntimeController` | Full incident history |
 | `DELETE /api/downtime?serverIp=&fellAt=` | `DowntimeController` | Deletes one **resolved** incident by natural key |
@@ -701,6 +699,7 @@ A representative slice of recent work — not an exhaustive commit-by-commit log
 - The unused Event Log monitoring feature removed (fully built, wired, and registered — but with zero real consumers on either the backend controller layer or the frontend).
 - Dead SignalR broadcast legs and an unreachable JSON SLA endpoint removed.
 - `POST /api/telegramusers` (an unreachable Add endpoint — allowed users are only ever added through the Telegram approval flow) removed.
+- The Ping page's **"Start RDP session"** action removed entirely (frontend button, `GET /api/servers/{ip}/rdp-file`, and the `.rdp`-file-generation code behind it) — it only ever downloaded a `.rdp` file for the browser's own RDP client to open, not something the product wants to keep going forward. The unrelated **RDP Sessions** monitoring page/feature (`quser`-based session tracking) is untouched.
 - `UptimeTrackerService.Handle(PingBatchResultOccurred)` no longer allowed a DB failure to propagate back into `PingMonitorService`'s loop guard and halt both ping loops together.
 
 ---
@@ -726,7 +725,7 @@ One controller per domain area, all reachable under `/api/*` and gated by the sa
 
 | Controller | Responsibility |
 |---|---|
-| `ServersController` | Configured server list + Restart/Shutdown/RDP-file actions |
+| `ServersController` | Configured server list + Restart/Shutdown actions |
 | `PingController` | On-demand ping snapshot (REST fallback behind the SignalR stream) |
 | `DowntimeController` | Downtime/incident history — list, delete a record, bulk-clear resolved incidents |
 | `SlaController` | On-demand SLA report as a self-contained HTML document |

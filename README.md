@@ -131,6 +131,8 @@ Not every recurring piece of work belongs on the same clock:
 
 **Single-row settings, protected against a startup race.** `AppSettings` is a one-row table with no unique constraint beyond its autoincrement key. At process start, `RdpMonitorService` and `ZabbixPollerService` each open their own `DbContext` scope and can call `GetAsync` at nearly the same instant — without protection, both could miss-see an empty table and both insert their own row. A static `SemaphoreSlim` gate (`AppSettingsRepository.CreateGate`) serializes just this path, with a re-check *inside* the lock in case the other caller already won the race while this one was waiting.
 
+**`problem.get` has never supported a `selectHosts` sub-select — resolving a Zabbix problem's host takes a second API call.** An audit (2026-08-24) traced a bug where every Zabbix problem showed `HostName: "Unknown"` — even ones on live, currently-enabled hosts — down to a request parameter that Zabbix's own API reference confirms was never valid for this method, in either the deployed version (6.2) or the current one (7.0): it was silently ignored server-side rather than erroring. The fix resolves each problem's `objectid` (the trigger that raised it) against a second `trigger.get` call, which *does* support `selectHosts` — the same join `problem` → `triggers` → `hosts` a raw SQL query would need. The same investigation also explained a second, unrelated-looking symptom: dozens of years-old "phantom" alerts on the Zabbix Alerts page that never appeared in Zabbix's own UI. Those belonged to hosts — and in three cases, individual *triggers* — an admin had disabled; Zabbix never auto-closes a problem once nothing is left to evaluate it, and the native UI silently filters both cases while the raw API doesn't. `GetActiveProblemsAsync` now excludes a problem only when Zabbix positively confirms host or trigger status `"1"` (disabled), failing **open** (still showing it) whenever that status can't be resolved at all — hiding a real active problem is a worse failure mode than occasionally showing one that's actually fine.
+
 ### Domain Events (MediatR)
 
 Every background service communicates exclusively through typed `INotificationHandler<T>` subscriptions — there is no direct reference from a producer to a consumer anywhere in this list:
@@ -197,6 +199,8 @@ Polls terminal servers via `quser` under the service's own Kerberos identity (no
 ### Zabbix Integration
 Requires **Zabbix 6.0 or newer** — authentication is Bearer-token only (legacy username/password and pre-6.0 session-token auth are not supported). Polls the Zabbix API for active problems on a configurable interval, authenticating with an API token (entered and tested directly from Settings) with automatic backoff on repeated auth failures. The **minimum severity threshold** is itself configurable — a slider in Settings lets an admin pick any level from Warning up through Disaster, and only problems at or above that threshold are fetched and counted. The Overview page's **Zabbix Monitor** card shows live Critical / Warning / Info counts side by side, plus a segmented, self-relative composition bar underneath — each severity's share of the *current* total, labeled with a percentage, rather than a gauge measured against a hardcoded "normal" ceiling (problem volume varies too much for that to mean anything).
 
+The Zabbix Alerts page mirrors what Zabbix's own UI would show, not just what its API returns verbatim: problems on hosts or individual triggers an admin has disabled are excluded (see [Key Architectural Decisions](#key-architectural-decisions)), each row shows whether it's already **acknowledged** in Zabbix, and the summary card notes **"+N hidden (disabled host or check)"** whenever the exclusion filter actually removed something — transparency instead of a silent, unexplained gap between what AdminConsole and Zabbix's own dashboard show.
+
 ### Backup Monitoring
 Evaluates each configured backup job against file age and a rolling size baseline, with anti-flapping so a single bad read doesn't flip a job's status. A job can independently track a Full and a Differential pattern, each with its own max-age threshold. Surfaces per-job size history, total backup size across the fleet, and pushes Telegram alerts the moment a job goes Stale or Missing.
 
@@ -247,6 +251,8 @@ The daily peak-concurrent-sessions counter (`_globalDailyPeak`) is computed and 
 ### ZabbixPollerService
 
 Authenticates with an API token only (legacy username/password auth was removed entirely). `_currentMinSeverity` (a `volatile int`, refreshed on every toggle check) drives `BuildWatchedSeverities`, which expands a single threshold into the full list of severities to request from the Zabbix API — e.g. a threshold of `4` (High) becomes `[4, 5]` (High + Disaster). Shares the same Pull-before-credentials toggle pattern and cancel-and-restart wake-up mechanism as `RdpMonitorService` (see [Key Architectural Decisions](#key-architectural-decisions)).
+
+`ZabbixApiClient.GetActiveProblemsAsync` makes two API calls, not one: `problem.get` for the raw problem list (`objectid`, severity, clock, acknowledged — no host data, since that parameter doesn't exist for this method), then a single batched `trigger.get` call across every distinct `objectid` to resolve host name and status, and the trigger's own status, in one round trip rather than one per problem. The method returns both the filtered problem list and a `HiddenCount` of how many were excluded as confirmed-disabled, so the frontend can show that count instead of a silent gap (see [Key Architectural Decisions](#key-architectural-decisions)).
 
 ### BackupMonitorJob / BackupCheckEvaluator
 
@@ -320,7 +326,7 @@ A dedicated audit pass (2026-08-23) targeted exactly one failure class across ev
 
 ### Test Suite
 
-**104 tests across 25 files**, using **xUnit** with **coverlet.collector** for coverage, organized to mirror the solution layout: `Controllers/`, `Data/`, `Migration/`, `Monitoring/`, `Reports/`, `Security/`, `Telegram/`, `Zabbix/`. Coverage leans toward pure-logic and integration-style tests that don't require a live Windows/AD environment to run — WMI calls, `quser` invocation, and Windows Integrated Authentication itself are inherently untestable outside that environment and are exercised manually against real infrastructure instead.
+**114 tests across 26 files**, using **xUnit** with **coverlet.collector** for coverage, organized to mirror the solution layout: `Controllers/`, `Data/`, `Migration/`, `Monitoring/`, `Reports/`, `Security/`, `Telegram/`, `Zabbix/`. Coverage leans toward pure-logic and integration-style tests that don't require a live Windows/AD environment to run — WMI calls, `quser` invocation, and Windows Integrated Authentication itself are inherently untestable outside that environment and are exercised manually against real infrastructure instead.
 
 ```powershell
 dotnet test
@@ -686,6 +692,7 @@ A representative slice of recent work — not an exhaustive commit-by-commit log
 - **Telegram HTML rich-text formatting** — backup and maintenance messages moved from plain-text/Markdown escaping to proper `parse_mode=HTML`, with a dedicated formatter and tag-safe pagination.
 - **90-day `AppLogEntries` retention job** and a hard upper bound on the Logs page's `take` query parameter.
 - **Reliability hardening pass** across every `BackgroundService` and `INotificationHandler` — see [Reliability Hardening](#reliability-hardening).
+- **Acknowledged badge and a hidden-problem count on Zabbix Alerts** — each row shows whether Zabbix already has the problem acknowledged, and the summary card notes "+N hidden (disabled host or check)" whenever the disabled-host/trigger filter actually removed something, instead of a silent, unexplained gap against Zabbix's own dashboard.
 
 ### Architectural & Reliability Improvements
 - Central Package Management with transitive pinning enabled (`CentralPackageTransitivePinningEnabled`), closing a real version-drift incident between `AdminConsole.Api` and `AdminConsole.Infrastructure`/`Migration`.
@@ -693,6 +700,8 @@ A representative slice of recent work — not an exhaustive commit-by-commit log
 - The EF Core migration tool now tracks completion **per step** rather than behind one global marker.
 - `AuthContext` on the frontend recovers from a transient authorization denial instead of latching permanently into Access Denied.
 - `MaintenanceRepository.UpsertAsync` serialized to close a concurrent-insert race.
+- Zabbix problem-to-host resolution rewritten as two API calls instead of one — `problem.get` (which has never supported a `selectHosts` sub-select, confirmed against Zabbix's own reference for both 6.2 and 7.0) followed by a single batched `trigger.get` across every distinct trigger ID. See [Key Architectural Decisions](#key-architectural-decisions).
+- Zabbix problems belonging to a disabled host **or** an individually disabled trigger are now excluded, matching what Zabbix's own web UI already hides — failing open (still shown) whenever status can't be confirmed either way.
 
 ### Fixed Bugs / Dead Code Removed
 - Legacy Zabbix username/password authentication removed entirely — API-token auth only.
@@ -701,6 +710,7 @@ A representative slice of recent work — not an exhaustive commit-by-commit log
 - `POST /api/telegramusers` (an unreachable Add endpoint — allowed users are only ever added through the Telegram approval flow) removed.
 - The Ping page's **"Start RDP session"** action removed entirely (frontend button, `GET /api/servers/{ip}/rdp-file`, and the `.rdp`-file-generation code behind it) — it only ever downloaded a `.rdp` file for the browser's own RDP client to open, not something the product wants to keep going forward. The unrelated **RDP Sessions** monitoring page/feature (`quser`-based session tracking) is untouched.
 - `UptimeTrackerService.Handle(PingBatchResultOccurred)` no longer allowed a DB failure to propagate back into `PingMonitorService`'s loop guard and halt both ping loops together.
+- **"Host: Unknown" on every Zabbix problem, and dozens of years-old phantom alerts with no trace in Zabbix's own UI** — both traced to the same two root causes (a nonexistent API parameter, and no exclusion for disabled hosts/triggers) and fixed together; see the Zabbix architectural-decisions entry above.
 
 ---
 
@@ -712,7 +722,7 @@ AdminConsole_v3/
 ├── AdminConsole.Domain/           Domain models, MediatR events, repository interfaces
 ├── AdminConsole.Infrastructure/   Background services, EF Core, Telegram bot, WMI/remote management
 ├── AdminConsole.Migration/        One-time legacy-data import + EF Core migration runner
-├── AdminConsole.Tests/            xUnit test suite (104 tests / 25 files)
+├── AdminConsole.Tests/            xUnit test suite (114 tests / 26 files)
 ├── adminconsole-web/              React + TypeScript + Vite frontend
 ├── Directory.Packages.props       Central Package Management — every NuGet version, pinned once
 ├── Directory.Build.props          Solution-wide MSBuild properties (runtime pack pinning)

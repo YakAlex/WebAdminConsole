@@ -31,6 +31,9 @@ AdminConsole v3 is the full rewrite of a legacy WPF desktop application into a *
 - [Local Development](#local-development)
 - [Configuration (`appsettings.json`)](#configuration-appsettingsjson)
 - [Deployment / Release Pipeline](#deployment--release-pipeline)
+- [API Reference](#api-reference)
+- [Database Backup & Restore](#database-backup--restore)
+- [Troubleshooting](#troubleshooting)
 - [Logging](#logging)
 - [Dependencies](#dependencies)
 - [Known Limitations](#known-limitations)
@@ -193,7 +196,7 @@ A dual-cadence background loop pings every configured host (a faster recovery lo
 Polls terminal servers via `quser` under the service's own Kerberos identity (no credentials stored or prompted per poll), tracks session state transitions (connected / disconnected / resumed), daily peak concurrent sessions, and last-logout history. Only servers placed in the `"Terminal Servers"` group are polled — everything else is skipped rather than probed and ignored.
 
 ### Zabbix Integration
-Polls the Zabbix API for active problems on a configurable interval, authenticating with an API token (entered and tested directly from Settings) with automatic backoff on repeated auth failures. The **minimum severity threshold** is itself configurable — a slider in Settings lets an admin pick any level from Warning up through Disaster, and only problems at or above that threshold are fetched and counted. The Overview page's **Zabbix Monitor** card shows live Critical / Warning / Info counts side by side, plus a segmented, self-relative composition bar underneath — each severity's share of the *current* total, labeled with a percentage, rather than a gauge measured against a hardcoded "normal" ceiling (problem volume varies too much for that to mean anything).
+Requires **Zabbix 6.0 or newer** — authentication is Bearer-token only (legacy username/password and pre-6.0 session-token auth are not supported). Polls the Zabbix API for active problems on a configurable interval, authenticating with an API token (entered and tested directly from Settings) with automatic backoff on repeated auth failures. The **minimum severity threshold** is itself configurable — a slider in Settings lets an admin pick any level from Warning up through Disaster, and only problems at or above that threshold are fetched and counted. The Overview page's **Zabbix Monitor** card shows live Critical / Warning / Info counts side by side, plus a segmented, self-relative composition bar underneath — each severity's share of the *current* total, labeled with a percentage, rather than a gauge measured against a hardcoded "normal" ceiling (problem volume varies too much for that to mean anything).
 
 ### Backup Monitoring
 Evaluates each configured backup job against file age and a rolling size baseline, with anti-flapping so a single bad read doesn't flip a job's status. A job can independently track a Full and a Differential pattern, each with its own max-age threshold. Surfaces per-job size history, total backup size across the fleet, and pushes Telegram alerts the moment a job goes Stale or Missing.
@@ -510,6 +513,99 @@ Configuration (`appsettings.json`) lives outside the publish artifact by design 
 
 ---
 
+## API Reference
+
+There is no Swagger/OpenAPI UI — `AddEndpointsApiExplorer`/`AddSwaggerGen` were deliberately never wired into `Program.cs` for an API with exactly one consumer (this repo's own SPA). The table below is the complete surface: **29 endpoints** across 12 controllers, every one gated by the same `[Authorize(Policy = "Viewer")]` policy from `AdminConsoleControllerBase` (Windows Integrated Auth + AD group membership — see [Security & Architecture](#security--architecture)). Default routing is `api/[controller]` (the controller class name, minus `Controller`, lowercased) unless a route override is noted.
+
+| Method & Path | Controller | Purpose |
+|---|---|---|
+| `GET /api/servers` | `ServersController` | Configured server list (from `appsettings.json`) |
+| `POST /api/servers/{ip}/restart` | `ServersController` | WMI restart — Windows servers only |
+| `POST /api/servers/{ip}/shutdown` | `ServersController` | WMI shutdown — Windows servers only |
+| `GET /api/servers/{ip}/rdp-file` | `ServersController` | Downloads a ready-to-open `.rdp` file, no stored credentials |
+| `GET /api/ping` | `PingController` | On-demand ping sweep of every server (throttled — see `PingMonitorService`) |
+| `GET /api/downtime` | `DowntimeController` | Full incident history |
+| `DELETE /api/downtime?serverIp=&fellAt=` | `DowntimeController` | Deletes one **resolved** incident by natural key |
+| `DELETE /api/downtime/resolved` | `DowntimeController` | Bulk-clears every resolved incident |
+| `GET /api/sla/html?from=&to=&group=&server=` | `SlaController` | On-demand SLA report as a self-contained HTML document |
+| `GET /api/maintenance` | `MaintenanceController` | Active maintenance windows |
+| `POST /api/maintenance` | `MaintenanceController` | Starts a window (`ServerIp` XOR `TargetGroup`, optional duration/reason) |
+| `DELETE /api/maintenance?key=` | `MaintenanceController` | Ends a window early, by its `ServerIp`/`"group:{name}"` key |
+| `GET /api/rdp-sessions` | `RdpSessionsController` | Live `quser` snapshot — **note:** this controller carries an explicit `[Route("api/rdp-sessions")]` override; the default `[controller]` convention would resolve to `api/RdpSessions` with no hyphen, which the frontend never called (a real 404 this repo hit once) |
+| `GET /api/zabbix` | `ZabbixController` | Live Zabbix active-problems snapshot |
+| `GET /api/backups` | `BackupsController` | Current backup check states |
+| `GET /api/logs?take=&before=&after=&search=` | `LogsController` | Paginated log query, `take` clamped to 5000 |
+| `GET /api/monitoring/toggles` | `MonitoringController` | Current Ping/Zabbix/Backup toggle + Zabbix minimum-severity state |
+| `PUT /api/monitoring/toggles` | `MonitoringController` | Updates toggles/severity; `ZabbixMinSeverity` validated to `1–5` server-side |
+| `GET /api/credentials` | `CredentialsController` | Masked Zabbix/Telegram credential status |
+| `POST /api/credentials/zabbix/token` | `CredentialsController` | Saves a Zabbix API token and immediately test-connects (`apiinfo.version`) |
+| `DELETE /api/credentials/zabbix` | `CredentialsController` | Clears the stored Zabbix token |
+| `POST /api/credentials/telegram` | `CredentialsController` | Saves the Telegram bot token (hot-restarts long-polling, no process restart) |
+| `DELETE /api/credentials/telegram` | `CredentialsController` | Clears the stored Telegram bot token |
+| `GET /api/telegramusers` | `TelegramUsersController` | Allowed Telegram users |
+| `DELETE /api/telegramusers/{chatId}` | `TelegramUsersController` | Revokes a user's access |
+| `POST /api/telegramusers/claim-code` | `TelegramUsersController` | Generates the one-time, 10-minute Primary Admin claim code |
+| `GET /api/telegramusers/pending` | `TelegramUsersController` | Pending access requests + whether Primary Admin is already claimed |
+| `POST /api/telegramusers/pending/{id}/approve` | `TelegramUsersController` | Approves a pending request |
+| `POST /api/telegramusers/pending/{id}/deny` | `TelegramUsersController` | Denies a pending request (triggers the 15-minute re-request cooldown) |
+
+Every mutating endpoint (`POST`/`PUT`/`DELETE`) that changes monitoring-relevant state publishes the matching MediatR notification (see [Domain Events](#domain-events-mediatr)) — the caller's own change appears over SignalR the same way it would for any other connected client, with no separate refetch needed on the frontend.
+
+---
+
+## Database Backup & Restore
+
+AdminConsole doesn't back up *itself* — it's the tool watching everyone else's backups, so its own data needs the same discipline applied manually (or via a scheduled task on the host). Three things make up its full state, and **all three must be backed up together** — they're not independently useful:
+
+| Path | Contents | Why it matters |
+|---|---|---|
+| `adminconsole.db` (+ `-wal`/`-shm`) | EF Core application data — servers' incident history, backup state, maintenance windows, app settings, persisted logs | The database itself |
+| `hangfire.db` (+ `-wal`/`-shm`) | Hangfire's own job/schedule state | Without it, the next start re-seeds recurring jobs from scratch (harmless) but loses in-flight job history |
+| `C:\ProgramData\AdminConsole\keys` (the `DataProtection:KeyPath` from `appsettings.json`) | The Data Protection key ring (DPAPI-NG-protected) | **Critical** — without the matching keys, the Zabbix/Telegram tokens encrypted inside `adminconsole.db` can never be decrypted again, on this machine or any other |
+
+`appsettings.json` itself (server list, monitoring intervals, the authorized AD group, backup job definitions) is worth including too — it's excluded from the publish artifact by design ([Deployment](#deployment--release-pipeline)) and exists only on the target machine.
+
+**Taking a backup.** Both databases run in WAL mode, but this app has no wired-up SQLite Online Backup API — the safe, simple approach is:
+
+```powershell
+Stop-Service AdminConsole
+
+$dest = "D:\Backups\AdminConsole\$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
+New-Item -ItemType Directory -Path $dest | Out-Null
+
+Copy-Item "C:\Program Files\AdminConsole\adminconsole.db*" $dest
+Copy-Item "C:\Program Files\AdminConsole\hangfire.db*"      $dest
+Copy-Item "C:\Program Files\AdminConsole\appsettings.json"  $dest
+Copy-Item "C:\ProgramData\AdminConsole\keys" $dest -Recurse
+
+Start-Service AdminConsole
+```
+
+Stopping the service first avoids copying a WAL file mid-checkpoint; the downtime is however long the copy takes (typically sub-second for this scale of data) — schedule it for a quiet window if even that brief a gap matters.
+
+**Restoring.** Stop the service, replace `adminconsole.db*`, `hangfire.db*`, `appsettings.json`, and the `keys` folder with the backed-up copies, then start the service — no migration run is needed for a same-version restore, since the schema the backup was taken from already matches what's on disk.
+
+---
+
+## Troubleshooting
+
+Common symptoms, matched to their actual cause in the code — most of these already log a specific `AppLogEntryOccurred.Warning`/`.Error` with the same explanation, visible on the Logs page.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| A server shows **Offline** in the UI but responds to a manual `ping` from another machine | The **File and Printer Sharing (Echo Request — ICMPv4-In)** firewall rule is disabled on that server — often off by default on a clean Windows Server install | Enable the rule ([Firewall & Windows components](#firewall--windows-components-on-target-servers)) |
+| RDP Sessions shows **"RPC unavailable"** for a Terminal Server | That server's `Name` in `appsettings.json` is an IP address, not a domain name — `quser` needs Named Pipes/NetBIOS resolution, which only works against a name | Set `Name` to the server's actual domain/NetBIOS name |
+| RDP Sessions shows **"service account authentication failure"** or **"Access Denied"** | The service account (`DOMAIN\svc_adminconsole`) lacks rights on that Terminal Server | Grant the account the same rights described under [The service account](#the-service-account) |
+| Zabbix Alerts tab stays empty, no error anywhere | `Monitoring:ZabbixUrl` isn't set in `appsettings.json` — the poller logs a Warning once and stays idle rather than retrying forever | Set `ZabbixUrl` and restart the service |
+| Zabbix Alerts tab empty, but `ZabbixUrl` is set | No API token has been saved yet in Settings — the poller waits silently for one | Enter and save a token in Settings → Zabbix |
+| A freshly-saved Zabbix token is rejected immediately | The target Zabbix instance is older than **6.0** — this app authenticates via the Bearer header only, which Zabbix requires 6.0+ for | Upgrade Zabbix, or use a 6.0+ instance |
+| A backup check is permanently stuck on **Unknown** | The UNC host in that check's `Path` doesn't respond to a 1-second reachability check before the file scan even runs | Verify the file share's network path and that the service account has read access to it |
+| A server flaps rapidly between Online/Offline in Uptime for brief network blips | `MinIncidentDurationSeconds` is too low (or `0`, which disables the anti-flapping filter entirely) for that network's baseline jitter | Raise `Monitoring:MinIncidentDurationSeconds` in `appsettings.json` |
+| A saved Zabbix/Telegram credential stops working after moving the app to new hardware or restoring from a backup that didn't include the `keys` folder | DPAPI-NG key material didn't travel with the database — see [Database Backup & Restore](#database-backup--restore) | Re-enter the credential in Settings; it will encrypt correctly under the new machine's keys |
+| The Telegram bot never responds to a new user | New users must be explicitly approved (inline button by the Primary Admin, or via Settings) before the bot answers anything | Approve the pending request, or check whether they're inside the 15-minute cooldown after a prior Deny |
+
+---
+
 ## Logging
 
 There are no rolling log *files* in v3 — the old WPF app's `logs/app-*.log` rolling-file sink was replaced entirely by `AppLogPersistenceHandler` writing straight to the `AppLogEntries` SQLite table (see [AppLogPersistenceHandler / AppLogRetentionJob](#applogpersistencehandler--applogretentionjob)). "Tail the newest log file" became `ORDER BY Timestamp DESC LIMIT :take`.
@@ -521,6 +617,8 @@ There are no rolling log *files* in v3 — the old WPF app's `logs/app-*.log` ro
 **Retention.** `AppLogRetentionJob` runs daily on Hangfire and deletes any row older than a fixed **90-day** cutoff, keeping both the table and the underlying SQLite file bounded regardless of how long the service has been running unattended.
 
 **On the frontend**, the Logs page opens with a live SignalR stream (the `logs` group) plus the same REST snapshot every other page uses on load/refresh — it's never empty immediately after a browser refresh the way a SignalR-only stream would be.
+
+**Time zone.** Every timestamp in the app — log entries, incident `FellAt`/`RecoveredAt`, SLA report windows — is `DateTimeOffset.Now`, captured in the **host machine's local time zone**, not UTC. This is deliberate for a single-server internal tool with admins on the same site, but it means a report generated at a "To: today" boundary reflects the host's midnight, not the browsing admin's, if they're ever in a different time zone than the server.
 
 ---
 
@@ -576,6 +674,7 @@ Honestly-scoped technical boundaries, not oversights waiting to be "discovered" 
 - **The migration tool is a one-shot, run-once-at-cutover utility with limited automated test coverage.** `AdminConsole.Migration` imports data from the legacy WPF app's format exactly once, per deployment; unlike the rest of the backend, nothing in `AdminConsole.Tests` exercises it end-to-end, so its correctness leans more heavily on manual verification at cutover time than the rest of the codebase does.
 - **The frontend has no automated test suite.** `adminconsole-web/package.json` defines no `test` script and there's no Vitest/Jest configuration in the repository — frontend changes are verified manually against the dev server rather than through an automated regression suite. Backend logic (104 xUnit tests) is covered far more thoroughly than the UI layer.
 - **WMI, `quser`, and Windows Integrated Authentication are not covered by the automated test suite either** — they require a live Windows/AD environment to exercise meaningfully and are validated manually against real infrastructure instead.
+- **No `/health` endpoint.** Nothing in `Program.cs` wires up ASP.NET Core's health-check middleware — there's no lightweight, unauthenticated endpoint an external monitor (or a load balancer, if one were ever introduced) could poll to check whether the service itself is up, short of hitting an authenticated API route.
 
 ---
 

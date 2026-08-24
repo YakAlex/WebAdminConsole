@@ -268,7 +268,7 @@ public sealed class ZabbixPollerService(
 
         try
         {
-            var problems = await client.GetActiveProblemsAsync(
+            var (problems, hiddenCount) = await client.GetActiveProblemsAsync(
                 _settings.ZabbixUrl, auth,
                 BuildWatchedSeverities(_currentMinSeverity), ct).ConfigureAwait(false);
 
@@ -284,7 +284,8 @@ public sealed class ZabbixPollerService(
             var successPayload = new ZabbixProblemsPayload(
                 Problems: problems,
                 ErrorMessage: null,
-                FetchedAt: DateTimeOffset.Now);
+                FetchedAt: DateTimeOffset.Now,
+                HiddenCount: hiddenCount);
 
             // Keeps the on-demand REST cache (GET /api/zabbix) in sync with
             // whatever this loop iteration just found — otherwise a page
@@ -397,9 +398,9 @@ public sealed class ZabbixPollerService(
 
         try
         {
-            var problems = await client.GetActiveProblemsAsync(
+            var (problems, hiddenCount) = await client.GetActiveProblemsAsync(
                 _settings.ZabbixUrl, auth, BuildWatchedSeverities(_currentMinSeverity), ct).ConfigureAwait(false);
-            return new ZabbixProblemsPayload(problems, null, DateTimeOffset.Now);
+            return new ZabbixProblemsPayload(problems, null, DateTimeOffset.Now, hiddenCount);
         }
         // Audit fix (2026-08-22, on-demand throttling): the catch (Exception) below
         // used to also catch OperationCanceledException — a cancelled request (client

@@ -1,4 +1,4 @@
-import { Bell, TriangleAlert } from 'lucide-react'
+import { Bell, TriangleAlert, EyeOff } from 'lucide-react'
 import { Card, CardHeader } from '@/components/ui/Card'
 import styles from './ZabbixSeveritySummary.module.scss'
 
@@ -6,11 +6,12 @@ export interface ZabbixSeveritySummaryProps {
   critical: number
   warning: number
   info: number
+  hiddenCount: number
   errorMessage: string | null
 }
 
 /** Brief §26 (Zabbix): "Critical / Warning / Resolved" — here Critical/Warning/Informational (actual Zabbix severity groups). */
-export function ZabbixSeveritySummary({ critical, warning, info, errorMessage }: ZabbixSeveritySummaryProps) {
+export function ZabbixSeveritySummary({ critical, warning, info, hiddenCount, errorMessage }: ZabbixSeveritySummaryProps) {
   return (
     <Card>
       <CardHeader eyebrow="Zabbix Alerts" icon={<Bell size={14} strokeWidth={1.75} />} />
@@ -36,6 +37,13 @@ export function ZabbixSeveritySummary({ critical, warning, info, errorMessage }:
           <span className={styles.statLabel}>Informational</span>
         </div>
       </div>
+
+      {hiddenCount > 0 && (
+        <div className={styles.hiddenNote}>
+          <EyeOff size={13} strokeWidth={1.75} />
+          +{hiddenCount} hidden (disabled host or check)
+        </div>
+      )}
     </Card>
   )
 }

@@ -26,7 +26,13 @@ export function ZabbixAlerts() {
             <Spinner label="Loading Zabbix alerts…" />
           ) : (
             <>
-              <ZabbixSeveritySummary critical={vm.critical} warning={vm.warning} info={vm.info} errorMessage={vm.errorMessage} />
+              <ZabbixSeveritySummary
+                critical={vm.critical}
+                warning={vm.warning}
+                info={vm.info}
+                hiddenCount={vm.hiddenCount}
+                errorMessage={vm.errorMessage}
+              />
               <ZabbixProblemsTable problems={vm.problems} />
             </>
           )}

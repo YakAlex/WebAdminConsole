@@ -39,3 +39,14 @@
   font-size: var(--font-size-micro);
   color: var(--color-text-muted);
 }
+
+.hiddenNote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+  font-size: var(--font-size-micro);
+  color: var(--color-text-muted);
+}

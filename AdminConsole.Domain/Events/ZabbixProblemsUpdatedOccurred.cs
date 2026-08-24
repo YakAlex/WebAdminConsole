@@ -13,5 +13,6 @@ public sealed record ZabbixProblemsUpdatedOccurred(ZabbixProblemsPayload Payload
 public sealed record ZabbixProblemsPayload(
     IReadOnlyList<ZabbixProblem>? Problems,
     string?                       ErrorMessage,
-    DateTimeOffset                FetchedAt
+    DateTimeOffset                FetchedAt,
+    int                           HiddenCount = 0
 );

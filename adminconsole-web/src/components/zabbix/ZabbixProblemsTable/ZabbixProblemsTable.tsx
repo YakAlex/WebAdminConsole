@@ -1,4 +1,4 @@
-import { ServerCrash } from 'lucide-react'
+import { ServerCrash, Check } from 'lucide-react'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { ZabbixSeverity, type ZabbixProblem } from '@/lib/api/types'
 import { formatClockWithSeconds } from '@/lib/format'
@@ -55,6 +55,7 @@ export function ZabbixProblemsTable({ problems }: ZabbixProblemsTableProps) {
                 <th>Severity</th>
                 <th>Age</th>
                 <th>Started</th>
+                <th>Ack</th>
               </tr>
             </thead>
             <tbody>
@@ -75,6 +76,13 @@ export function ZabbixProblemsTable({ problems }: ZabbixProblemsTableProps) {
                   </td>
                   <td className={styles.age}>{problem.ageDisplay}</td>
                   <td className={styles.started}>{formatClockWithSeconds(problem.startTime)}</td>
+                  <td className={styles.ack}>
+                    {problem.acknowledged && (
+                      <span className={styles.ackBadge} title="Acknowledged">
+                        <Check size={13} strokeWidth={2} />
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

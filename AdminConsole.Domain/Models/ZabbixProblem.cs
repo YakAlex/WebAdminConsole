@@ -20,5 +20,6 @@ public sealed record ZabbixProblem(
     string         Description,
     ZabbixSeverity Severity,
     DateTimeOffset StartTime,
-    string         AgeDisplay
+    string         AgeDisplay,
+    bool           Acknowledged
 );

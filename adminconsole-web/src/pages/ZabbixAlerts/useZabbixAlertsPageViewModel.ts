@@ -16,6 +16,7 @@ export function useZabbixAlertsPageViewModel() {
     critical,
     warning,
     info,
+    hiddenCount: zabbixQuery.payload?.hiddenCount ?? 0,
     errorMessage: zabbixQuery.payload?.errorMessage ?? null,
     loading: zabbixQuery.loading,
     fetchError: zabbixQuery.error,

@@ -227,12 +227,14 @@ export interface ZabbixProblem {
   severity: ZabbixSeverity
   startTime: string
   ageDisplay: string
+  acknowledged: boolean
 }
 
 export interface ZabbixProblemsPayload {
   problems: ZabbixProblem[] | null
   errorMessage: string | null
   fetchedAt: string
+  hiddenCount: number
 }
 
 export interface ZabbixProblemsUpdatedEvent {

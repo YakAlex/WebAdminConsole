@@ -2,6 +2,7 @@ using AdminConsole.Domain.Abstractions;
 using AdminConsole.Domain.Events;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace AdminConsole.Infrastructure.Monitoring;
 
@@ -25,14 +26,29 @@ namespace AdminConsole.Infrastructure.Monitoring;
 /// CAPTURED root provider, so NO handler it resolves can be Scoped — even
 /// if the handler itself isn't syntactically Singleton).
 /// </summary>
-public sealed class AppLogPersistenceHandler(IServiceScopeFactory scopeFactory)
+public sealed class AppLogPersistenceHandler(IServiceScopeFactory scopeFactory, ILogger<AppLogPersistenceHandler> logger)
     : INotificationHandler<AppLogEntryOccurred>
 {
     public async Task Handle(AppLogEntryOccurred notification, CancellationToken ct)
     {
-        using var scope = scopeFactory.CreateScope();
-        await scope.ServiceProvider
-            .GetRequiredService<IAppLogRepository>()
-            .AppendAsync(notification.Entry, ct);
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            await scope.ServiceProvider
+                .GetRequiredService<IAppLogRepository>()
+                .AppendAsync(notification.Entry, ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            // A subscriber must never take down its publisher (see
+            // UptimeTrackerService.Handle(PingBatchResultOccurred) for the
+            // same class of fix) — a transient SQLite failure here must not
+            // propagate back through MediatR's sequential default publisher
+            // into whichever service raised this log entry in the first
+            // place. Logged via ILogger, not another AppLogEntryOccurred —
+            // this handler IS the thing that persists those.
+            logger.LogError(ex, "AppLogPersistenceHandler: failed to persist a log entry.");
+        }
     }
 }

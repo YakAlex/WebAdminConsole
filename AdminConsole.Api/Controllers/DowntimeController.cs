@@ -1,7 +1,6 @@
 using AdminConsole.Domain.Abstractions;
-using AdminConsole.Domain.Events;
 using AdminConsole.Domain.Models;
-using MediatR;
+using AdminConsole.Infrastructure.Monitoring;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AdminConsole.Api.Controllers;
@@ -10,12 +9,13 @@ namespace AdminConsole.Api.Controllers;
 /// GET /api/downtime — all DowntimeRecord entries (initial load for the
 /// Uptime tab). DELETE endpoints — Step 5 (#3): removing resolved incidents
 /// from the list (equivalent to WPF's UptimeViewModel.DeleteRecord/
-/// ClearAllResolved). Both publish UptimeUpdatedOccurred (full snapshot) —
-/// the same channel UptimeTrackerService already uses to push live updates,
-/// so the requesting client sees the change via SignalR without a separate
-/// refetch.
+/// ClearAllResolved). Both go through UptimeTrackerService.DeleteRecordAsync/
+/// ClearAllResolvedAsync — not IDowntimeRepository directly — so the
+/// service's in-memory _records cache (what every subsequent snapshot and
+/// SLA report actually reads from) stays in sync with the DB; those methods
+/// already publish UptimeUpdatedOccurred themselves.
 /// </summary>
-public sealed class DowntimeController(IDowntimeRepository repository, IMediator mediator) : AdminConsoleControllerBase
+public sealed class DowntimeController(IDowntimeRepository repository, UptimeTrackerService uptimeTracker) : AdminConsoleControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<DowntimeRecord>>> Get(CancellationToken ct) =>
@@ -31,17 +31,12 @@ public sealed class DowntimeController(IDowntimeRepository repository, IMediator
         if (target is null) return NotFound();
         if (!target.IsResolved) return BadRequest(new { error = "Cannot delete an open incident." });
 
-        await repository.DeleteAsync(serverIp, fellAt, ct);
-        await mediator.Publish(new UptimeUpdatedOccurred(await repository.LoadAllAsync(ct)), ct);
+        await uptimeTracker.DeleteRecordAsync(target, ct);
         return NoContent();
     }
 
     /// <summary>Bulk-deletes all resolved incidents (WPF's "Clear History").</summary>
     [HttpDelete("resolved")]
-    public async Task<ActionResult<int>> DeleteAllResolved(CancellationToken ct)
-    {
-        int removed = await repository.DeleteAllResolvedAsync(ct);
-        await mediator.Publish(new UptimeUpdatedOccurred(await repository.LoadAllAsync(ct)), ct);
-        return Ok(removed);
-    }
+    public async Task<ActionResult<int>> DeleteAllResolved(CancellationToken ct) =>
+        Ok(await uptimeTracker.ClearAllResolvedAsync(ct));
 }

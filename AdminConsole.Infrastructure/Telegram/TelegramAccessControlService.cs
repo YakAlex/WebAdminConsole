@@ -41,6 +41,15 @@ public sealed class TelegramAccessControlService(
     private readonly Dictionary<long, string?> _allowedUsers = new();
     private readonly object _stateLock = new();
 
+    // Serializes ApproveAsync/RevokeAsync/RefreshUsernameAsync's in-memory
+    // mutation + persisted-DB-write span for TelegramAllowedUsers — each
+    // method releases _stateLock before awaiting its own DB call, so without
+    // this gate two of them racing on the same chat_id (e.g. a Revoke and a
+    // concurrent RefreshUsername) could land their DB writes out of order
+    // relative to each other and to the in-memory state, silently
+    // resurrecting a just-revoked user's row on the next restart.
+    private readonly SemaphoreSlim _persistGate = new(1, 1);
+
     /// <summary>
     /// Called ONCE from TelegramBotService.ExecuteAsync before long-polling
     /// starts — the same principle as LoadFromDbAsync in MaintenanceService/
@@ -177,11 +186,17 @@ public sealed class TelegramAccessControlService(
 
     public async Task<bool> RevokeAsync(long chatId, CancellationToken ct = default)
     {
+        await _persistGate.WaitAsync(ct);
         bool removed;
-        lock (_stateLock) removed = _allowedUsers.Remove(chatId);
-        if (!removed) return false;
+        try
+        {
+            lock (_stateLock) removed = _allowedUsers.Remove(chatId);
+            if (!removed) return false;
 
-        await WithAppSettingsAsync(r => r.RemoveTelegramAllowedUserAsync(chatId, ct));
+            await WithAppSettingsAsync(r => r.RemoveTelegramAllowedUserAsync(chatId, ct));
+        }
+        finally { _persistGate.Release(); }
+
         _requestCooldownUntil[chatId] = DateTimeOffset.Now.Add(RequestCooldown);
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
@@ -273,8 +288,13 @@ public sealed class TelegramAccessControlService(
     {
         if (!_pending.TryRemove(id, out var request)) return false;
 
-        lock (_stateLock) _allowedUsers[request.ChatId] = request.Username;
-        await WithAppSettingsAsync(r => r.UpsertTelegramAllowedUserAsync(request.ChatId, request.Username, ct));
+        await _persistGate.WaitAsync(ct);
+        try
+        {
+            lock (_stateLock) _allowedUsers[request.ChatId] = request.Username;
+            await WithAppSettingsAsync(r => r.UpsertTelegramAllowedUserAsync(request.ChatId, request.Username, ct));
+        }
+        finally { _persistGate.Release(); }
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
             $"Access approved: @{request.Username} (chat_id={request.ChatId})."), ct);
@@ -337,14 +357,23 @@ public sealed class TelegramAccessControlService(
     /// </summary>
     public async Task RefreshUsernameAsync(long chatId, string username, CancellationToken ct = default)
     {
-        bool changed;
-        lock (_stateLock)
+        await _persistGate.WaitAsync(ct);
+        try
         {
-            changed = _allowedUsers.ContainsKey(chatId) && _allowedUsers[chatId] != username;
-            if (changed) _allowedUsers[chatId] = username;
-        }
+            bool changed;
+            lock (_stateLock)
+            {
+                // Re-check membership under the gate, not just _stateLock —
+                // a concurrent RevokeAsync could have removed this chat_id
+                // while we were waiting on _persistGate, in which case this
+                // call must not re-add it to the DB.
+                changed = _allowedUsers.ContainsKey(chatId) && _allowedUsers[chatId] != username;
+                if (changed) _allowedUsers[chatId] = username;
+            }
 
-        if (!changed) return;
-        await WithAppSettingsAsync(r => r.UpsertTelegramAllowedUserAsync(chatId, username, ct));
+            if (!changed) return;
+            await WithAppSettingsAsync(r => r.UpsertTelegramAllowedUserAsync(chatId, username, ct));
+        }
+        finally { _persistGate.Release(); }
     }
 }

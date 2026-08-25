@@ -364,6 +364,7 @@ public sealed class RdpMonitorService(
 
             if (allText.Contains("rpc server is unavailable") || allText.Contains("1722") || allText.Contains("0x000006ba"))
             {
+                _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
                 await mediator.Publish(AppLogEntryOccurred.Error(LogSource,
                     $"{hostname}: RPC unavailable. Make sure appsettings.json has a domain name (not an IP)."), ct);
                 await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(
@@ -400,6 +401,7 @@ public sealed class RdpMonitorService(
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
+            _previousSessions[server.IP] = new Dictionary<int, RdpSessionInfo>();
             logger.LogWarning(ex, "RdpMonitorService: error polling {Server}", hostname);
             await mediator.Publish(AppLogEntryOccurred.Error(LogSource, $"{hostname}: {ex.GetType().Name}: {ex.Message}"), ct);
             await mediator.Publish(new RdpSessionsUpdatedOccurred(await CreatePayloadAsync(

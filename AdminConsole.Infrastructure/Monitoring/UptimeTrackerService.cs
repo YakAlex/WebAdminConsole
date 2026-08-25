@@ -327,6 +327,24 @@ public sealed class UptimeTrackerService(
                             changed = true;
                         }
                     }
+                    else if (isFirstRealStatusThisSession && !underMaintenance
+                             && !_records.Any(r => r.ServerIp == result.IP && !r.IsResolved))
+                    {
+                        // FIX: first real ping this session (prev == Unknown,
+                        // right after a restart) for a server that's already
+                        // Offline, with no already-open DB record for it —
+                        // the drop happened, and possibly matured, entirely
+                        // before the crash/restart, so the two branches above
+                        // both correctly stay silent (prev IS Unknown; there's
+                        // no pending entry to continue, since _pendingOffline
+                        // never survives a restart). Without this, the server
+                        // could stay Offline indefinitely post-restart and
+                        // NEVER get a DowntimeRecord. We can't recover the
+                        // true original FellAt, so start tracking from now —
+                        // an incident from here on is better than none at all.
+                        _pendingOffline[result.IP] =
+                            new PendingOffline(DateTimeOffset.Now, result.Name, result.Group);
+                    }
                 }
                 else if (result.Status == PingStatus.Online)
                 {
@@ -458,7 +476,7 @@ public sealed class UptimeTrackerService(
             $"fell at {record.FellAt:dd.MM HH:mm:ss}."), ct);
     }
 
-    public async Task ClearAllResolvedAsync(CancellationToken ct = default)
+    public async Task<int> ClearAllResolvedAsync(CancellationToken ct = default)
     {
         int removedInMemory;
         lock (_lock)
@@ -466,13 +484,15 @@ public sealed class UptimeTrackerService(
             removedInMemory = _records.RemoveAll(r => r.IsResolved);
         }
 
-        if (removedInMemory == 0) return;
+        if (removedInMemory == 0) return 0;
 
         int removed = await WithRepositoryAsync(r => r.DeleteAllResolvedAsync(ct));
         await PublishSnapshotAsync(ct);
 
         await mediator.Publish(AppLogEntryOccurred.Info(LogSource,
             $"Cleared {removed} resolved incident(s) from history."), ct);
+
+        return removed;
     }
 
     // ── Persistence ───────────────────────────────────────────────────────────

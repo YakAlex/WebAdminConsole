@@ -118,7 +118,13 @@ public sealed class BackupMonitorJob(
 
             foreach (var def in _definitions)
             {
-                updatedStates.Add(await CheckKindSafeAsync(def, BackupKind.Full, existingStates, ct));
+                // BackupCheckEvaluator.EvaluateAsync requires the caller to
+                // skip a Kind whose pattern is empty (it throws otherwise) —
+                // DiffPattern was already guarded below; FullPattern needs
+                // the same guard, since it's just as legitimately omittable
+                // (e.g. a server tracked for differential backups only).
+                if (!string.IsNullOrWhiteSpace(def.FullPattern))
+                    updatedStates.Add(await CheckKindSafeAsync(def, BackupKind.Full, existingStates, ct));
 
                 if (!string.IsNullOrWhiteSpace(def.DiffPattern))
                     updatedStates.Add(await CheckKindSafeAsync(def, BackupKind.Diff, existingStates, ct));

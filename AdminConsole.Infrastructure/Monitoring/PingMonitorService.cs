@@ -74,9 +74,9 @@ public sealed class PingMonitorService(
 
     // ── INotificationHandler<MaintenanceChangedOccurred> ────────────────────
 
-    public Task Handle(MaintenanceChangedOccurred notification, CancellationToken ct)
+    public async Task Handle(MaintenanceChangedOccurred notification, CancellationToken ct)
     {
-        if (notification.Action != MaintenanceAction.Ended) return Task.CompletedTask;
+        if (notification.Action != MaintenanceAction.Ended) return;
 
         // Reset previousStatus to Unknown for affected servers — the next
         // ping cycle will treat a current Offline status (if the server
@@ -89,9 +89,16 @@ public sealed class PingMonitorService(
             : _servers.Where(s => s.IP == notification.Window.ServerIp);
 
         foreach (var s in affected)
-            _previousStatus[s.IP] = PingStatus.Unknown;
-
-        return Task.CompletedTask;
+        {
+            // Same per-server lock PingSingleServerAsync holds around its own
+            // GetOrAdd+TryUpdate CAS on this exact dictionary — without it,
+            // this raw write can land mid-CAS and silently drop or clobber
+            // the transition log for a ping cycle already in flight for s.IP.
+            var serverLock = GetServerLock(s.IP);
+            await serverLock.WaitAsync(ct).ConfigureAwait(false);
+            try { _previousStatus[s.IP] = PingStatus.Unknown; }
+            finally { serverLock.Release(); }
+        }
     }
 
     // ── BackgroundService ────────────────────────────────────────────────────

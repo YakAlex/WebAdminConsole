@@ -651,7 +651,7 @@ Take a final backup first if there's any chance the server's data will be needed
 
 ## API Reference
 
-There is no Swagger/OpenAPI UI — `AddEndpointsApiExplorer`/`AddSwaggerGen` were deliberately never wired into `Program.cs` for an API with exactly one consumer (this repo's own SPA). The table below is the complete surface: **28 endpoints** across 12 controllers, every one gated by the same `[Authorize(Policy = "Viewer")]` policy from `AdminConsoleControllerBase` (Windows Integrated Auth + AD group membership — see [Security & Architecture](#security--architecture)). Default routing is `api/[controller]` (the controller class name, minus `Controller`, lowercased) unless a route override is noted.
+There is no Swagger/OpenAPI UI — `AddEndpointsApiExplorer`/`AddSwaggerGen` were deliberately never wired into `Program.cs` for an API with exactly one consumer (this repo's own SPA). The table below is the complete surface: **28 endpoints** across 12 controllers, every one gated by the same `[Authorize(Policy = "Viewer")]` policy from `AdminConsoleControllerBase` (Windows Integrated Auth + AD group membership — see [Security & Architecture](#security--architecture)). Default routing is `api/[controller]` (the controller class name, minus `Controller`, lowercased) unless a route override is noted. `AdminConsoleControllerBase` also carries `[ApiController]`, which means every controller gets ASP.NET Core's automatic model-validation behavior for free: an invalid request body/route/query binding short-circuits straight to an HTTP `400` before the action method ever runs, with no custom `InvalidModelStateResponseFactory` or global exception filter overriding that default anywhere in `Program.cs`.
 
 | Method & Path | Controller | Purpose |
 |---|---|---|
@@ -921,7 +921,6 @@ There are no rolling log *files* in v3 — the old WPF app's `logs/app-*.log` ro
 | `Microsoft.AspNetCore.DataProtection.Abstractions` | 8.0.30 | `IDataProtector` — DPAPI-NG secret encryption ([Security](#security--architecture)) |
 | `System.DirectoryServices.AccountManagement` | 8.0.1 | Active Directory group-membership authorization checks |
 | `System.Management` | 8.0.0 | WMI — remote restart/shutdown |
-| `System.Diagnostics.PerformanceCounter` | 8.0.1 | Local resource counters |
 | `System.Diagnostics.EventLog` | 8.0.1 | Windows Event Log interop |
 | `Telegram.Bot` | 22.6.0 | Telegram Bot API client |
 | `Polly` | 8.7.0 | Resilience/retry policies for external calls |
@@ -990,6 +989,7 @@ A representative slice of recent work — not an exhaustive commit-by-commit log
 - The Ping page's **"Start RDP session"** action removed entirely (frontend button, `GET /api/servers/{ip}/rdp-file`, and the `.rdp`-file-generation code behind it) — it only ever downloaded a `.rdp` file for the browser's own RDP client to open, not something the product wants to keep going forward. The unrelated **RDP Sessions** monitoring page/feature (`quser`-based session tracking) is untouched.
 - `UptimeTrackerService.Handle(PingBatchResultOccurred)` no longer allowed a DB failure to propagate back into `PingMonitorService`'s loop guard and halt both ping loops together.
 - **"Host: Unknown" on every Zabbix problem, and dozens of years-old phantom alerts with no trace in Zabbix's own UI** — both traced to the same two root causes (a nonexistent API parameter, and no exclusion for disabled hosts/triggers) and fixed together; see the Zabbix architectural-decisions entry above.
+- **System Resources monitoring removed entirely** (2026-08-22) — `ResourceMonitorService`/`RemoteResourceService` and the frontend's "Resources" tab are gone (see `Program.cs`), following the same "dead code with no real consumer" reasoning as the Event Log feature above. The `System.Diagnostics.PerformanceCounter` NuGet reference it depended on is now unused and was removed from the [Dependencies](#dependencies) table; the package reference itself is still present in `AdminConsole.Infrastructure.csproj` and is a cleanup candidate.
 
 ---
 

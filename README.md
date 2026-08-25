@@ -32,6 +32,7 @@ AdminConsole v3 is the full rewrite of a legacy WPF desktop application into a *
 - [Configuration (`appsettings.json`)](#configuration-appsettingsjson)
 - [Deployment / Release Pipeline](#deployment--release-pipeline)
 - [API Reference](#api-reference)
+- [Telegram Integration](#telegram-integration)
 - [Database Backup & Restore](#database-backup--restore)
 - [Troubleshooting](#troubleshooting)
 - [Logging](#logging)
@@ -480,17 +481,78 @@ Everything the service needs to run lives in one `appsettings.json`, deployed al
 
 ## Deployment / Release Pipeline
 
-The application ships as a self-contained, single-folder Windows deployment — no separate IIS site, no Node.js on the target machine, no manual frontend build step. See [Release Pipeline](#release-pipeline) above for what [`publish.ps1`](publish.ps1) does internally (staged per-project publish, hash-verified merge, hard failure on version conflicts, post-publish verification); the steps below are how to actually ship a release.
+The application ships as a self-contained, single-folder Windows deployment — no separate IIS site, no Node.js on the target machine, no manual frontend build step. See [Release Pipeline](#release-pipeline) above for what [`publish.ps1`](publish.ps1) does internally (staged per-project publish, hash-verified merge, hard failure on version conflicts, post-publish verification). Everything below is the full operational runbook — from a bare server to a running service, and from one release to the next.
 
-1. **Build the release artifact**
+### Build-machine prerequisites
+
+Only the machine that *runs* `publish.ps1` needs these — the target server needs none of them:
+
+- **.NET 8 SDK** (not just the runtime) — `dotnet publish` needs the SDK to compile.
+- **Node.js + npm on `PATH`** — `AdminConsole.Api.csproj`'s `PublishFrontend` MSBuild target shells out to `npm run build` inside `adminconsole-web/` automatically as part of `dotnet publish -c Release`; if Node isn't reachable there, the publish fails at that step with a clear MSBuild error rather than producing a silently-empty `wwwroot`.
+- **Windows PowerShell 5.1+** — `publish.ps1` declares `#Requires -Version 5.1` and refuses to run under an older host.
+
+### First-time installation (a server that has never run AdminConsole before)
+
+1. **Build** on the build machine:
 
    ```powershell
    .\publish.ps1
    ```
 
-   This runs `dotnet publish` for `AdminConsole.Api` and `AdminConsole.Migration` (self-contained, `win-x64`), which in turn builds the React frontend and embeds it into `wwwroot` automatically, into a single `publish/` folder. The script fails loudly — non-zero exit, thrown exception — if the two projects' dependency graphs have diverged or if the output looks incomplete; a run that prints the success banner is a run that's actually safe to deploy.
+2. **Copy the whole `publish/` folder** to the target server, e.g. `C:\Program Files\AdminConsole`. Unlike a redeploy (below), there's nothing to protect yet, so a plain recursive copy is fine — no exclusions needed.
 
-2. **Deploy to the target server**, preserving the live database and configuration:
+3. **Edit `appsettings.json`** in that folder for the real environment. `dotnet publish` always emits the repo's own `appsettings.json` into the output (with its placeholder AD group and empty `Servers`/`BackupChecks`) — set `Authorization:ViewerGroup` to the real AD group, `Kestrel:Endpoints:Http:Url` to the interface/port the server should bind, and fill in `Servers`/`BackupChecks`/`Monitoring:*`. See [Configuration](#configuration-appsettingsjson) for the full shape.
+
+4. **Create the Data Protection key folder** and grant the service account write access to it — `PersistKeysToFileSystem` throws at startup if it can't create/write `DataProtection:KeyPath` (`C:\ProgramData\AdminConsole\keys` by default):
+
+   ```powershell
+   New-Item -ItemType Directory -Path "C:\ProgramData\AdminConsole\keys" -Force
+   icacls "C:\ProgramData\AdminConsole\keys" /grant "CONTOSO\svc-adminconsole:(OI)(CI)M"
+   ```
+
+5. **Create the database schema.** This is the *same* console tool used on every later redeploy — on a brand-new install there's no `adminconsole.db` yet, so `Database.MigrateAsync()` creates it from scratch (applying every EF Core migration in order) before the one-time legacy-import step runs:
+
+   ```powershell
+   cd "C:\Program Files\AdminConsole"
+   .\AdminConsole.Migration.exe
+   ```
+
+   Run with no arguments, it assumes a companion legacy WPF install at `E:\AdminConsole_v2\logs` and `%LocalAppData%\AdminConsole\user_settings.json` for the one-time data import. Every source path it looks for is individually guarded with `File.Exists`/`Directory.Exists`, so on a server with **no** legacy install to import from, each import step safely no-ops (imports 0 records) instead of failing — only schema creation actually matters for a from-scratch install. To point at different source paths (or a non-default DB file), pass them positionally: `.\AdminConsole.Migration.exe "Data Source=adminconsole.db;Cache=Shared" "D:\old\logs" "D:\old\user_settings.json"`.
+
+6. **Register the Windows Service**, under the dedicated domain account described in [The service account](#the-service-account) — never `LocalSystem`/`NetworkService`:
+
+   ```powershell
+   New-Service -Name "AdminConsole" `
+     -BinaryPathName '"C:\Program Files\AdminConsole\AdminConsole.Api.exe"' `
+     -DisplayName "AdminConsole" `
+     -StartupType Automatic `
+     -Credential (Get-Credential "CONTOSO\svc-adminconsole")
+
+   sc.exe failure AdminConsole reset= 86400 actions= restart/60000/restart/60000/restart/60000
+   ```
+
+   `UseWindowsService()` in `Program.cs` is what lets the Service Control Manager host the process at all; the `sc.exe failure` line is a separate, additional step that tells the SCM to auto-restart the process (after a 60-second delay, up to three attempts before the 24-hour failure counter resets) if it ever crashes — `New-Service` alone does not configure a restart policy.
+
+7. **Open the firewall** for whatever port `Kestrel:Endpoints:Http:Url` binds, if the dashboard needs to be reached from other machines rather than just `localhost` on the server itself:
+
+   ```powershell
+   New-NetFirewallRule -DisplayName "AdminConsole (Kestrel)" -Direction Inbound `
+     -Protocol TCP -LocalPort 5000 -Action Allow
+   ```
+
+8. **Start the service** and confirm it's actually healthy — see [Verifying a deployment](#verifying-a-deployment) below:
+
+   ```powershell
+   Start-Service AdminConsole
+   ```
+
+**A note on TLS.** The default `Kestrel:Endpoints:Http:Url` binds plain HTTP — there's no HTTPS endpoint configured out of the box, and the app has no built-in certificate handling. Windows Integrated Authentication doesn't require TLS to function (NTLM/Kerberos protect the credential exchange independently of the transport), so this is a deliberate simplification for a trusted internal network, not an oversight. If a deployment's security policy requires TLS in transit regardless, either add an `Https` endpoint under `Kestrel:Endpoints` pointing at a certificate, or front Kestrel with a reverse proxy (IIS + ARR, nginx, etc.) that terminates TLS — neither is wired up in this repository today.
+
+### Redeploying an update (an existing install)
+
+1. **Build** the new release the same way: `.\publish.ps1`.
+
+2. **Stop the service and copy the new binaries**, explicitly preserving the live database and configuration — `robocopy`'s `/XF` excludes them from being overwritten:
 
    ```powershell
    Stop-Service AdminConsole
@@ -515,6 +577,30 @@ The application ships as a self-contained, single-folder Windows deployment — 
    ```
 
 Configuration (`appsettings.json`) lives outside the publish artifact by design — server list, monitoring intervals, the authorized AD group, and backup job definitions are edited in place on the target machine and are never overwritten by a redeploy.
+
+### Verifying a deployment
+
+After `Start-Service`, confirm the new build is actually healthy before considering the deploy done:
+
+- **Service state:** `Get-Service AdminConsole` should report `Running` within a few seconds — Kestrel starts early in `Program.cs`, before any background service's first poll cycle.
+- **Windows Event Log (Application):** if the service fails to start at all (a missing `ConnectionStrings:AdminConsoleDb`, an unreachable `DataProtection:KeyPath`, an unset `Authorization:ViewerGroup`, etc. — several config values are read with `?? throw` at startup), .NET's Windows Service host logs the startup exception there. Check this first if `Get-Service` shows `Stopped` right after `Start-Service`.
+- **The dashboard itself:** open the Overview page in a browser from a machine in the AD group — a blank page or a 500 response there usually means the AD group name in `Authorization:ViewerGroup` doesn't match, or the browsing machine isn't actually in it.
+- **The Logs page:** a successful start publishes an `AppLogEntryOccurred.Info` entry for each background service, including `Telegram bot started: @<botname>` if a Telegram token is already configured. Their presence confirms the whole event pipeline (MediatR → SQLite → SignalR) is actually working end to end, not just that the process is technically running.
+
+### Rolling back a bad release
+
+Because a redeploy only ever touches binaries (never `appsettings.json` or the two `.db` files, per the `/XF` exclusions above), rolling back a release that turns out to be broken is symmetric to deploying it:
+
+```powershell
+Stop-Service AdminConsole
+
+robocopy "path\to\previous\publish" "C:\Program Files\AdminConsole" /E `
+  /XF appsettings.json appsettings.*.json adminconsole.db* hangfire.db*
+
+Start-Service AdminConsole
+```
+
+This only works cleanly if the rolled-back version's EF Core schema is compatible with whatever migrations the *broken* release may have already applied — the migration tool has no `down`/revert command, so a release that shipped a genuinely destructive schema change needs to be rolled back together with a database restore from backup (see [Database Backup & Restore](#database-backup--restore)), not binaries alone. Keeping the previous `publish/` folder (renamed with a version/date suffix) around after every release, rather than overwriting it, is what makes this rollback path available at all — `publish.ps1` itself always starts from a clean `publish/`, so preserving prior releases is a manual step on the build machine.
 
 ---
 
@@ -557,6 +643,87 @@ Every mutating endpoint (`POST`/`PUT`/`DELETE`) that changes monitoring-relevant
 
 ---
 
+## Telegram Integration
+
+The Telegram bot ([`TelegramBotService`](#telegrambotservice--telegramaccesscontrolservice)) runs in-process as another `BackgroundService`, sharing the exact same Singleton monitoring services the REST API and dashboard use — nothing it reports is computed separately, and it can never drift from what the web UI shows. This section is the operator-facing reference: how to connect a bot, the role model, and the complete command/action surface. For the internal implementation (long-polling loop, push-cache design, callback registry), see [TelegramBotService / TelegramAccessControlService](#telegrambotservice--telegramaccesscontrolservice) under Background Services.
+
+### Connecting a bot
+
+1. Create a bot via **@BotFather** on Telegram and copy its token.
+2. In the AdminConsole web UI, go to **Settings → Telegram** and paste the token (`POST /api/credentials/telegram`). It's encrypted at rest with DPAPI-NG the same way the Zabbix token is (see [Security & Architecture](#security--architecture)) — nothing is ever written to `appsettings.json`. Saving a token **hot-restarts** the bot's long-polling loop (`CredentialsChangedOccurred` → `RestartPollingAsync`) — no process restart needed.
+3. Generate a **claim code** from the same Settings page (`POST /api/telegramusers/claim-code`) — a random 6-digit number, valid for **10 minutes**, held in memory only (it does not survive a service restart, and is single-use).
+4. In Telegram, open a chat with the bot and send:
+
+   ```
+   /claim_admin 123456
+   ```
+
+   The chat that sends a valid, unexpired code becomes the **Primary Admin** — permanently, until the database row is edited directly. This only works while no Primary Admin has been claimed yet (`IsPrimaryAdminClaimed == false`); a second `/claim_admin` from a different chat after that point is simply rejected as invalid.
+5. Anyone else who messages the bot with `/start` goes through the approval flow described below instead.
+
+### Roles & authorization
+
+There are exactly two access levels — nothing in between, and no per-command permission grid beyond the one exception (`/users`) called out below:
+
+| Role | How it's granted | Storage | Capabilities |
+|---|---|---|---|
+| **Primary Admin** | Claims the one-time code via `/claim_admin` | `AppSettings.TelegramPrimaryAdminChatId` (SQLite, one row) — never appears in the allowed-users list | Everything an approved user can do, **plus**: approve/deny incoming access requests, revoke any approved user's access, `/users` / "👥 Users" menu, and is the sole recipient of new-access-request notifications |
+| **Approved user** | Sends `/start`, then is **Approve**d by the Primary Admin (inline button in Telegram) | `TelegramAllowedUsers` table (SQLite) — `chat_id` + last-seen username | All read-only monitoring commands: status, offline list, incidents, RDP sessions, maintenance windows, on-demand ping, backup status |
+| *(anyone else)* | No entry, no claim | — | `/start` and `/claim_admin` are the only commands that respond; every other message is logged as `AppLogEntryOccurred.Warning("Unauthorized: chat_id=…")` and otherwise silently ignored — no reply is sent, so an unapproved chat can't use responses to probe for which commands exist |
+
+Both persistent roles survive a service restart — they live in SQLite, loaded once by `TelegramAccessControlService.InitializeAsync` before polling starts, guaranteeing the cache is populated before the first incoming message could possibly read it. Everything *ephemeral* — the claim code, pending access requests, rate-limit counters, the ping cooldown, the re-request cooldown — is **in-memory only** and resets on restart; a request that was still pending approval when the service restarted is gone, and that user needs to send `/start` again.
+
+**Anti-abuse limits**, enforced per `chat_id` regardless of role:
+
+| Limit | Value | Applies to |
+|---|---|---|
+| Sliding-window rate limit | 10 actions / minute | Every text command and every inline-button press |
+| `/ping` cooldown | 20 seconds | Just `/ping` — the most expensive command, since it triggers a real ICMP sweep of every server |
+| Re-request cooldown | 15 minutes | Sending `/start` again after being **Denied** or **Revoked** |
+| Pending-request cap | 50 concurrent, 24-hour TTL each | New `/start` requests once the cap is hit — rejected outright rather than queued |
+
+### Commands & menu
+
+Approved users (and the Primary Admin) see a persistent reply keyboard after `/start`/`/help`; every button has an equivalent slash command:
+
+| Menu button | Command | Who | What it shows |
+|---|---|---|---|
+| — | `/start` | anyone | Initiates the claim/approval flow; re-sends the main menu if already approved |
+| — | `/claim_admin <code>` | anyone (pre-claim only) | Binds the sending chat as Primary Admin |
+| — | `/help` | approved | Lists available commands (includes `/users` only when sent by the Primary Admin) |
+| 📊 Status | `/status` | approved | Online/offline counts, open incident count, active RDP session count (or "monitoring disabled" if toggled off in Settings), active maintenance window count |
+| 🔴 Offline | — | approved | Paginated, per-group list of currently offline servers |
+| ⏱ Incidents | — | approved | Paginated list of open (unresolved) downtime incidents, with start time and running duration |
+| 🖥 RDP | `/rdp` | approved | If exactly one server is in the `"Terminal Servers"` group, its session list directly; otherwise an inline server picker, then that server's sessions (state, logon time), with a Back button. Reports "monitoring disabled" if RDP polling is toggled off |
+| 🔧 Maintenance | — | approved | Paginated list of currently active maintenance windows |
+| 🏓 Ping | `/ping` | approved | Triggers a real-time, on-demand ping sweep of every configured server (throttled — see the cooldown table above) and shows per-group results with latency |
+| 💾 Backups | `/backups` | approved | Paginated per-job Full/Differential status, flagging jobs whose host is currently under a maintenance window. Reports "monitoring disabled" if backup checks are toggled off |
+| 👥 Users | `/users` | **Primary Admin only** | Lists every approved user with an inline **🚫 revoke** button next to each |
+
+### Inline actions (buttons under a message)
+
+These aren't slash commands — they're `callback_data` payloads attached to inline keyboards, all handled by a single dispatcher (`HandleCallbackQueryAsync`):
+
+| Action | Trigger | Who | Effect |
+|---|---|---|---|
+| `approve:{id}` / `deny:{id}` | Buttons on a new-access-request notification | Primary Admin only | Resolves the pending request; a second tap on an already-resolved request is rejected with "already handled" instead of double-processing |
+| `revoke:{chatId}` | 🚫 button in the Users list | Primary Admin only | Immediately removes that chat's access and starts their 15-minute re-request cooldown |
+| `rdp_server:{id}` | Server picker in `/rdp` | approved | Opens that server's session list. `{id}` is a short numeric handle from `TelegramCallbackRegistry`, not the raw IP — Telegram caps `callback_data` at 64 bytes |
+| `back:rdp_picker` / `back:status` | Back buttons on a detail screen | approved | Returns to the previous screen, editing the same message in place rather than sending a new one |
+| `page:{screen}:{index}` | Next ▶ / ◀ Back on any paginated list | approved | Flips one page in place. If the underlying list was rebuilt since (a fresh `/ping`, or reopening the same menu), a stale page reference is caught and the user is told to reopen the screen rather than shown wrong data |
+
+### Push notifications (bot-initiated, no command needed)
+
+The bot proactively messages the Primary Admin and every approved user — not just whoever happens to be looking — the instant either event fires:
+
+- **`🔴 SERVER OFFLINE`** — the moment a *new* incident opens (after anti-flapping confirms it — see [Key Architectural Decisions](#key-architectural-decisions)). A server recovering is never separately announced; it's just quietly dropped from the internal "already alerted" set, so the *same* server going down again later still triggers a fresh alert.
+- **`BACKUP STALE / MISSING / UNKNOWN`** — on every confirmed backup-status transition, with an icon per outcome (⏰ Stale, 🚫 Missing, ❓ Unknown).
+- **New access request** — Primary Admin only, with inline **✅ Approve** / **❌ Deny** buttons attached directly to the notification.
+
+All bot output — commands, buttons, and pushed alerts alike — is rendered as real Telegram HTML (`parse_mode=HTML`) through a dedicated formatter, with long lists split across multiple messages under Telegram's 4096-character limit in a way that never splits a tag across pages.
+
+---
+
 ## Database Backup & Restore
 
 AdminConsole doesn't back up *itself* — it's the tool watching everyone else's backups, so its own data needs the same discipline applied manually (or via a scheduled task on the host). Three things make up its full state, and **all three must be backed up together** — they're not independently useful:
@@ -587,7 +754,73 @@ Start-Service AdminConsole
 
 Stopping the service first avoids copying a WAL file mid-checkpoint; the downtime is however long the copy takes (typically sub-second for this scale of data) — schedule it for a quiet window if even that brief a gap matters.
 
-**Restoring.** Stop the service, replace `adminconsole.db*`, `hangfire.db*`, `appsettings.json`, and the `keys` folder with the backed-up copies, then start the service — no migration run is needed for a same-version restore, since the schema the backup was taken from already matches what's on disk.
+### Automating backups on a schedule
+
+The manual script above is safe to wrap in a **Scheduled Task** so backups happen unattended — the only requirement is that it still stops and restarts the service around the copy, exactly like the manual version:
+
+```powershell
+# Save as C:\Scripts\Backup-AdminConsole.ps1
+$installDir = "C:\Program Files\AdminConsole"
+$dest = "D:\Backups\AdminConsole\$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
+New-Item -ItemType Directory -Path $dest -Force | Out-Null
+
+Stop-Service AdminConsole
+Copy-Item "$installDir\adminconsole.db*" $dest
+Copy-Item "$installDir\hangfire.db*"      $dest
+Copy-Item "$installDir\appsettings.json"  $dest
+Copy-Item "C:\ProgramData\AdminConsole\keys" $dest -Recurse
+Start-Service AdminConsole
+
+# Retention: keep the most recent 14 daily backups, delete the rest
+Get-ChildItem "D:\Backups\AdminConsole" -Directory |
+    Sort-Object Name -Descending | Select-Object -Skip 14 |
+    Remove-Item -Recurse -Force
+```
+
+Register it to run daily during a quiet window:
+
+```powershell
+$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
+  -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\Scripts\Backup-AdminConsole.ps1"'
+$trigger = New-ScheduledTaskTrigger -Daily -At 3am
+Register-ScheduledTask -TaskName "AdminConsole Backup" -Action $action -Trigger $trigger `
+  -User "SYSTEM" -RunLevel Highest
+```
+
+Running as `SYSTEM` needs local Administrator rights on the box to `Stop-Service`/`Start-Service` — which `SYSTEM` already has; a dedicated service account would need those rights granted explicitly (e.g. via the Services MMC's Security tab) if used instead.
+
+### Verifying a backup is actually restorable
+
+A copied file isn't a verified backup on its own — periodically confirm a backup set is intact rather than discovering a corrupt copy only during an actual incident:
+
+```powershell
+# Run against a COPY of the backup, never the live files
+sqlite3 "D:\Backups\AdminConsole\2026-08-25_0300\adminconsole.db" "PRAGMA integrity_check;"
+```
+
+`PRAGMA integrity_check` returns the single word `ok` for a healthy file; anything else means that backup set is unusable and an earlier copy in the retention window should be checked instead. This requires the separate `sqlite3` CLI (not bundled with AdminConsole itself) on whichever machine runs the check.
+
+### Restoring — same server, same version
+
+Stop the service, replace `adminconsole.db*`, `hangfire.db*`, `appsettings.json`, and the `keys` folder with the backed-up copies, then start the service — no migration run is needed for a same-version restore, since the schema the backup was taken from already matches what's on disk.
+
+### Disaster recovery — a new machine
+
+Restoring onto hardware that never ran AdminConsole before is the [First-time installation](#first-time-installation-a-server-that-has-never-run-adminconsole-before) steps, with the backed-up files substituted in at the right point instead of starting from empty:
+
+1. Follow [First-time installation](#first-time-installation-a-server-that-has-never-run-adminconsole-before) steps 1–2 (build and copy `publish/`), but **skip** step 3 (editing a fresh `appsettings.json`) — restore the backed-up `appsettings.json` in its place instead, since it already has the real `Servers`/`BackupChecks`/`Authorization` values.
+2. Restore the backed-up `keys` folder to `C:\ProgramData\AdminConsole\keys` (or wherever the restored `appsettings.json`'s `DataProtection:KeyPath` points) **before** first start — without it, the Zabbix/Telegram tokens already inside `adminconsole.db` can never be decrypted on this machine, ever (see [Known Limitations](#known-limitations)).
+3. Restore the backed-up `adminconsole.db*` and `hangfire.db*` into the install folder — **do not** run `AdminConsole.Migration.exe` yet if the new machine is running the *same* AdminConsole version the backup was taken from; only run it if the new machine is on a newer version (see below).
+4. Continue with [First-time installation](#first-time-installation-a-server-that-has-never-run-adminconsole-before) steps 6–8: register the Windows Service under the correct domain account, open the firewall, start it, and verify.
+
+### Restoring alongside a version upgrade
+
+If the restored database predates the AdminConsole build now being deployed, run the migration tool once after restoring the `.db` files and before starting the service — `Database.MigrateAsync()` only ever *adds* what's missing (it tracks applied migrations, the same idempotent mechanism used on every normal redeploy) and is safe to run against an already-current schema too:
+
+```powershell
+cd "C:\Program Files\AdminConsole"
+.\AdminConsole.Migration.exe
+```
 
 ---
 

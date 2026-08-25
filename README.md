@@ -11,9 +11,9 @@
 [![Tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)](#engineering-practices)
 [![Central Package Management](https://img.shields.io/badge/NuGet-Central%20Package%20Management-004880?logo=nuget&logoColor=white)](#central-package-management)
 
-**A self-hosted, real-time infrastructure monitoring and management console** — ping, uptime/SLA, RDP session tracking, Zabbix alerts, backup verification, scheduled maintenance, and a Telegram bot, all in one dashboard.
+**A self-hosted, real-time infrastructure monitoring and management console** — ping, uptime/SLA, RDP session tracking, Zabbix alerts, backup verification, maintenance windows, and a Telegram bot, all in one dashboard.
 
-AdminConsole v3 is the full rewrite of a legacy WPF desktop application into a **headless ASP.NET Core Windows Service with a React web front end**. Where the original tool only worked at the console of whichever machine it was installed on, this version runs unattended as a background service and is reachable from any browser on the network — no RDP session, no desktop session, no client install. Every monitoring loop, alerting rule, and management action from the desktop era was ported, and several — live SLA reporting, scheduled maintenance windows, Telegram-based approvals — were rebuilt to be genuinely web-native rather than emulated.
+AdminConsole v3 is the full rewrite of a legacy WPF desktop application into a **headless ASP.NET Core Windows Service with a React web front end**. Where the original tool only worked at the console of whichever machine it was installed on, this version runs unattended as a background service and is reachable from any browser on the network — no RDP session, no desktop session, no client install. Every monitoring loop, alerting rule, and management action from the desktop era was ported, and several — live SLA reporting, maintenance windows, Telegram-based approvals — were rebuilt to be genuinely web-native rather than emulated.
 
 ![AdminConsole Overview](overview.png)
 
@@ -187,7 +187,7 @@ The production build is **embedded directly into the ASP.NET Core host** — `do
 ## Key Features
 
 ### Dashboard & Uptime
-A single Overview page rolls up system health, ping success rate, live uptime percentage, recent activity, active backups, RDP sessions, and scheduled maintenance into one glance. The Uptime page tracks every Online↔Offline transition per server with **anti-flapping** (a downtime shorter than a configurable threshold never becomes a recorded incident) and produces **on-demand SLA reports** — per-server uptime %, downtime, incident count, MTTR, and a maintenance appendix — rendered as a self-contained, offline-viewable HTML document opened in a new tab. The same report is also generated automatically every week by `SlaReportJob` on Hangfire's schedule.
+A single Overview page rolls up system health, ping success rate, live uptime percentage, recent activity, active backups, RDP sessions, and active maintenance windows into one glance. The Uptime page tracks every Online↔Offline transition per server with **anti-flapping** (a downtime shorter than a configurable threshold never becomes a recorded incident) and produces **on-demand SLA reports** — per-server uptime %, downtime, incident count, MTTR, and a maintenance appendix — rendered as a self-contained, offline-viewable HTML document opened in a new tab. The same report is also generated automatically every week by `SlaReportJob` on Hangfire's schedule.
 
 ### Ping & Server Management
 A dual-cadence background loop pings every configured host (a faster recovery loop re-checks only currently-offline hosts, so recovery is detected quickly without hammering healthy servers). From the same table, Windows hosts support:
@@ -206,7 +206,7 @@ The Zabbix Alerts page mirrors what Zabbix's own UI would show, not just what it
 Evaluates each configured backup job against file age and a rolling size baseline, with anti-flapping so a single bad read doesn't flip a job's status. A job can independently track a Full and a Differential pattern, each with its own max-age threshold. Surfaces per-job size history, total backup size across the fleet, and pushes Telegram alerts the moment a job goes Stale or Missing.
 
 ### Maintenance Windows
-Start a maintenance window against a single server or an entire group, with duration presets or no time limit. While active, Ping and Backup alerting is suppressed and the corresponding uptime incident is marked as maintenance-related rather than counted against SLA. Windows auto-expire on schedule or can be ended early from the same UI that started them.
+Start a maintenance window against a single server or an entire group, with duration presets or no time limit. A window always starts **immediately**, at the moment it's created (`MaintenanceController.Start` sets `From = DateTimeOffset.Now` server-side) — there is no way to schedule one for a future date/time in advance; "schedule" here refers only to the auto-expiry once a duration is set, not to planning ahead. While active, Ping and Backup alerting is suppressed and the corresponding uptime incident is marked as maintenance-related rather than counted against SLA. Windows auto-expire once their duration elapses, or can be ended early from the same UI that started them.
 
 ### Telegram Bot
 A full admin bot living in the same process as the API: a one-time **claim code** binds the first Primary Admin, new users are approved or denied through **inline keyboard buttons** (mirrored in the web Settings page, so either side can act), and the bot pushes real-time alerts for new incidents and backup transitions. Command menu covers live status, offline hosts, open incidents, RDP sessions, maintenance, on-demand ping, and backup state — all reading from the exact same in-memory services the web dashboard uses, so the two are never out of sync.

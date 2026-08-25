@@ -8,7 +8,7 @@
 [![Hangfire](https://img.shields.io/badge/jobs-Hangfire-1A2A6C)](#architecture)
 [![SQLite](https://img.shields.io/badge/storage-SQLite%20(WAL)-07405E?logo=sqlite&logoColor=white)](#architecture)
 [![Platform](https://img.shields.io/badge/platform-Windows%20Service-0078D6?logo=windows&logoColor=white)](#security--architecture)
-[![Tests](https://img.shields.io/badge/tests-104%20passing-brightgreen)](#engineering-practices)
+[![Tests](https://img.shields.io/badge/tests-114%20passing-brightgreen)](#engineering-practices)
 [![Central Package Management](https://img.shields.io/badge/NuGet-Central%20Package%20Management-004880?logo=nuget&logoColor=white)](#central-package-management)
 
 **A self-hosted, real-time infrastructure monitoring and management console** — ping, uptime/SLA, RDP session tracking, Zabbix alerts, backup verification, scheduled maintenance, and a Telegram bot, all in one dashboard.
@@ -327,7 +327,7 @@ A dedicated audit pass (2026-08-23) targeted exactly one failure class across ev
 
 ### Test Suite
 
-**114 tests across 26 files**, using **xUnit** with **coverlet.collector** for coverage, organized to mirror the solution layout: `Controllers/`, `Data/`, `Migration/`, `Monitoring/`, `Reports/`, `Security/`, `Telegram/`, `Zabbix/`. Coverage leans toward pure-logic and integration-style tests that don't require a live Windows/AD environment to run — WMI calls, `quser` invocation, and Windows Integrated Authentication itself are inherently untestable outside that environment and are exercised manually against real infrastructure instead.
+**114 tests across 22 files**, using **xUnit** with **coverlet.collector** for coverage, organized to mirror the solution layout: `Controllers/`, `Data/`, `Migration/`, `Monitoring/`, `Reports/`, `Security/`, `Telegram/`, `Zabbix/`. Coverage leans toward pure-logic and integration-style tests that don't require a live Windows/AD environment to run — WMI calls, `quser` invocation, and Windows Integrated Authentication itself are inherently untestable outside that environment and are exercised manually against real infrastructure instead.
 
 ```powershell
 dotnet test
@@ -385,6 +385,11 @@ Each monitored server needs a few inbound rules enabled — all are predefined W
 - Ships **self-contained** (see [Deployment](#deployment--release-pipeline)) — no separate .NET runtime install is needed on the host.
 - Needs its own **inbound firewall rule** for whatever port Kestrel is configured to listen on (`Kestrel:Endpoints:Http:Url`) if the dashboard will be reached from other machines rather than just `localhost`.
 
+### Compatibility matrix
+
+- **Host OS:** built for `net8.0-windows`, self-contained `win-x64` (see [Release Pipeline](#release-pipeline)) — any 64-bit Windows Server release still within [.NET 8's own support matrix](https://dotnet.microsoft.com/platform/support/policy) can run the published output. In practice the realistic floor is higher than that bare minimum: Windows Integrated Authentication against AD, the Remote Desktop Services role backing RDP session polling, and WMI's `CIMV2` namespace are all first-class on Windows Server 2016 and newer, which is the range this app has actually been run and tested on.
+- **Browsers (the React SPA):** `adminconsole-web` has no `browserslist` entry and no custom Vite `build.target` (`adminconsole-web/vite.config.ts`), so it inherits Vite's own default — modern, evergreen browsers only (current Chrome/Edge/Firefox/Safari). There is no transpilation step for older engines; Internet Explorer and legacy Edge are not supported.
+
 ---
 
 ## Local Development
@@ -412,10 +417,11 @@ Vite's dev-server config ([`vite.config.ts`](adminconsole-web/vite.config.ts)) p
 **Other useful commands:**
 
 ```powershell
-dotnet test              # run the 104-test xUnit suite
+dotnet test              # run the 114-test xUnit suite
 cd adminconsole-web
 npm run lint              # oxlint
 npm run build             # production build (also runs automatically during `dotnet publish -c Release`)
+npm run preview           # serves the last `npm run build` output locally, for a quick sanity check of the production bundle without a full publish
 ```
 
 ---
@@ -439,6 +445,19 @@ Everything the service needs to run lives in one `appsettings.json`, deployed al
 
   "ConnectionStrings": {
     "AdminConsoleDb": "Data Source=adminconsole.db;Cache=Shared"
+  },
+
+  "Hangfire": {
+    // Bare file name/path for Hangfire.Storage.SQLite — NOT an ADO.NET
+    // connection string (see Two SQLite databases, on purpose).
+    "SqliteDbPath": "hangfire.db"
+  },
+
+  "DataProtection": {
+    // Folder for the DPAPI-NG key ring that encrypts the Zabbix/Telegram
+    // tokens at rest — must exist and be writable by the service account
+    // *before* first start (see First-time installation).
+    "KeyPath": "C:\\ProgramData\\AdminConsole\\keys"
   },
 
   "Monitoring": {
@@ -467,14 +486,17 @@ Everything the service needs to run lives in one `appsettings.json`, deployed al
       "DiffPattern": "*_diff_*.bak",
       "MaxAgeHoursFull": 26,
       "MaxAgeHoursDiff": 26,
-      "SizeWarningThresholdPct": 30
+      "SizeWarningThresholdPct": 30,
+      "MinSamplesForBaseline": 3,
+      "MinConsecutiveForAlert": 2
     }
   ]
 }
 ```
 
+- **`Hangfire:SqliteDbPath`** and **`DataProtection:KeyPath`** are both read with `?? throw new InvalidOperationException(...)` at startup (`Program.cs`) — an `appsettings.json` missing either key fails to start immediately, not just at first use.
 - **`Servers`** drives every per-host feature — Ping, Uptime, and which action buttons appear: `"Type": "Windows"` unlocks Restart/Shutdown, while `"Linux"` and `"Network"` entries get ping-only monitoring. Only servers placed in the `"Terminal Servers"` group are polled for RDP sessions.
-- **`BackupChecks`** — one entry per job. `Path` accepts either a local or a UNC path; `DiffPattern` can be left as an empty string for a server that has no differential backups to track.
+- **`BackupChecks`** — one entry per job. `Path` accepts either a local or a UNC path; `DiffPattern` can be left as an empty string for a server that has no differential backups to track. `MinSamplesForBaseline` (default `3`) is how many size samples must accumulate in a job's history before size deviation is evaluated at all — below that, only file age is checked and the result is always `Ok`. `MinConsecutiveForAlert` (default `2`) is the anti-flapping threshold: a raw `Stale`/`Missing`/`SizeWarning` result must repeat this many consecutive cycles before it's confirmed and alerted on.
 - **No credentials live in this file.** The Zabbix API token and the Telegram bot token are entered through the web **Settings** page after the service is already running, and are encrypted at rest with the Windows Data Protection API (DPAPI-NG) before being written to SQLite — `appsettings.json` never sees them. The Zabbix minimum-severity threshold is likewise a runtime setting, changed from the same Settings page, not a config file entry.
 
 ---
@@ -488,6 +510,7 @@ The application ships as a self-contained, single-folder Windows deployment — 
 Only the machine that *runs* `publish.ps1` needs these — the target server needs none of them:
 
 - **.NET 8 SDK** (not just the runtime) — `dotnet publish` needs the SDK to compile.
+- **The exact ASP.NET Core runtime patch pinned in [`Directory.Build.props`](Directory.Build.props)** — `RuntimeFrameworkVersion` for `net8.0-windows` is hardcoded to a specific patch (`8.0.28` as of this writing), not "any 8.0.x", to close the version-drift incident described under [Central Package Management](#central-package-management). A build machine with a *different* 8.0.x SDK/runtime installed will fail to resolve that exact runtime pack and needs the pin bumped (or the matching runtime installed) before `publish.ps1` succeeds — this isn't a soft warning, `dotnet publish` errors out.
 - **Node.js + npm on `PATH`** — `AdminConsole.Api.csproj`'s `PublishFrontend` MSBuild target shells out to `npm run build` inside `adminconsole-web/` automatically as part of `dotnet publish -c Release`; if Node isn't reachable there, the publish fails at that step with a clear MSBuild error rather than producing a silently-empty `wwwroot`.
 - **Windows PowerShell 5.1+** — `publish.ps1` declares `#Requires -Version 5.1` and refuses to run under an older host.
 
@@ -601,6 +624,28 @@ Start-Service AdminConsole
 ```
 
 This only works cleanly if the rolled-back version's EF Core schema is compatible with whatever migrations the *broken* release may have already applied — the migration tool has no `down`/revert command, so a release that shipped a genuinely destructive schema change needs to be rolled back together with a database restore from backup (see [Database Backup & Restore](#database-backup--restore)), not binaries alone. Keeping the previous `publish/` folder (renamed with a version/date suffix) around after every release, rather than overwriting it, is what makes this rollback path available at all — `publish.ps1` itself always starts from a clean `publish/`, so preserving prior releases is a manual step on the build machine.
+
+### Uninstalling / decommissioning a server
+
+Retiring a server that runs AdminConsole means undoing every one-time step from [First-time installation](#first-time-installation-a-server-that-has-never-run-adminconsole-before), not just stopping the process — none of this is automated by any script in the repo:
+
+```powershell
+# 1. Stop and remove the Windows Service itself
+Stop-Service AdminConsole
+sc.exe delete AdminConsole
+
+# 2. Remove the inbound firewall rule opened for Kestrel
+Remove-NetFirewallRule -DisplayName "AdminConsole (Kestrel)"
+
+# 3. Remove the scheduled backup task, if one was registered
+Unregister-ScheduledTask -TaskName "AdminConsole Backup" -Confirm:$false
+
+# 4. Remove the install directory, the DataProtection key folder, and ProgramData state
+Remove-Item "C:\Program Files\AdminConsole" -Recurse -Force
+Remove-Item "C:\ProgramData\AdminConsole" -Recurse -Force
+```
+
+Take a final backup first if there's any chance the server's data will be needed again (see [Database Backup & Restore](#database-backup--restore)) — steps 1 and 4 are irreversible once the `.db` files and the DPAPI key folder are gone together, since without the matching keys a later-restored `adminconsole.db` can never have its Zabbix/Telegram tokens decrypted again, on this machine or any other. If the retired server was also the Telegram bot's only credential holder, remember to save the bot token itself somewhere before deleting — it isn't recoverable from the encrypted database without the same key folder.
 
 ---
 
@@ -909,9 +954,10 @@ Honestly-scoped technical boundaries, not oversights waiting to be "discovered" 
 - **Single-instance by design.** SignalR's connection state, Hangfire's scheduler, and both SQLite databases (WAL mode notwithstanding) all assume exactly one running instance of `AdminConsole.Api`. There is no horizontal scaling story — a second instance pointed at the same database files would corrupt Hangfire's job coordination and produce duplicate SignalR broadcasts.
 - **DPAPI-NG-protected secrets are tied to the machine/account that encrypted them.** Copying `adminconsole.db` to a different machine (disaster recovery, hardware replacement) without also migrating the Data Protection key folder means the Zabbix/Telegram tokens fail to decrypt. This is handled gracefully — `CredentialStore.Unprotect` treats it as "secret unavailable," not a fatal error, and Settings simply asks for the credential again — but the secret itself doesn't survive the move and must be re-entered.
 - **The migration tool is a one-shot, run-once-at-cutover utility with limited automated test coverage.** `AdminConsole.Migration` imports data from the legacy WPF app's format exactly once, per deployment; unlike the rest of the backend, nothing in `AdminConsole.Tests` exercises it end-to-end, so its correctness leans more heavily on manual verification at cutover time than the rest of the codebase does.
-- **The frontend has no automated test suite.** `adminconsole-web/package.json` defines no `test` script and there's no Vitest/Jest configuration in the repository — frontend changes are verified manually against the dev server rather than through an automated regression suite. Backend logic (104 xUnit tests) is covered far more thoroughly than the UI layer.
+- **The frontend has no automated test suite.** `adminconsole-web/package.json` defines no `test` script and there's no Vitest/Jest configuration in the repository — frontend changes are verified manually against the dev server rather than through an automated regression suite. Backend logic (114 xUnit tests) is covered far more thoroughly than the UI layer.
 - **WMI, `quser`, and Windows Integrated Authentication are not covered by the automated test suite either** — they require a live Windows/AD environment to exercise meaningfully and are validated manually against real infrastructure instead.
 - **No `/health` endpoint.** Nothing in `Program.cs` wires up ASP.NET Core's health-check middleware — there's no lightweight, unauthenticated endpoint an external monitor (or a load balancer, if one were ever introduced) could poll to check whether the service itself is up, short of hitting an authenticated API route.
+- **No LICENSE, CONTRIBUTING guide, or CI pipeline in the repository.** There's no `.github/workflows` or equivalent — `dotnet test`/`npm run lint` are run manually, not gated automatically on push or PR. This is consistent with a single-team, single-deployment internal tool rather than an oversight, but it means nothing currently blocks a change with a failing test or lint error from being merged.
 
 ---
 
@@ -955,7 +1001,7 @@ AdminConsole_v3/
 ├── AdminConsole.Domain/           Domain models, MediatR events, repository interfaces
 ├── AdminConsole.Infrastructure/   Background services, EF Core, Telegram bot, WMI/remote management
 ├── AdminConsole.Migration/        One-time legacy-data import + EF Core migration runner
-├── AdminConsole.Tests/            xUnit test suite (114 tests / 26 files)
+├── AdminConsole.Tests/            xUnit test suite (114 tests / 22 files)
 ├── adminconsole-web/              React + TypeScript + Vite frontend
 ├── Directory.Packages.props       Central Package Management — every NuGet version, pinned once
 ├── Directory.Build.props          Solution-wide MSBuild properties (runtime pack pinning)

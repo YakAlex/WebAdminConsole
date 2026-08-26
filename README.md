@@ -13,7 +13,7 @@
 
 **A self-hosted, real-time infrastructure monitoring and management console** — ping, uptime/SLA, RDP session tracking, Zabbix alerts, backup verification, maintenance windows, and a Telegram bot, all in one dashboard.
 
-AdminConsole v3 is the full rewrite of a legacy WPF desktop application into a **headless ASP.NET Core Windows Service with a React web front end**. Where the original tool only worked at the console of whichever machine it was installed on, this version runs unattended as a background service and is reachable from any browser on the network — no RDP session, no desktop session, no client install. Every monitoring loop, alerting rule, and management action from the desktop era was ported, and several — live SLA reporting, maintenance windows, Telegram-based approvals — were rebuilt to be genuinely web-native rather than emulated.
+AdminConsole is built as a **headless ASP.NET Core Windows Service with a React web front end** — it runs unattended as a background service from boot, under a dedicated service account, and is reachable from any browser on the network. No RDP session, no desktop session, no client install: every monitoring loop, alerting rule, and management action — including live SLA reporting, maintenance windows, and Telegram-based approvals — is a first-class, genuinely web-native feature.
 
 ![AdminConsole Overview](overview.png)
 
@@ -47,12 +47,12 @@ AdminConsole v3 is the full rewrite of a legacy WPF desktop application into a *
 
 Infrastructure teams running a self-hosted Windows/AD environment tend to accumulate a pile of single-purpose tools: a ping sweeper, a backup-age checker, an RDP session tracker, a Zabbix tab that's always open, a spreadsheet for maintenance windows, and a phone full of alert emails nobody reads in time. AdminConsole replaces that pile with one process and one dashboard.
 
-The original version of this tool was a WPF desktop application — it worked, but only from the console of the one machine it was installed on, under the identity of whoever was logged in, with no way to check status remotely short of an RDP session into that box. **v3 is a ground-up rewrite**, not a port with a new coat of paint:
+AdminConsole is designed around a simple constraint: nobody should need a desktop session, an RDP connection, or physical access to a console to find out whether their infrastructure is healthy. That constraint shapes every layer of the stack:
 
-- The desktop client became a **headless ASP.NET Core Windows Service**. There is no window to open, no user to log in as — Kestrel listens on the network from boot, under a dedicated service account, whether or not anyone is watching.
-- The UI became a **React single-page application**, served by the same process and reachable from any browser on the domain, authenticated transparently via Windows Integrated Authentication — no second login, no separate credential store.
-- State that used to live only in the WPF window's memory (current ping status, active alerts, live sessions) now flows through a proper **domain-event bus** (MediatR) fanned out over **SignalR**, so the dashboard, the Telegram bot, and the persisted audit log are always looking at the same truth, not three independent implementations that can drift apart.
-- Every monitoring loop, alert rule, and management action from the desktop era was ported feature-for-feature; SLA reporting, maintenance windows, and Telegram-based user approval were **rebuilt** rather than carried over, because the desktop versions leaned on things (a visible window, an interactive desktop, local file dialogs) that simply don't exist in a headless service.
+- **Headless by design.** There is no window to open, no user to log in as — Kestrel listens on the network from boot, under a dedicated service account, whether or not anyone is watching.
+- **A real web front end.** The UI is a **React single-page application**, served by the same process and reachable from any browser on the domain, authenticated transparently via Windows Integrated Authentication — no second login, no separate credential store.
+- **One source of truth.** Live state (current ping status, active alerts, live sessions) flows through a proper **domain-event bus** (MediatR) fanned out over **SignalR**, so the dashboard, the Telegram bot, and the persisted audit log are always looking at the same truth, not three independent implementations that can drift apart.
+- **Nothing bolted on.** SLA reporting, maintenance windows, and Telegram-based user approval are first-class, real-time features built directly on the same event bus — not add-ons layered over a system that wasn't built to support them.
 
 ---
 
@@ -194,7 +194,7 @@ A single Overview page rolls up system health, ping success rate, live uptime pe
 ### Ping & Server Management
 A dual-cadence background loop pings every configured host (a faster recovery loop re-checks only currently-offline hosts, so recovery is detected quickly without hammering healthy servers). From the same table, Windows hosts support:
 - **Restart / Shutdown** — a WMI call against the remote machine, confirmed through a modal, with no interactive process spawned on the server (the service runs headless, so there's no desktop session to open a window on).
-- **Continuous ping** — an in-browser modal that polls the live ping endpoint once a second for as long as it's open, replacing the desktop app's ability to spawn its own terminal window.
+- **Continuous ping** — an in-browser modal that polls the live ping endpoint once a second for as long as it's open, with no terminal window or local ping utility needed.
 
 ### RDP Sessions
 Polls terminal servers via `quser` under the service's own Kerberos identity (no credentials stored or prompted per poll), tracks session state transitions (connected / disconnected / resumed), daily peak concurrent sessions, and last-logout history. Only servers placed in the `"Terminal Servers"` group are polled — everything else is skipped rather than probed and ignored.
@@ -267,7 +267,7 @@ Authenticates with an API token only (legacy username/password auth was removed 
 
 ### AppLogPersistenceHandler / AppLogRetentionJob
 
-`AppLogPersistenceHandler` is the entire replacement for the old WPF app's rolling-file logger — every `AppLogEntryOccurred` is written straight to the `AppLogEntries` SQLite table, turning "tail the newest log file" into `ORDER BY Timestamp DESC LIMIT :take`. Because MediatR fans the same event out to multiple handlers independently, a failure persisting to SQLite can never suppress the SignalR broadcast of the same entry, or vice versa. `AppLogRetentionJob` runs daily on Hangfire (`Cron.Daily()`) and deletes rows older than a fixed 90-day cutoff — added after an audit finding that the table had **no** retention policy at all, and every monitoring loop (Ping, RDP, Zabbix, Backup, Uptime) writes to it on every cycle, forever.
+`AppLogPersistenceHandler` is the application's log persistence layer — every `AppLogEntryOccurred` is written straight to the `AppLogEntries` SQLite table, turning "tail the newest log file" into `ORDER BY Timestamp DESC LIMIT :take`. Because MediatR fans the same event out to multiple handlers independently, a failure persisting to SQLite can never suppress the SignalR broadcast of the same entry, or vice versa. `AppLogRetentionJob` runs daily on Hangfire (`Cron.Daily()`) and deletes rows older than a fixed 90-day cutoff — added after an audit finding that the table had **no** retention policy at all, and every monitoring loop (Ping, RDP, Zabbix, Backup, Uptime) writes to it on every cycle, forever.
 
 ### TelegramBotService / TelegramAccessControlService
 
@@ -300,7 +300,7 @@ That `Newtonsoft.Json` mismatch was only **1 of 18** files [`publish.ps1`'s](#de
 3. **Hard failure on conflict.** If any conflicts were found, the script prints every offending path and `throw`s, aborting the publish. A previous version of this script only warned and still exited 0 — a broken publish could be reported as a success. It can't anymore.
 4. **Post-publish verification.** Before printing a success banner, the script checks that at least one `.exe` exists in the output and that `wwwroot` exists and is non-empty (i.e. the frontend actually built and got embedded). Both checks `throw` on failure rather than just logging a warning — the same "gate, don't just log" philosophy applied throughout.
 
-`-p:PublishSingleFile=true` is deliberately **not** used: the old WPF client's single-file mode existed to solve a BAML-resource-extraction problem specific to WPF, and Kestrel has no equivalent dependency — enabling it here would only add a temp-extraction step to every startup for no corresponding benefit.
+`-p:PublishSingleFile=true` is deliberately **not** used: Kestrel has no dependency that benefits from single-file packaging — enabling it here would only add a temp-extraction step to every startup for no corresponding benefit.
 
 ### Concurrency & Thread-Safety
 
@@ -538,14 +538,14 @@ Only the machine that *runs* `publish.ps1` needs these — the target server nee
    icacls "C:\ProgramData\AdminConsole\keys" /grant "CONTOSO\svc-adminconsole:(OI)(CI)M"
    ```
 
-5. **Create the database schema.** This is the *same* console tool used on every later redeploy — on a brand-new install there's no `adminconsole.db` yet, so `Database.MigrateAsync()` creates it from scratch (applying every EF Core migration in order) before the one-time legacy-import step runs:
+5. **Create the database schema.** This is the *same* console tool used on every later redeploy — on a brand-new install there's no `adminconsole.db` yet, so `Database.MigrateAsync()` creates it from scratch (applying every EF Core migration in order) before the one-time data-import step runs:
 
    ```powershell
    cd "C:\Program Files\AdminConsole"
    .\AdminConsole.Migration.exe
    ```
 
-   Run with no arguments, it assumes a companion legacy WPF install at `E:\AdminConsole_v2\logs` and `%LocalAppData%\AdminConsole\user_settings.json` for the one-time data import. Every source path it looks for is individually guarded with `File.Exists`/`Directory.Exists`, so on a server with **no** legacy install to import from, each import step safely no-ops (imports 0 records) instead of failing — only schema creation actually matters for a from-scratch install. To point at different source paths (or a non-default DB file), pass them positionally: `.\AdminConsole.Migration.exe "Data Source=adminconsole.db;Cache=Shared" "D:\old\logs" "D:\old\user_settings.json"`.
+   Run with no arguments, it looks for pre-existing monitoring data to import once, at `E:\AdminConsole_v2\logs` and `%LocalAppData%\AdminConsole\user_settings.json`. Every source path it looks for is individually guarded with `File.Exists`/`Directory.Exists`, so on a server with **no** prior data to import, each import step safely no-ops (imports 0 records) instead of failing — only schema creation actually matters for a from-scratch install. To point at different source paths (or a non-default DB file), pass them positionally: `.\AdminConsole.Migration.exe "Data Source=adminconsole.db;Cache=Shared" "D:\old\logs" "D:\old\user_settings.json"`.
 
    This step isn't optional, and skipping it isn't silently risky — it's loudly blocked. `AdminConsole.Api` deliberately does **not** migrate itself in production (an unattended `ALTER TABLE` against a live database it hasn't been told to touch is its own risk); instead, `Program.cs` checks `Database.GetPendingMigrationsAsync()` on every startup and, outside `Development`, throws immediately if anything is pending — the service fails fast with a message naming the exact pending migrations and pointing back at this step, instead of surfacing later as an opaque `SqliteException` ("no such column") from whichever background service happens to touch the missing schema first. One coupling to watch: `AdminConsole.Migration.exe` does **not** read `appsettings.json` — its connection string defaults to the same value as the shipped `appsettings.json` (`Data Source=adminconsole.db;Cache=Shared`), but if `ConnectionStrings:AdminConsoleDb` has been customized, the *same* value must be passed as this tool's first positional argument, or it silently migrates a different database file than the one the service actually opens at startup.
 
@@ -899,9 +899,9 @@ Common symptoms, matched to their actual cause in the code — most of these alr
 
 ## Logging
 
-There are no rolling log *files* in v3 — the old WPF app's `logs/app-*.log` rolling-file sink was replaced entirely by `AppLogPersistenceHandler` writing straight to the `AppLogEntries` SQLite table (see [AppLogPersistenceHandler / AppLogRetentionJob](#applogpersistencehandler--applogretentionjob)). "Tail the newest log file" became `ORDER BY Timestamp DESC LIMIT :take`.
+There are no rolling log *files* — logging is handled entirely by `AppLogPersistenceHandler` writing straight to the `AppLogEntries` SQLite table (see [AppLogPersistenceHandler / AppLogRetentionJob](#applogpersistencehandler--applogretentionjob)). "Tail the newest log file" becomes `ORDER BY Timestamp DESC LIMIT :take`.
 
-**Sources and severities.** Every background service, job, and notification handler publishes `AppLogEntryOccurred.{Info,Success,Warning,Error}(source, message)` — `source` is a short tag (`PingMonitor`, `UptimeTracker`, `Maintenance`, `RdpMonitor`, `Zabbix`, `TelegramAccess`, `AppLogRetention`, …) matching the class that raised it, mirroring the old app's `[Source]` log-line convention one for one.
+**Sources and severities.** Every background service, job, and notification handler publishes `AppLogEntryOccurred.{Info,Success,Warning,Error}(source, message)` — `source` is a short tag (`PingMonitor`, `UptimeTracker`, `Maintenance`, `RdpMonitor`, `Zabbix`, `TelegramAccess`, `AppLogRetention`, …) matching the class that raised it.
 
 **Querying.** `GET /api/logs` ([`LogsController`](#adminconsoleapi--rest-surface)) accepts `take` (default 1000, hard-clamped to a maximum of 5000 — added after an audit finding that an unbounded `take` flowed straight into EF Core's `Take()` against a table with no retention of its own, letting one request force a full-table sort), plus optional `before`/`after` timestamp bounds and a `search` substring filter — newest entries first.
 
@@ -959,15 +959,15 @@ There are no rolling log *files* in v3 — the old WPF app's `logs/app-*.log` ro
 
 Honestly-scoped technical boundaries, not oversights waiting to be "discovered" — most are either deliberate scope cuts for the current deployment size (~15 servers, one trusted internal network) or properties inherent to the technology choice:
 
-- **RDP and Zabbix polling are not integrated with Maintenance Windows.** `PingMonitorService` and `UptimeTrackerService` both check `MaintenanceService.IsUnderMaintenance(...)` before logging a Warning/Error; `RdpMonitorService` and `ZabbixPollerService` do not — a maintenance window suppresses ping/uptime noise for a server, but an RDP or Zabbix issue on that same server during the window still logs normally. Carried forward unchanged from the WPF version, where it was the same acknowledged gap.
+- **RDP and Zabbix polling are not integrated with Maintenance Windows.** `PingMonitorService` and `UptimeTrackerService` both check `MaintenanceService.IsUnderMaintenance(...)` before logging a Warning/Error; `RdpMonitorService` and `ZabbixPollerService` do not — a maintenance window suppresses ping/uptime noise for a server, but an RDP or Zabbix issue on that same server during the window still logs normally. An acknowledged gap, not yet addressed.
 - **Single-instance by design.** SignalR's connection state, Hangfire's scheduler, and both SQLite databases (WAL mode notwithstanding) all assume exactly one running instance of `AdminConsole.Api`. There is no horizontal scaling story — a second instance pointed at the same database files would corrupt Hangfire's job coordination and produce duplicate SignalR broadcasts.
 - **DPAPI-NG-protected secrets are tied to the machine/account that encrypted them.** Copying `adminconsole.db` to a different machine (disaster recovery, hardware replacement) without also migrating the Data Protection key folder means the Zabbix/Telegram tokens fail to decrypt. This is handled gracefully — `CredentialStore.Unprotect` treats it as "secret unavailable," not a fatal error, and Settings simply asks for the credential again — but the secret itself doesn't survive the move and must be re-entered.
-- **The migration tool is a one-shot, run-once-at-cutover utility.** `AdminConsole.Migration` imports data from the legacy WPF app's format exactly once, per deployment. It does have genuine end-to-end coverage — `MigrationRunnerTests.cs` runs `MigrationRunner.RunAsync` against a real EF Core/SQLite database and fixture files, asserting on the resulting rows across a first run, a second idempotent run, and a partial-completion retry — but that coverage is narrower than the rest of the backend's: `Program.cs`'s CLI entry point itself (argument parsing, the `Database.MigrateAsync()` call) has no test, so correctness there still leans more on manual verification at cutover time.
+- **The migration tool is a one-shot, run-once-at-cutover utility.** `AdminConsole.Migration` imports pre-existing monitoring data exactly once, per deployment. It does have genuine end-to-end coverage — `MigrationRunnerTests.cs` runs `MigrationRunner.RunAsync` against a real EF Core/SQLite database and fixture files, asserting on the resulting rows across a first run, a second idempotent run, and a partial-completion retry — but that coverage is narrower than the rest of the backend's: `Program.cs`'s CLI entry point itself (argument parsing, the `Database.MigrateAsync()` call) has no test, so correctness there still leans more on manual verification at cutover time.
 - **The frontend has no automated test suite.** `adminconsole-web/package.json` defines no `test` script and there's no Vitest/Jest configuration in the repository — frontend changes are verified manually against the dev server rather than through an automated regression suite. Backend logic (114 xUnit tests) is covered far more thoroughly than the UI layer.
 - **WMI, `quser`, and Windows Integrated Authentication are not covered by the automated test suite either** — they require a live Windows/AD environment to exercise meaningfully and are validated manually against real infrastructure instead.
 - **No `/health` endpoint.** Nothing in `Program.cs` wires up ASP.NET Core's health-check middleware — there's no lightweight, unauthenticated endpoint an external monitor (or a load balancer, if one were ever introduced) could poll to check whether the service itself is up, short of hitting an authenticated API route.
 - **No LICENSE, CONTRIBUTING guide, or CI pipeline in the repository.** There's no `.github/workflows` or equivalent — `dotnet test`/`npm run lint` are run manually, not gated automatically on push or PR. This is consistent with a single-team, single-deployment internal tool rather than an oversight, but it means nothing currently blocks a change with a failing test or lint error from being merged.
-- **A handful of pieces are dead code, not yet cleaned up.** `ServerDashboardEntry` and `MaintenanceDurationChoice` (`AdminConsole.Domain/Models/`) are leftover WPF-era types with no reference anywhere outside their own file. `SlaReportService.GetFleetAvailabilityPercent` — fleet-wide availability via the union of every server's downtime intervals over a period — is fully implemented and documented but has no controller or job calling it; only `SlaReportServiceTests.cs` exercises it. None of the three are wired to any REST endpoint, background job, or UI surface. Harmless to leave as-is, but worth knowing before assuming every public type in the codebase has a live consumer.
+- **A handful of pieces are dead code, not yet cleaned up.** `ServerDashboardEntry` and `MaintenanceDurationChoice` (`AdminConsole.Domain/Models/`) are leftover, unreferenced types with no use anywhere outside their own file. `SlaReportService.GetFleetAvailabilityPercent` — fleet-wide availability via the union of every server's downtime intervals over a period — is fully implemented and documented but has no controller or job calling it; only `SlaReportServiceTests.cs` exercises it. None of the three are wired to any REST endpoint, background job, or UI surface. Harmless to leave as-is, but worth knowing before assuming every public type in the codebase has a live consumer.
 
 ---
 
@@ -1011,7 +1011,7 @@ AdminConsole_v3/
 ├── AdminConsole.Api/              REST controllers, SignalR hub, composition root (Program.cs)
 ├── AdminConsole.Domain/           Domain models, MediatR events, repository interfaces
 ├── AdminConsole.Infrastructure/   Background services, EF Core, Telegram bot, WMI/remote management
-├── AdminConsole.Migration/        One-time legacy-data import + EF Core migration runner
+├── AdminConsole.Migration/        One-time data-import utility + EF Core migration runner
 ├── AdminConsole.Tests/            xUnit test suite (114 tests / 22 files)
 ├── adminconsole-web/              React + TypeScript + Vite frontend
 ├── Directory.Packages.props       Central Package Management — every NuGet version, pinned once

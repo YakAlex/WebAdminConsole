@@ -19,17 +19,6 @@
 
   <ItemGroup>
     <!-- Shared across multiple projects -->
-    <!-- Api needs these as real NuGet packages (not just the runtime pack):
-         Microsoft.AspNetCore.Authentication.Negotiate has a hard floor of
-         Connections.Abstractions >= 8.0.30 (confirmed: pinning down to
-         8.0.28 to match the installed runtime pack hits NU1109, a genuine
-         downgrade conflict, not a false alarm). Migration has no such
-         requirement and would otherwise only pick up the framework-pack
-         copies (8.0.28): explicit PackageReferences in Migration.csproj
-         pull the same 8.0.30 NuGet packages Api uses, so both projects'
-         self-contained outputs agree. -->
-    <PackageVersion Include="Microsoft.AspNetCore.Connections.Abstractions" Version="8.0.30" />
-    <PackageVersion Include="Microsoft.Extensions.Features" Version="8.0.30" />
     <PackageVersion Include="MediatR" Version="14.2.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
@@ -57,7 +46,6 @@
     <!-- AdminConsole.Api -->
     <PackageVersion Include="Hangfire.AspNetCore" Version="1.8.24" />
     <PackageVersion Include="Hangfire.Storage.SQLite" Version="0.4.3" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.30" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
     <PackageVersion Include="System.DirectoryServices.AccountManagement" Version="8.0.1" />
 

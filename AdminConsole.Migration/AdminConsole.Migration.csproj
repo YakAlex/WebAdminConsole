@@ -9,13 +9,6 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
-    <!-- Not used directly by Migration: pulled explicitly so it resolves
-         the same NuGet packages (8.0.30) as AdminConsole.Api's
-         Microsoft.AspNetCore.Authentication.Negotiate dependency does,
-         instead of picking up the FrameworkReference-provided 8.0.28 copies
-         below. See Directory.Packages.props for the full explanation. -->
-    <PackageReference Include="Microsoft.AspNetCore.Connections.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Features" />
   </ItemGroup>
 
   <!-- publish.ps1 fix (2026-08-23): without this, Microsoft.Extensions.*

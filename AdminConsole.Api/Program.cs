@@ -15,8 +15,9 @@ using Hangfire;
 using Hangfire.Storage.SQLite;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Negotiate;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -64,10 +65,40 @@ builder.Host.UseWindowsService();
 builder.Services.Configure<HostOptions>(options =>
     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
 
-// ── T3.2: Windows Integrated Authentication (Negotiate), no IIS ─────────────
+// ── Cookie authentication — replaces Windows Integrated Auth (Negotiate) ────
+// with a custom login form that still validates against AD
+// (IAdAuthenticationService/WindowsAdAuthenticationService), for a friendlier
+// login UX than the native browser credentials popup Negotiate produces.
+// CookieSecurePolicy.Always means the auth cookie is ONLY set/sent over
+// HTTPS — this REQUIRES the Kestrel Https endpoint (appsettings.json,
+// "Kestrel:Endpoints:Https") to be configured, or login will silently fail
+// (the browser drops a Secure cookie sent over plain HTTP).
 builder.Services
-    .AddAuthentication(NegotiateDefaults.AuthenticationScheme)
-    .AddNegotiate();
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "AdminConsole.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+
+        // This is an SPA/JSON API, not a server-rendered site — the default
+        // CookieAuthenticationHandler redirects to LoginPath on 401/403,
+        // which would return index.html (200) instead of a real status
+        // code, breaking http.ts's status-code-based auth handling.
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
 
 var viewerGroup = builder.Configuration["Authorization:ViewerGroup"]
     ?? throw new InvalidOperationException("Authorization:ViewerGroup is not configured.");
@@ -77,8 +108,29 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Viewer", policy => policy.RequireRole(viewerGroup));
 });
 
-// ── T3.4: mapping the "AdminConsole-Admins" AD group into claims (R4) ───────
-builder.Services.AddTransient<IClaimsTransformation, WindowsGroupClaimsTransformation>();
+// ── Login brute-force throttle ───────────────────────────────────────────────
+// AD itself typically enforces an account-lockout policy after repeated bad
+// passwords, but that protects the AD account, not this endpoint from being
+// hammered — a simple fixed-window throttle here is a cheap, standard first
+// line of defense, with no added package (built into the ASP.NET Core 8
+// shared framework).
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("login", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 5;
+        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueLimit = 0;
+    });
+    options.OnRejected = (context, _) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        return ValueTask.CompletedTask;
+    };
+});
+
+// ── AD access, used once at login by AuthController (Authorization:ViewerGroup group check is NOT re-run per request — see AuthController's doc comment) ──
+builder.Services.AddSingleton<IAdAuthenticationService, WindowsAdAuthenticationService>();
 
 // ── T3.3: Data Protection — encrypting keys at rest (DPAPI-NG) ──────────────
 var keyPath = builder.Configuration["DataProtection:KeyPath"]
@@ -311,6 +363,7 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<DashboardHub>("/hubs/dashboard");

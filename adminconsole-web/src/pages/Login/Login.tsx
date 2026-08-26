@@ -34,8 +34,8 @@ export function Login() {
     } catch (err: unknown) {
       setError(
         err instanceof ApiError && err.status === 429
-          ? 'Забагато спроб входу. Спробуйте пізніше.'
-          : "Невірне ім'я користувача або пароль.",
+          ? 'Too many login attempts. Please try again later.'
+          : "Invalid username or password.",
       )
     } finally {
       setSubmitting(false)
@@ -50,12 +50,12 @@ export function Login() {
             <ShieldCheck size={22} strokeWidth={1.75} aria-hidden="true" />
           </div>
           <h1 className={styles.title}>Admin Console</h1>
-          <p className={styles.subtitle}>Увійдіть, використовуючи обліковий запис домену</p>
+          <p className={styles.subtitle}>Log in with your domain account</p>
         </div>
 
         <div className={styles.fields}>
           <label className={styles.field}>
-            <span className={styles.label}>Ім'я користувача</span>
+            <span className={styles.label}>Login</span>
             <input
               className={styles.input}
               type="text"
@@ -69,7 +69,7 @@ export function Login() {
           </label>
 
           <label className={styles.field}>
-            <span className={styles.label}>Пароль</span>
+            <span className={styles.label}>Password</span>
             <div className={styles.inputWrap}>
               <input
                 className={styles.input}
@@ -85,7 +85,7 @@ export function Login() {
                 className={styles.passwordToggle}
                 onClick={() => setShowPassword((v) => !v)}
                 disabled={submitting}
-                aria-label={showPassword ? 'Приховати пароль' : 'Показати пароль'}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
               </button>
@@ -106,7 +106,7 @@ export function Login() {
           ) : (
             <LogIn size={16} strokeWidth={2} aria-hidden="true" />
           )}
-          {submitting ? 'Вхід…' : 'Увійти'}
+          {submitting ? 'Logging in…' : 'Log in'}
         </button>
       </form>
     </div>

@@ -22,6 +22,19 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- Program.cs встановлює ContentRootPath = AppContext.BaseDirectory (щоб
+       Windows Service не резолвив шляхи відносно C:\Windows\System32) — тому
+       Kestrel резолює відносний Kestrel:Endpoints:Https:Certificate:Path
+       (appsettings.Development.json, "./certs/dev-cert.pfx") відносно теки
+       збірки (bin\...), а не кореня проєкту. Копіюємо dev-сертифікат туди ж,
+       де вже опиняються appsettings.*.json. Condition — щоб build не падав,
+       поки розробник ще не згенерував власний dev-сертифікат локально. -->
+  <ItemGroup>
+    <None Include="certs\dev-cert.pfx" Condition="Exists('certs\dev-cert.pfx')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
   <!-- Фаза 7, T7.2: React-фронтенд збирається й вшивається у публікацію
        автоматично — окремий build-скрипт (npm run build → копіювання в
        wwwroot вручну) більше не потрібен. -->

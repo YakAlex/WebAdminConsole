@@ -9,6 +9,7 @@
 *.db-shm
 *.db-wal
 AdminConsole.Api/keys/
+AdminConsole.Api/certs/
 
 # dotenv files
 .env

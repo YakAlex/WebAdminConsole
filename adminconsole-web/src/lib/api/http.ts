@@ -22,9 +22,11 @@ export function isAuthError(error: unknown): error is ApiAuthError {
 }
 
 /**
- * GET request to /api/*. `credentials: 'include'` is needed for
- * Windows authentication (Negotiate) to correctly pass through the
- * Vite dev proxy to the backend.
+ * GET request to /api/*. `credentials: 'include'` is needed so the
+ * AdminConsole.Auth session cookie is sent through the Vite dev proxy to
+ * the backend (browsers don't attach cookies to cross-origin fetches by
+ * default even same-site-in-production, and the dev server proxies from a
+ * different origin/port).
  */
 export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response

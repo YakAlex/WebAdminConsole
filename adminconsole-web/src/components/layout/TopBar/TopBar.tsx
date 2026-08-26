@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { HubConnectionState } from '@microsoft/signalr'
+import { LogOut } from 'lucide-react'
 import { StatusDot, type StatusTone } from '@/components/ui/StatusDot'
 import { useDashboardConnection } from '@/lib/signalr/DashboardConnectionContext'
+import { logout } from '@/lib/api/endpoints'
 import styles from './TopBar.module.scss'
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -33,18 +35,6 @@ const CONNECTION_TONE: Record<HubConnectionState, StatusTone> = {
   [HubConnectionState.Disconnected]: 'critical',
 }
 
-/**
- * Global top bar (brief §3). Step 1 UX polish (2026-08-21): removed
- * non-functional elements (Search, "Updated just now" + refresh, avatar)
- * — only date/time and system status remain.
- *
- * UX fix (2026-08-22): date/time now sits on the left edge (instead of
- * the right); "All systems operational" (previously a static label with
- * no backing data, always green regardless of actual state) was replaced
- * with a REAL live indicator of the SignalR connection
- * (useDashboardConnection) — the right edge isn't empty, and the label
- * now tells the truth about the app's state.
- */
 export function TopBar() {
   const [now, setNow] = useState(() => new Date())
   const { state } = useDashboardConnection()
@@ -54,6 +44,13 @@ export function TopBar() {
     return () => clearInterval(id)
   }, [])
 
+  const handleLogout = () => {
+    // A full reload after logout (rather than calling recheck()) resets
+    // both the REST canary AND the SignalR connection cleanly — the same
+    // reasoning as the Login page's post-login reload.
+    logout().finally(() => window.location.reload())
+  }
+
   return (
     <header className={styles.topbar}>
       <div className={styles.dateTime}>
@@ -61,9 +58,15 @@ export function TopBar() {
         <span className={styles.time}>{timeFormatter.format(now)}</span>
       </div>
 
-      <div className={styles.status}>
-        <StatusDot tone={CONNECTION_TONE[state]} glow />
-        <span>{CONNECTION_LABEL[state]}</span>
+      <div className={styles.right}>
+        <div className={styles.status}>
+          <StatusDot tone={CONNECTION_TONE[state]} glow />
+          <span>{CONNECTION_LABEL[state]}</span>
+        </div>
+
+        <button className={styles.logout} type="button" onClick={handleLogout} title="Вийти">
+          <LogOut size={16} strokeWidth={2} />
+        </button>
       </div>
     </header>
   )

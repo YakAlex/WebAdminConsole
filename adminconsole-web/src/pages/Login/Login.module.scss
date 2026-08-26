@@ -1,0 +1,218 @@
+@use '@/styles/mixins' as *;
+
+.root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100%;
+  background: var(--color-bg-app);
+  padding: var(--space-6);
+}
+
+// Reuse the same card surface every other panel in the app uses
+// (border + top→bottom gradient, no heavy shadow) instead of
+// redefining it here.
+.card {
+  @include card-surface;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 380px;
+  padding: var(--space-8);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+// Circular badge behind the icon — same brand-cyan tint used for the
+// active nav item elsewhere, so the login page reads as part of the
+// same system rather than a bespoke screen.
+.iconBadge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-brand-cyan-border);
+  background: var(--color-brand-cyan-bg);
+  color: var(--color-brand-cyan);
+}
+
+.title {
+  font-size: var(--font-size-page-title);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  max-width: 30ch;
+  font-size: var(--font-size-secondary);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-base);
+}
+
+// Groups the two fields with a tighter rhythm than the card's own
+// header/fields/submit rhythm (field-grouping).
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+}
+
+.input {
+  width: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  font-family: var(--font-family-base);
+  transition: border-color var(--transition-fast);
+  @include focus-ring;
+
+  // The password field's toggle button sits inside the input on the
+  // right — keep typed text from running under it.
+  .inputWrap & {
+    padding-right: var(--space-10);
+  }
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-border-hover);
+  }
+
+  &:focus-visible {
+    border-color: var(--color-brand-cyan);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+  @include focus-ring;
+
+  &:hover:not(:disabled) {
+    color: var(--color-text-primary);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// A tinted panel rather than plain red text — visually distinct on its
+// own (not color alone: it also carries an icon + message), and
+// role="alert" on the element (Login.tsx) gets it announced.
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-critical-bg);
+}
+
+.errorIcon {
+  flex-shrink: 0;
+  color: var(--color-critical);
+}
+
+.errorText {
+  font-size: var(--font-size-secondary);
+  color: var(--color-critical);
+  line-height: var(--line-height-tight);
+}
+
+.submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--color-brand-cyan);
+  color: var(--color-bg-app);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    opacity var(--transition-fast),
+    background var(--transition-fast);
+  @include focus-ring;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  &:active:not(:disabled) {
+    opacity: 0.8;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.spinner {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

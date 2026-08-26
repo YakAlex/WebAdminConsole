@@ -401,6 +401,33 @@ Each monitored server needs a few inbound rules enabled — all are predefined W
 
 Running the API and the frontend as two separate dev processes gives instant backend rebuilds and Vite's hot module replacement, at the cost of one piece of setup: the browser talks to two different origins in dev (Vite's dev server and Kestrel), so Vite is configured to **proxy** both the REST API and the SignalR WebSocket through to Kestrel.
 
+### Local Development — HTTPS certificate
+
+`appsettings.json`'s Kestrel `Https` endpoint points at a certificate that only exists on
+the production server (`C:\ProgramData\AdminConsole\certs\adminconsole.pfx`, provisioned
+separately — see [Deployment](#deployment--release-pipeline)). Only that production path
+is committed, so **every fresh clone needs a one-time, local, throwaway certificate**
+before `dotnet run` will start — unlike `DataProtection:KeyPath` (`./keys`), which
+`PersistKeysToFileSystem` creates and populates automatically on first run with no manual
+step, Kestrel's certificate loader requires the `.pfx` file to already physically exist on
+disk, so nothing in the code can generate it for you.
+
+Generate one with PowerShell, from the repo root:
+
+```powershell
+$cert = New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(5)
+$pwd = ConvertTo-SecureString -String "dev-only-not-secret" -Force -AsPlainText
+New-Item -ItemType Directory -Force -Path "AdminConsole.Api\certs" | Out-Null
+Export-PfxCertificate -Cert $cert -FilePath "AdminConsole.Api\certs\dev-cert.pfx" -Password $pwd
+Remove-Item "cert:\CurrentUser\My\$($cert.Thumbprint)"
+```
+
+This drops a self-signed, localhost-only certificate at `AdminConsole.Api/certs/dev-cert.pfx`
+(git-ignored — never committed). `appsettings.Development.json` already points Kestrel at
+that exact path with the password `dev-only-not-secret` baked in — if you change the
+password above, update it there too, or `dotnet run` will fail to load the `.pfx`. Run this
+once per machine; the cert is valid for 5 years.
+
 **1. Start the backend** (Kestrel, listening on `http://localhost:5074` in dev):
 
 ```powershell

@@ -15,8 +15,8 @@
 
   <PropertyGroup>
     <!-- net8.0-windows, не net8.0: хост принципово Windows-only за дизайном
-         (UseWindowsService, DPAPI-NG, Negotiate/AD-групи) — узгоджено з
-         рештою застосунку, а не точковий SupportedOSPlatform на кожен файл. -->
+         (UseWindowsService, DPAPI-NG, PrincipalContext/AD-групи) — узгоджено
+         з рештою застосунку, а не точковий SupportedOSPlatform на кожен файл. -->
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

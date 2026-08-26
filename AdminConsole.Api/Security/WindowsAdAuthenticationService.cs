@@ -14,11 +14,11 @@ public sealed class WindowsAdAuthenticationService(ILogger<WindowsAdAuthenticati
 {
     public bool ValidateCredentials(string username, string password, out string canonicalUsername)
     {
-        var samAccountName = StripDomainPrefix(username);
-        canonicalUsername = samAccountName;
+        canonicalUsername = string.Empty;
 
         try
         {
+            var samAccountName = StripDomainPrefix(username);
             using var context = new PrincipalContext(ContextType.Domain);
             if (!context.ValidateCredentials(samAccountName, password))
                 return false;
@@ -34,7 +34,7 @@ public sealed class WindowsAdAuthenticationService(ILogger<WindowsAdAuthenticati
             logger.LogWarning(ex,
                 "WindowsAdAuthenticationService: failed to validate credentials for {User} " +
                 "— the domain is unreachable, the machine is not domain-joined, or the credentials are invalid.",
-                samAccountName);
+                username ?? "(null)");
             return false;
         }
     }

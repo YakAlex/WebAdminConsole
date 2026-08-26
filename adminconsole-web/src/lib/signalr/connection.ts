@@ -2,8 +2,9 @@ import { HubConnectionBuilder, LogLevel, type HubConnection } from '@microsoft/s
 
 /**
  * T6.2: DashboardHub client. withCredentials: true is mandatory,
- * otherwise Windows authentication (Negotiate) won't reach
- * /hubs/dashboard even through the same-origin Vite proxy.
+ * otherwise the AdminConsole.Auth session cookie (cookie-based
+ * authentication, replacing the old Negotiate/Windows-auth popup) won't be
+ * sent to /hubs/dashboard even through the same-origin Vite proxy.
  */
 export function createDashboardConnection(): HubConnection {
   return new HubConnectionBuilder()

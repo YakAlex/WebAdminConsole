@@ -78,17 +78,31 @@ public sealed class AuthController(
         await HttpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity),
+            // IsPersistent = true is intentional, not an oversight: it makes
+            // the cookie survive a browser restart (still bounded by the 8h
+            // sliding ExpireTimeSpan in Program.cs) rather than being a
+            // session-only cookie the browser discards on close. Do not
+            // "fix" this into a security regression or treat it as an
+            // unexplained mystery — it's a deliberate UX choice from the
+            // original plan.
             new AuthenticationProperties { IsPersistent = true });
 
         logger.LogInformation("Login succeeded for {User} from {RemoteIp} (AdminConsole-Admins member: {IsMember}).",
             canonicalUsername, HttpContext.Connection.RemoteIpAddress, isMember);
-        return Ok();
+        // 204, not 200: an empty-body 200 makes the frontend's apiSend()
+        // (adminconsole-web/src/lib/api/http.ts) call response.json() on an
+        // empty body, which throws and gets rethrown as ApiError — so a
+        // successful login would render as "wrong username or password"
+        // even though the cookie was set correctly. Matches the NoContent()
+        // pattern used by every other empty-success response in this API
+        // (CredentialsController, DowntimeController, TelegramUsersController).
+        return NoContent();
     }
 
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return Ok();
+        return NoContent();
     }
 }

@@ -28,17 +28,32 @@ export default defineConfig({
       // REST API — AdminConsole.Api (Kestrel, Phase 3). changeOrigin is
       // needed because the backend checks the Host header for
       // Negotiate/Windows authentication.
+      //
+      // Target is the HTTPS endpoint (appsettings.json,
+      // "Kestrel:Endpoints:Https", :5001) — NOT the old :5074
+      // launchSettings.json port, and NOT the plain-HTTP :5000 endpoint.
+      // appsettings.json now declares explicit Kestrel:Endpoints, which
+      // Kestrel treats as taking precedence over ASPNETCORE_URLS/launch
+      // profiles, so the backend actually listens on 5000/5001. And the
+      // auth cookie is CookieSecurePolicy.Always (Program.cs) — the
+      // browser silently drops it over plain HTTP, so the dev proxy has to
+      // go through HTTPS too. `secure: false` tells the proxy to accept
+      // the backend's self-signed dev certificate (README, "Local
+      // Development — HTTPS certificate") instead of rejecting it as
+      // untrusted.
       '/api': {
-        target: 'http://localhost:5074',
+        target: 'https://localhost:5001',
         changeOrigin: true,
+        secure: false,
         agent: keepAliveAgent,
       },
       // SignalR hub (DashboardHub, T3.7) — a separate ws: true flag,
       // otherwise Vite won't proxy the WebSocket upgrade for real-time events.
       '/hubs': {
-        target: 'http://localhost:5074',
+        target: 'https://localhost:5001',
         changeOrigin: true,
         ws: true,
+        secure: false,
         agent: keepAliveAgent,
       },
     },

@@ -45,7 +45,7 @@ public sealed class AuthControllerTests
 
         var result = await controller.Login(new AuthController.LoginRequest("yakymenko", "correct-password"));
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<NoContentResult>(result);
         Assert.NotNull(authService.SignedInPrincipal);
         Assert.True(authService.SignedInPrincipal!.IsInRole(RequiredGroup));
         Assert.Equal("SANTA\\yakymenko", authService.SignedInPrincipal.Identity!.Name);
@@ -65,7 +65,7 @@ public sealed class AuthControllerTests
 
         var result = await controller.Login(new AuthController.LoginRequest("someoneelse", "correct-password"));
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<NoContentResult>(result);
         Assert.False(authService.SignedInPrincipal!.IsInRole(RequiredGroup));
     }
 
@@ -80,7 +80,7 @@ public sealed class AuthControllerTests
 
         var result = await controller.Login(new AuthController.LoginRequest("yakymenko", "correct-password"));
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<NoContentResult>(result);
         Assert.False(authService.SignedInPrincipal!.IsInRole(RequiredGroup));
     }
 
@@ -110,13 +110,13 @@ public sealed class AuthControllerTests
     }
 
     [Fact]
-    public async Task Logout_SignsOut_AndReturnsOk()
+    public async Task Logout_SignsOut_AndReturnsNoContent()
     {
         var (controller, authService) = NewController(new FakeAdAuthenticationService());
 
         var result = await controller.Logout();
 
-        Assert.IsType<OkResult>(result);
+        Assert.IsType<NoContentResult>(result);
         Assert.True(authService.SignedOutCalled);
     }
 

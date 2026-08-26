@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { AlertCircle, Eye, EyeOff, Loader2, LogIn, ShieldCheck } from 'lucide-react'
 import { login } from '@/lib/api/endpoints'
-import { useAuth } from '@/lib/auth/AuthContext'
 import { ApiError } from '@/lib/api/http'
 import styles from './Login.module.scss'
 
@@ -10,13 +9,15 @@ import styles from './Login.module.scss'
  * popup. Rendered by App.tsx whenever AuthContext resolves to
  * 'unauthenticated' (a 401 from the REST canary or SignalR negotiate).
  *
- * On success this calls `recheck()` — NOT `reportAuthorized()` — because a
- * successful login only proves valid domain credentials, not AD group
- * membership; the REST canary re-check is what actually decides between
- * 'authorized' and 'denied'.
+ * On success this does a full `window.location.reload()` rather than
+ * calling `recheck()` — the same reasoning as TopBar's logout handler
+ * (TopBar.tsx): a reload resets both the REST canary AND the SignalR
+ * connection cleanly. `recheck()` alone only re-runs the REST canary, so
+ * DashboardConnectionProvider's SignalR connection (established once on
+ * first mount, before login) would never retry and the dashboard would
+ * stay stuck "Offline" until a manual reload anyway.
  */
 export function Login() {
-  const { recheck } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -29,7 +30,7 @@ export function Login() {
     setSubmitting(true)
     try {
       await login({ username, password })
-      recheck()
+      window.location.reload()
     } catch (err: unknown) {
       setError(
         err instanceof ApiError && err.status === 429

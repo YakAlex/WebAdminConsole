@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Threading.RateLimiting;
 
 // Phase 7, T7.3: the Windows Service Control Manager starts the process with
 // Environment.CurrentDirectory = C:\Windows\System32 (not the exe's folder).
@@ -114,17 +115,33 @@ builder.Services.AddAuthorization(options =>
 // hammered — a simple fixed-window throttle here is a cheap, standard first
 // line of defense, with no added package (built into the ASP.NET Core 8
 // shared framework).
+//
+// Partitioned per client IP (RemoteIpAddress), NOT a single shared/global
+// limiter: AddFixedWindowLimiter(name, ...) would create ONE limiter
+// instance shared by every caller hitting the "login" policy, so any two
+// admins mistyping a password in the same minute would lock out everyone
+// else, and an unauthenticated attacker could send 5 req/min forever and
+// permanently block all logins — a trivial DoS against the whole admin
+// console. Partitioning by IP keeps the throttle scoped to the offending
+// client.
 builder.Services.AddRateLimiter(options =>
 {
-    options.AddFixedWindowLimiter("login", limiterOptions =>
-    {
-        limiterOptions.PermitLimit = 5;
-        limiterOptions.Window = TimeSpan.FromMinutes(1);
-        limiterOptions.QueueLimit = 0;
-    });
+    options.AddPolicy("login", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
     options.OnRejected = (context, _) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        // Matches the 1-minute fixed window above — gives the frontend's
+        // "Забагато спроб входу. Спробуйте пізніше." message something
+        // concrete to act on instead of an unqualified "try later".
+        context.HttpContext.Response.Headers.RetryAfter = "60";
         return ValueTask.CompletedTask;
     };
 });
@@ -357,6 +374,27 @@ else
             $"{string.Join(", ", pending)}. Run AdminConsole.Migration.exe " +
             "(next to this .exe) before starting AdminConsole.Api — see README.md → Deployment / Setup.");
     }
+}
+
+// With a native Negotiate popup, plain HTTP was tolerable — the
+// challenge/response handshake never puts the password on the wire. Now
+// that the login form POSTs a real AD password in the request body, anyone
+// reaching the app over the plain-HTTP Kestrel endpoint (appsettings.json,
+// "Kestrel:Endpoints:Http") would send that password in cleartext, and the
+// browser would then silently drop the Secure auth cookie the response
+// tries to set — producing the exact "login looks like it failed" symptom
+// with no diagnostic. UseHttpsRedirection sends plain-HTTP visitors to the
+// HTTPS endpoint before any of that can happen.
+app.UseHttpsRedirection();
+
+// UseHsts is skipped in Development on purpose — it would fight the
+// self-signed dev certificate workflow (README, "Local Development — HTTPS
+// certificate"): a browser that's been told via Strict-Transport-Security
+// to only ever use HTTPS for this host would refuse to fall back even when
+// the dev cert isn't trusted yet.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
 }
 
 app.UseStaticFiles();

@@ -43,7 +43,7 @@ export function DashboardConnectionProvider({ children }: { children: ReactNode 
 
   const [state, setState] = useState<HubConnectionState>(connection.state)
   const [reconnectGeneration, setReconnectGeneration] = useState(0)
-  const { reportDenied, reportAuthorized } = useAuth()
+  const { reportDenied, reportUnauthenticated, reportAuthorized } = useAuth()
   const groupRefCounts = useRef(new Map<string, number>())
 
   const rejoinActiveGroups = useCallback(() => {
@@ -112,15 +112,16 @@ export function DashboardConnectionProvider({ children }: { children: ReactNode 
       })
       .catch((err: unknown) => {
         updateState()
-        if (err instanceof HttpError && (err.statusCode === 401 || err.statusCode === 403)) {
-          reportDenied()
+        if (err instanceof HttpError) {
+          if (err.statusCode === 401) reportUnauthenticated()
+          else if (err.statusCode === 403) reportDenied()
         }
       })
 
     return () => {
       connection.stop().catch(() => {})
     }
-  }, [connection, rejoinActiveGroups, reportAuthorized, reportDenied])
+  }, [connection, rejoinActiveGroups, reportAuthorized, reportDenied, reportUnauthenticated])
 
   return (
     <DashboardConnectionContext.Provider value={{ connection, state, reconnectGeneration, joinGroup, leaveGroup }}>

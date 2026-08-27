@@ -9,34 +9,19 @@
     <PackageReference Include="Hangfire.AspNetCore" />
     <PackageReference Include="Hangfire.Storage.SQLite" />
     <PackageReference Include="MediatR" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
     <PackageReference Include="System.DirectoryServices.AccountManagement" />
   </ItemGroup>
 
   <PropertyGroup>
     <!-- net8.0-windows, не net8.0: хост принципово Windows-only за дизайном
-         (UseWindowsService, DPAPI-NG, PrincipalContext/AD-групи) — узгоджено
-         з рештою застосунку, а не точковий SupportedOSPlatform на кожен файл. -->
+         (UseWindowsService, DPAPI-NG, Negotiate/AD-групи) — узгоджено з
+         рештою застосунку, а не точковий SupportedOSPlatform на кожен файл. -->
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-
-  <!-- Program.cs встановлює ContentRootPath = AppContext.BaseDirectory (щоб
-       Windows Service не резолвив шляхи відносно C:\Windows\System32) — тому
-       Kestrel резолює відносний Kestrel:Endpoints:Https:Certificate:Path
-       (appsettings.Development.json, "./certs/dev-cert.pfx") відносно теки
-       збірки (bin\...), а не кореня проєкту. Копіюємо dev-сертифікат туди ж,
-       де вже опиняються appsettings.*.json. Перший Condition — щоб build не
-       падав, поки розробник ще не згенерував власний dev-сертифікат
-       локально. Другий Condition ('Debug') — щоб Release/publish-збірка
-       ніколи не захопила dev-сертифікат у вихід навіть якщо він випадково
-       лежить локально на машині, де запускають publish. -->
-  <ItemGroup>
-    <None Include="certs\dev-cert.pfx" Condition="Exists('certs\dev-cert.pfx') AND '$(Configuration)' == 'Debug'">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
 
   <!-- Фаза 7, T7.2: React-фронтенд збирається й вшивається у публікацію
        автоматично — окремий build-скрипт (npm run build → копіювання в

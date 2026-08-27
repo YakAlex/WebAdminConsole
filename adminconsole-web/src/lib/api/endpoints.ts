@@ -145,14 +145,3 @@ export const startMaintenance = (request: StartMaintenanceRequest) =>
 
 /** key — MaintenanceWindow.serverIp or "group:{targetGroup}". */
 export const endMaintenance = (key: string) => apiDelete(`/api/maintenance?key=${encodeURIComponent(key)}`)
-
-// ── Auth ──────────────────────────────────────────────────────────────────
-
-export interface LoginRequest {
-  username: string
-  password: string
-}
-
-export const login = (request: LoginRequest) => apiPost('/api/auth/login', request)
-
-export const logout = () => apiPost('/api/auth/logout')

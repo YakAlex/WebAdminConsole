@@ -11,7 +11,6 @@ import { Logs } from '@/pages/Logs/Logs'
 import { Settings } from '@/pages/Settings/Settings'
 import { AccessDenied } from '@/pages/AccessDenied/AccessDenied'
 import { AuthChecking } from '@/pages/AuthChecking/AuthChecking'
-import { Login } from '@/pages/Login/Login'
 import { useAuth } from '@/lib/auth/AuthContext'
 import { navItems } from '@/components/layout/Sidebar/navItems'
 
@@ -41,10 +40,6 @@ export function App() {
 
   if (status === 'checking') {
     return <AuthChecking />
-  }
-
-  if (status === 'unauthenticated') {
-    return <Login />
   }
 
   if (status === 'denied') {

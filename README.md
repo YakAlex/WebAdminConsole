@@ -50,7 +50,7 @@ Infrastructure teams running a self-hosted Windows/AD environment tend to accumu
 AdminConsole is designed around a simple constraint: nobody should need a desktop session, an RDP connection, or physical access to a console to find out whether their infrastructure is healthy. That constraint shapes every layer of the stack:
 
 - **Headless by design.** There is no window to open, no user to log in as — Kestrel listens on the network from boot, under a dedicated service account, whether or not anyone is watching.
-- **A real web front end.** The UI is a **React single-page application**, served by the same process and reachable from any browser on the domain, gated by a custom login form that validates the entered domain credentials against Active Directory and issues an HTTPS-only session cookie — no Windows Integrated Auth popup, no separate credential store of its own.
+- **A real web front end.** The UI is a **React single-page application**, served by the same process and reachable from any browser on the domain, authenticated transparently via Windows Integrated Authentication — no second login, no separate credential store.
 - **One source of truth.** Live state (current ping status, active alerts, live sessions) flows through a proper **domain-event bus** (MediatR) fanned out over **SignalR**, so the dashboard, the Telegram bot, and the persisted audit log are always looking at the same truth, not three independent implementations that can drift apart.
 - **Nothing bolted on.** SLA reporting, maintenance windows, and Telegram-based user approval are first-class, real-time features built directly on the same event bus — not add-ons layered over a system that wasn't built to support them.
 
@@ -169,7 +169,7 @@ Handlers with no page of their own in the current frontend (RDP, Zabbix, monitor
 | Remote management | **WMI** (`System.Management`, `Win32_OperatingSystem.Win32Shutdown`) for remote restart/shutdown; `quser` process invocation (Kerberos-authenticated, no stored credentials) for RDP session polling |
 | Secrets at rest | Windows **Data Protection API** (DPAPI-NG) encrypting an `AdminConsoleDb` table — no plaintext credentials on disk |
 | Telegram bot | `Telegram.Bot` client running in-process as another `BackgroundService`, sharing the same Singleton monitoring services the API talks to |
-| Authentication | Custom login form (`AuthController`) validating AD credentials via `PrincipalContext.ValidateCredentials`, backed by an **8-hour sliding-expiration, HTTPS-only cookie**; AD group membership is checked once at login and authorized by a `Viewer` authorization policy on both the REST controllers and the SignalR hub |
+| Authentication | Windows Integrated Authentication (**NTLM/Kerberos via Negotiate**), authorized by Active Directory group membership, enforced by a `Viewer` authorization policy on both the REST controllers and the SignalR hub |
 
 ### Frontend — `adminconsole-web`
 
@@ -331,7 +331,7 @@ A dedicated audit pass (2026-08-23) targeted exactly one failure class across ev
 
 ### Test Suite
 
-**126 tests across 26 files**, using **xUnit** with **coverlet.collector** for coverage, organized to mirror the solution layout: `Controllers/`, `Data/`, `Migration/`, `Monitoring/`, `Reports/`, `Security/`, `Telegram/`, `Zabbix/`. Coverage leans toward pure-logic and integration-style tests that don't require a live Windows/AD environment to run — WMI calls, `quser` invocation, and `PrincipalContext.ValidateCredentials` (AD credential validation, `WindowsAdAuthenticationService`) itself are inherently untestable outside that environment and are exercised manually against real infrastructure instead; `AuthControllerTests.cs` covers the login/logout controller logic against a fake `IAdAuthenticationService`.
+**114 tests across 22 files**, using **xUnit** with **coverlet.collector** for coverage, organized to mirror the solution layout: `Controllers/`, `Data/`, `Migration/`, `Monitoring/`, `Reports/`, `Security/`, `Telegram/`, `Zabbix/`. Coverage leans toward pure-logic and integration-style tests that don't require a live Windows/AD environment to run — WMI calls, `quser` invocation, and Windows Integrated Authentication itself are inherently untestable outside that environment and are exercised manually against real infrastructure instead.
 
 ```powershell
 dotnet test
@@ -346,8 +346,8 @@ Every piece of user-facing text — dashboard copy, log messages, Telegram bot r
 ## Security & Architecture
 
 - **Runs as a Windows Service**, not an interactive application — `Microsoft.Extensions.Hosting.WindowsServices` hosts Kestrel directly, with no reverse proxy required.
-- **Custom login form, backed by real AD credential validation.** `AuthController.Login` validates the submitted username/password against Active Directory via `PrincipalContext.ValidateCredentials` (`WindowsAdAuthenticationService`), then issues a cookie-authentication session — `AdminConsole.Auth`, `HttpOnly`, `SameSite=Strict`, `Secure` (HTTPS-only, enforced by `CookieSecurePolicy.Always` and, at the transport level, `UseHttpsRedirection`/`UseHsts` in `Program.cs`), with an 8-hour sliding expiration. A logout button (`TopBar`, `POST /api/auth/logout`) ends the session. This replaces the earlier Windows Integrated Authentication (NTLM/Kerberos `Negotiate`) popup model. The same `Viewer` policy protects both the REST controllers and the `DashboardHub` SignalR connection.
-- **AD group membership is checked once, at login — not on every request.** `AuthController.Login` queries AD via `PrincipalContext`/`WindowsAdAuthenticationService.IsMemberOfViewerGroup` for membership in `Authorization:ViewerGroup` a single time, and bakes the result into the auth cookie as a `ClaimTypes.Role` claim if the user is a member — this removes all per-request AD load, at the deliberately accepted cost that a user removed from the group keeps access until their cookie expires (8h sliding) or they log out. Authentication itself still only proves "valid AD account": a valid AD user outside the group can log in but gets no Role claim, so the `Viewer` policy (`RequireRole`) still blocks them on every API call. If the domain controller is unreachable at the moment of login, membership is treated as "cannot confirm" (fails closed, not a member) rather than failing the login itself — the credentials were still valid.
+- **Windows Integrated Authentication** end to end: every request is authenticated via NTLM/Kerberos (`Negotiate`), and access is gated by membership in a configured Active Directory security group — there is no separate login form, password, or session token to manage. The same `Viewer` policy protects both the REST controllers and the `DashboardHub` SignalR connection.
+- **AD group membership isn't mapped into an authorization role for free.** Under IIS, `WindowsPrincipal` gets AD groups as roles out of the box; under Kestrel + Negotiate with no IIS in front of it, it doesn't — `WindowsGroupClaimsTransformation` (an `IClaimsTransformation`, run on every authenticated request) queries AD via `PrincipalContext` to check membership in `Authorization:ViewerGroup`, then works around `WindowsIdentity.RoleClaimType` being immutably `GroupSid` (adding a claim of type `ClaimTypes.Role` directly to a cloned `WindowsIdentity` is silently ineffective — `IsInRole`/`RequireRole` keep checking `GroupSid`) by attaching a second, plain `ClaimsIdentity` with `RoleClaimType = ClaimTypes.Role` instead. If the domain controller is unreachable or the host isn't domain-joined, membership is treated as "cannot confirm" — the request falls through to an ordinary `403`, not a crash or a `500`.
 - **No plaintext secrets at rest.** The Zabbix API token and the Telegram bot token are the only two secrets the app stores at all (RDP credentials were removed entirely — see below). Both live in a `StoredCredentials` SQLite table, encrypted through ASP.NET Core's `IDataProtector` (keys persisted to disk, protected with the Windows Data Protection API / DPAPI-NG) under an app-specific protection purpose string — nothing sensitive ever touches `appsettings.json`.
 - **Encryption failure is a handled, explained state — not a crash.** If the DPAPI-NG key ring is ever unavailable or corrupted (e.g. the service account changed, or the SQLite file was copied to a different machine without its key folder), a **write** throws a specific `CredentialProtectionException` with an actionable message rather than a raw `CryptographicException` and a bare 500. A **read** failure is treated as "secret unavailable, not fatal" — the app falls back to prompting for the credential again via Settings instead of refusing to start.
 - **Least-privilege remote management, with no stored RDP credentials at all.** The service runs under a single dedicated domain account (`DOMAIN\svc_adminconsole`) that authenticates to every managed server directly via Kerberos — for both WMI restart/shutdown *and* `quser` RDP-session polling. There is no separate credential-entry flow for RDP, no Credential Manager entries, nothing to leak: the account either has rights on the target server or it doesn't.
@@ -363,8 +363,8 @@ AdminConsole is built specifically for a **Windows + Active Directory** environm
 
 ### Domain environment
 
-- The host machine and every server being monitored must be joined to the **same Active Directory domain** (or trusted domains) — both AD credential validation for the login form and Kerberos-based remote management depend on this.
-- An **AD security group** must exist and contain everyone who should be able to open the dashboard (see [`Authorization:ViewerGroup`](#configuration-appsettingsjson) below). Any valid domain account can log in through the form; group membership is what actually grants access — a valid account outside the group logs in successfully but is denied by the `Viewer` policy on every API call.
+- The host machine and every server being monitored must be joined to the **same Active Directory domain** (or trusted domains) — both Windows Integrated Authentication for the dashboard and Kerberos-based remote management depend on this.
+- An **AD security group** must exist and contain everyone who should be able to open the dashboard (see [`Authorization:ViewerGroup`](#configuration-appsettingsjson) below). There's no separate login form or password — group membership *is* the access control.
 
 ### The service account
 
@@ -388,12 +388,11 @@ Each monitored server needs a few inbound rules enabled — all are predefined W
 ### The AdminConsole host itself
 
 - Ships **self-contained** (see [Deployment](#deployment--release-pipeline)) — no separate .NET runtime install is needed on the host.
-- Needs its own **inbound firewall rules** for whatever ports Kestrel is configured to listen on — both `Kestrel:Endpoints:Http:Url` (5000 by default) and `Kestrel:Endpoints:Https:Url` (5001 by default) — if the dashboard will be reached from other machines rather than just `localhost`. HTTPS is not optional: the login form POSTs a real AD password, and the auth cookie is `Secure`-only, so plain HTTP alone won't let anyone actually log in from another machine (see [First-time installation](#first-time-installation-a-server-that-has-never-run-adminconsole-before) step 8).
-- Needs a valid **HTTPS certificate** at the path configured under `Kestrel:Endpoints:Https:Certificate:Path` — see [First-time installation](#first-time-installation-a-server-that-has-never-run-adminconsole-before) step 3.
+- Needs its own **inbound firewall rule** for whatever port Kestrel is configured to listen on (`Kestrel:Endpoints:Http:Url`) if the dashboard will be reached from other machines rather than just `localhost`.
 
 ### Compatibility matrix
 
-- **Host OS:** built for `net8.0-windows`, self-contained `win-x64` (see [Release Pipeline](#release-pipeline)) — any 64-bit Windows Server release still within [.NET 8's own support matrix](https://dotnet.microsoft.com/platform/support/policy) can run the published output. In practice the realistic floor is higher than that bare minimum: AD credential validation (`PrincipalContext`/`System.DirectoryServices.AccountManagement`), the Remote Desktop Services role backing RDP session polling, and WMI's `CIMV2` namespace are all first-class on Windows Server 2016 and newer, which is the range this app has actually been run and tested on.
+- **Host OS:** built for `net8.0-windows`, self-contained `win-x64` (see [Release Pipeline](#release-pipeline)) — any 64-bit Windows Server release still within [.NET 8's own support matrix](https://dotnet.microsoft.com/platform/support/policy) can run the published output. In practice the realistic floor is higher than that bare minimum: Windows Integrated Authentication against AD, the Remote Desktop Services role backing RDP session polling, and WMI's `CIMV2` namespace are all first-class on Windows Server 2016 and newer, which is the range this app has actually been run and tested on.
 - **Browsers (the React SPA):** `adminconsole-web` has no `browserslist` entry and no custom Vite `build.target` (`adminconsole-web/vite.config.ts`), so it inherits Vite's own default — modern, evergreen browsers only (current Chrome/Edge/Firefox/Safari). There is no transpilation step for older engines; Internet Explorer and legacy Edge are not supported.
 
 ---
@@ -401,33 +400,6 @@ Each monitored server needs a few inbound rules enabled — all are predefined W
 ## Local Development
 
 Running the API and the frontend as two separate dev processes gives instant backend rebuilds and Vite's hot module replacement, at the cost of one piece of setup: the browser talks to two different origins in dev (Vite's dev server and Kestrel), so Vite is configured to **proxy** both the REST API and the SignalR WebSocket through to Kestrel.
-
-### Local Development — HTTPS certificate
-
-`appsettings.json`'s Kestrel `Https` endpoint points at a certificate that only exists on
-the production server (`C:\ProgramData\AdminConsole\certs\adminconsole.pfx`, provisioned
-separately — see [First-time installation](#first-time-installation-a-server-that-has-never-run-adminconsole-before) step 3). Only that production path
-is committed, so **every fresh clone needs a one-time, local, throwaway certificate**
-before `dotnet run` will start — unlike `DataProtection:KeyPath` (`./keys`), which
-`PersistKeysToFileSystem` creates and populates automatically on first run with no manual
-step, Kestrel's certificate loader requires the `.pfx` file to already physically exist on
-disk, so nothing in the code can generate it for you.
-
-Generate one with PowerShell, from the repo root:
-
-```powershell
-$cert = New-SelfSignedCertificate -DnsName "localhost" -CertStoreLocation "cert:\CurrentUser\My" -NotAfter (Get-Date).AddYears(5)
-$pwd = ConvertTo-SecureString -String "dev-only-not-secret" -Force -AsPlainText
-New-Item -ItemType Directory -Force -Path "AdminConsole.Api\certs" | Out-Null
-Export-PfxCertificate -Cert $cert -FilePath "AdminConsole.Api\certs\dev-cert.pfx" -Password $pwd
-Remove-Item "cert:\CurrentUser\My\$($cert.Thumbprint)"
-```
-
-This drops a self-signed, localhost-only certificate at `AdminConsole.Api/certs/dev-cert.pfx`
-(git-ignored — never committed). `appsettings.Development.json` already points Kestrel at
-that exact path with the password `dev-only-not-secret` baked in — if you change the
-password above, update it there too, or `dotnet run` will fail to load the `.pfx`. Run this
-once per machine; the cert is valid for 5 years.
 
 **1. Start the backend** (Kestrel, listening on `http://localhost:5074` in dev):
 
@@ -445,7 +417,7 @@ npm install
 npm run dev
 ```
 
-Vite's dev-server config ([`vite.config.ts`](adminconsole-web/vite.config.ts)) proxies `/api` and `/hubs` to Kestrel's **HTTPS** endpoint (`https://localhost:5001`, `secure: false` so the proxy accepts the self-signed dev certificate above) — not the plain-HTTP one, since the `AdminConsole.Auth` cookie is `Secure`-only and the browser silently drops it if it's ever sent over plain HTTP. Both proxy entries also share a single **keep-alive** HTTP agent, a carry-over from the earlier Windows Negotiate (NTLM/Kerberos) model, where the handshake was bound to one TCP connection and Node's default (non-keep-alive) proxy agent broke it; it's harmless with cookie authentication and left in place. `/hubs` additionally sets `ws: true` so the SignalR WebSocket upgrade itself gets proxied.
+Vite's dev-server config ([`vite.config.ts`](adminconsole-web/vite.config.ts)) proxies `/api` and `/hubs` to Kestrel, with one detail that matters more than it looks: both proxy entries share a single **keep-alive** HTTP agent. Windows Negotiate (NTLM/Kerberos) is a multi-step handshake bound to one TCP connection between the proxy and the backend — Node's default proxy agent doesn't keep connections alive, so without an explicit shared `Agent({ keepAlive: true })` every request looks like a *new* anonymous client to Kestrel, which repeats the 401 challenge forever instead of ever completing the handshake. `/hubs` additionally sets `ws: true` so the SignalR WebSocket upgrade itself gets proxied, not just the initial negotiate request.
 
 **Other useful commands:**
 
@@ -557,44 +529,16 @@ Only the machine that *runs* `publish.ps1` needs these — the target server nee
 
 2. **Copy the whole `publish/` folder** to the target server, e.g. `C:\Program Files\AdminConsole`. Unlike a redeploy (below), there's nothing to protect yet, so a plain recursive copy is fine — no exclusions needed.
 
-3. **Provision the production HTTPS certificate.** The login form POSTs a real AD password in the request body, and the auth cookie is `Secure`-only (`CookieSecurePolicy.Always`, `Program.cs`) — HTTPS is a hard requirement, not optional, and `appsettings.json`'s `Kestrel:Endpoints:Https` points at `C:\ProgramData\AdminConsole\certs\adminconsole.pfx`, a path that doesn't exist yet on a fresh server. Kestrel's certificate loader needs the `.pfx` to physically exist on disk before first start; nothing in the app generates it for you.
+3. **Edit `appsettings.json`** in that folder for the real environment. `dotnet publish` always emits the repo's own `appsettings.json` into the output (with its placeholder AD group and empty `Servers`/`BackupChecks`) — set `Authorization:ViewerGroup` to the real AD group, `Kestrel:Endpoints:Http:Url` to the interface/port the server should bind, and fill in `Servers`/`BackupChecks`/`Monitoring:*`. See [Configuration](#configuration-appsettingsjson) for the full shape.
 
-   A self-signed certificate is enough for a trusted internal network (swap in an internal-CA-issued certificate instead if the environment has one):
-
-   ```powershell
-   $cert = New-SelfSignedCertificate -DnsName "192.168.244.222","adminconsole.santa.local" -CertStoreLocation "cert:\LocalMachine\My" -NotAfter (Get-Date).AddYears(5)
-   $securePwd = ConvertTo-SecureString -String "REPLACE_WITH_A_REAL_SECRET" -Force -AsPlainText
-   New-Item -ItemType Directory -Force -Path "C:\ProgramData\AdminConsole\certs" | Out-Null
-   Export-PfxCertificate -Cert $cert -FilePath "C:\ProgramData\AdminConsole\certs\adminconsole.pfx" -Password $securePwd
-   ```
-
-   Kestrel needs the export password to actually decrypt the `.pfx` at startup — set it via the `Kestrel__Endpoints__Https__Certificate__Password` environment variable (double underscore, ASP.NET Core's config-key convention), **never** in `appsettings.json`:
-
-   ```powershell
-   [Environment]::SetEnvironmentVariable("Kestrel__Endpoints__Https__Certificate__Password", "REPLACE_WITH_A_REAL_SECRET", "Machine")
-   ```
-
-   If the certificate is self-signed, every admin workstation that will open the dashboard needs to trust it, or the browser will show a certificate-warning interstitial (or silently fail the SignalR WebSocket upgrade) on every visit:
-
-   ```powershell
-   # On the server, after exporting the .pfx above:
-   Export-Certificate -Cert $cert -FilePath "adminconsole.cer"
-   # Copy adminconsole.cer to each admin workstation, then:
-   certutil -addstore -f "Root" adminconsole.cer
-   ```
-
-   Skip this trust step entirely if the certificate was instead issued by an internal CA the workstations already trust.
-
-4. **Edit `appsettings.json`** in that folder for the real environment. `dotnet publish` always emits the repo's own `appsettings.json` into the output (with its placeholder AD group and empty `Servers`/`BackupChecks`) — set `Authorization:ViewerGroup` to the real AD group, `Kestrel:Endpoints:Http:Url`/`Kestrel:Endpoints:Https:Url` to the interface/ports the server should bind, and fill in `Servers`/`BackupChecks`/`Monitoring:*`. See [Configuration](#configuration-appsettingsjson) for the full shape.
-
-5. **Create the Data Protection key folder** and grant the service account write access to it — `PersistKeysToFileSystem` throws at startup if it can't create/write `DataProtection:KeyPath` (`C:\ProgramData\AdminConsole\keys` by default):
+4. **Create the Data Protection key folder** and grant the service account write access to it — `PersistKeysToFileSystem` throws at startup if it can't create/write `DataProtection:KeyPath` (`C:\ProgramData\AdminConsole\keys` by default):
 
    ```powershell
    New-Item -ItemType Directory -Path "C:\ProgramData\AdminConsole\keys" -Force
    icacls "C:\ProgramData\AdminConsole\keys" /grant "CONTOSO\svc-adminconsole:(OI)(CI)M"
    ```
 
-6. **Create the database schema.** This is the *same* console tool used on every later redeploy — on a brand-new install there's no `adminconsole.db` yet, so `Database.MigrateAsync()` creates it from scratch (applying every EF Core migration in order) before the one-time data-import step runs:
+5. **Create the database schema.** This is the *same* console tool used on every later redeploy — on a brand-new install there's no `adminconsole.db` yet, so `Database.MigrateAsync()` creates it from scratch (applying every EF Core migration in order) before the one-time data-import step runs:
 
    ```powershell
    cd "C:\Program Files\AdminConsole"
@@ -605,7 +549,7 @@ Only the machine that *runs* `publish.ps1` needs these — the target server nee
 
    This step isn't optional, and skipping it isn't silently risky — it's loudly blocked. `AdminConsole.Api` deliberately does **not** migrate itself in production (an unattended `ALTER TABLE` against a live database it hasn't been told to touch is its own risk); instead, `Program.cs` checks `Database.GetPendingMigrationsAsync()` on every startup and, outside `Development`, throws immediately if anything is pending — the service fails fast with a message naming the exact pending migrations and pointing back at this step, instead of surfacing later as an opaque `SqliteException` ("no such column") from whichever background service happens to touch the missing schema first. One coupling to watch: `AdminConsole.Migration.exe` does **not** read `appsettings.json` — its connection string defaults to the same value as the shipped `appsettings.json` (`Data Source=adminconsole.db;Cache=Shared`), but if `ConnectionStrings:AdminConsoleDb` has been customized, the *same* value must be passed as this tool's first positional argument, or it silently migrates a different database file than the one the service actually opens at startup.
 
-7. **Register the Windows Service**, under the dedicated domain account described in [The service account](#the-service-account) — never `LocalSystem`/`NetworkService`:
+6. **Register the Windows Service**, under the dedicated domain account described in [The service account](#the-service-account) — never `LocalSystem`/`NetworkService`:
 
    ```powershell
    New-Service -Name "AdminConsole" `
@@ -617,25 +561,22 @@ Only the machine that *runs* `publish.ps1` needs these — the target server nee
    sc.exe failure AdminConsole reset= 86400 actions= restart/60000/restart/60000/restart/60000
    ```
 
-   `UseWindowsService()` in `Program.cs` is what lets the Service Control Manager host the process at all; the `sc.exe failure` line is a separate, additional step that tells the SCM to auto-restart the process (after a 60-second delay, up to three attempts before the 24-hour failure counter resets) if it ever crashes — `New-Service` alone does not configure a restart policy. Setting the certificate password environment variable at the **Machine** scope (step 3) means it's already in place for the service process regardless of which account starts it — no extra step needed here to propagate it.
+   `UseWindowsService()` in `Program.cs` is what lets the Service Control Manager host the process at all; the `sc.exe failure` line is a separate, additional step that tells the SCM to auto-restart the process (after a 60-second delay, up to three attempts before the 24-hour failure counter resets) if it ever crashes — `New-Service` alone does not configure a restart policy.
 
-8. **Open the firewall** for both ports Kestrel is configured to bind — `Kestrel:Endpoints:Http:Url` (5000 by default) *and* `Kestrel:Endpoints:Https:Url` (5001 by default) — if the dashboard needs to be reached from other machines rather than just `localhost` on the server itself. HTTPS is not optional here (see step 3): a firewall rule for 5000 alone lets browsers reach the app, but `UseHttpsRedirection` (`Program.cs`) will bounce them to 5001, so 5001 has to be reachable too.
+7. **Open the firewall** for whatever port `Kestrel:Endpoints:Http:Url` binds, if the dashboard needs to be reached from other machines rather than just `localhost` on the server itself:
 
    ```powershell
-   New-NetFirewallRule -DisplayName "AdminConsole (Kestrel HTTP)" -Direction Inbound `
+   New-NetFirewallRule -DisplayName "AdminConsole (Kestrel)" -Direction Inbound `
      -Protocol TCP -LocalPort 5000 -Action Allow
-
-   New-NetFirewallRule -DisplayName "AdminConsole (Kestrel HTTPS)" -Direction Inbound `
-     -Protocol TCP -LocalPort 5001 -Action Allow
    ```
 
-9. **Start the service** and confirm it's actually healthy — see [Verifying a deployment](#verifying-a-deployment) below:
+8. **Start the service** and confirm it's actually healthy — see [Verifying a deployment](#verifying-a-deployment) below:
 
    ```powershell
    Start-Service AdminConsole
    ```
 
-**A note on TLS.** Unlike the earlier Windows Integrated Authentication (Negotiate) model — where NTLM/Kerberos protected the credential exchange independently of the transport, so plain HTTP was an acceptable simplification — the custom login form POSTs a real AD password in the request body, so HTTPS in transit is now a hard requirement, not an optional hardening step. `Program.cs` calls `UseHttpsRedirection()` (bounces any plain-HTTP request to the HTTPS endpoint) and `UseHsts()` outside `Development`, and the auth cookie is `Secure`-only (`CookieSecurePolicy.Always`) — a deployment that skips step 3 above will have a running service that silently rejects every login, because the browser drops the `Secure` cookie the moment it's ever sent over plain HTTP. There's no supported way to run this app over HTTP-only in production.
+**A note on TLS.** The default `Kestrel:Endpoints:Http:Url` binds plain HTTP — there's no HTTPS endpoint configured out of the box, and the app has no built-in certificate handling. Windows Integrated Authentication doesn't require TLS to function (NTLM/Kerberos protect the credential exchange independently of the transport), so this is a deliberate simplification for a trusted internal network, not an oversight. If a deployment's security policy requires TLS in transit regardless, either add an `Https` endpoint under `Kestrel:Endpoints` pointing at a certificate, or front Kestrel with a reverse proxy (IIS + ARR, nginx, etc.) that terminates TLS — neither is wired up in this repository today.
 
 ### Redeploying an update (an existing install)
 
@@ -717,12 +658,10 @@ Take a final backup first if there's any chance the server's data will be needed
 
 ## API Reference
 
-There is no Swagger/OpenAPI UI — `AddEndpointsApiExplorer`/`AddSwaggerGen` were deliberately never wired into `Program.cs` for an API with exactly one consumer (this repo's own SPA). The table below is the complete surface: **28 endpoints** across 12 controllers, every one gated by the same `[Authorize(Policy = "Viewer")]` policy from `AdminConsoleControllerBase` (login-form AD credential validation + AD group membership, checked once at login — see [Security & Architecture](#security--architecture)) — except the two `AuthController` endpoints below, which are anonymous by design (you can't be authenticated before you've logged in). Default routing is `api/[controller]` (the controller class name, minus `Controller`, lowercased) unless a route override is noted. `AdminConsoleControllerBase` also carries `[ApiController]`, which means every controller gets ASP.NET Core's automatic model-validation behavior for free: an invalid request body/route/query binding short-circuits straight to an HTTP `400` before the action method ever runs, with no custom `InvalidModelStateResponseFactory` or global exception filter overriding that default anywhere in `Program.cs`.
+There is no Swagger/OpenAPI UI — `AddEndpointsApiExplorer`/`AddSwaggerGen` were deliberately never wired into `Program.cs` for an API with exactly one consumer (this repo's own SPA). The table below is the complete surface: **28 endpoints** across 12 controllers, every one gated by the same `[Authorize(Policy = "Viewer")]` policy from `AdminConsoleControllerBase` (Windows Integrated Auth + AD group membership — see [Security & Architecture](#security--architecture)). Default routing is `api/[controller]` (the controller class name, minus `Controller`, lowercased) unless a route override is noted. `AdminConsoleControllerBase` also carries `[ApiController]`, which means every controller gets ASP.NET Core's automatic model-validation behavior for free: an invalid request body/route/query binding short-circuits straight to an HTTP `400` before the action method ever runs, with no custom `InvalidModelStateResponseFactory` or global exception filter overriding that default anywhere in `Program.cs`.
 
 | Method & Path | Controller | Purpose |
 |---|---|---|
-| `POST /api/auth/login` | `AuthController` | Validates AD credentials, issues the session cookie (anonymous) |
-| `POST /api/auth/logout` | `AuthController` | Clears the session cookie (anonymous) |
 | `GET /api/servers` | `ServersController` | Configured server list (from `appsettings.json`) |
 | `POST /api/servers/{ip}/restart` | `ServersController` | WMI restart — Windows servers only |
 | `POST /api/servers/{ip}/shutdown` | `ServersController` | WMI shutdown — Windows servers only |
@@ -986,9 +925,10 @@ There are no rolling log *files* — logging is handled entirely by `AppLogPersi
 | `Microsoft.EntityFrameworkCore.Design` | 8.0.30 | Design-time migration tooling |
 | `Hangfire.Core` / `Hangfire.AspNetCore` | 1.8.24 | Scheduled job runner — backup checks, weekly SLA report, daily log retention |
 | `Hangfire.Storage.SQLite` | 0.4.3 | Hangfire's own job/schedule storage — `hangfire.db`, kept separate from the app's own database |
+| `Microsoft.AspNetCore.Authentication.Negotiate` | 8.0.30 | NTLM/Kerberos Windows Integrated Authentication |
 | `Microsoft.Extensions.Hosting.WindowsServices` | 8.0.1 | Runs Kestrel as a native Windows Service |
 | `Microsoft.AspNetCore.DataProtection.Abstractions` | 8.0.30 | `IDataProtector` — DPAPI-NG secret encryption ([Security](#security--architecture)) |
-| `System.DirectoryServices.AccountManagement` | 8.0.1 | `PrincipalContext.ValidateCredentials` (login form) and AD group-membership authorization checks |
+| `System.DirectoryServices.AccountManagement` | 8.0.1 | Active Directory group-membership authorization checks |
 | `System.Management` | 8.0.0 | WMI — remote restart/shutdown |
 | `System.Diagnostics.EventLog` | 8.0.1 | Windows Event Log interop |
 | `Telegram.Bot` | 22.6.0 | Telegram Bot API client |
@@ -1023,8 +963,8 @@ Honestly-scoped technical boundaries, not oversights waiting to be "discovered" 
 - **Single-instance by design.** SignalR's connection state, Hangfire's scheduler, and both SQLite databases (WAL mode notwithstanding) all assume exactly one running instance of `AdminConsole.Api`. There is no horizontal scaling story — a second instance pointed at the same database files would corrupt Hangfire's job coordination and produce duplicate SignalR broadcasts.
 - **DPAPI-NG-protected secrets are tied to the machine/account that encrypted them.** Copying `adminconsole.db` to a different machine (disaster recovery, hardware replacement) without also migrating the Data Protection key folder means the Zabbix/Telegram tokens fail to decrypt. This is handled gracefully — `CredentialStore.Unprotect` treats it as "secret unavailable," not a fatal error, and Settings simply asks for the credential again — but the secret itself doesn't survive the move and must be re-entered.
 - **The migration tool is a one-shot, run-once-at-cutover utility.** `AdminConsole.Migration` imports pre-existing monitoring data exactly once, per deployment. It does have genuine end-to-end coverage — `MigrationRunnerTests.cs` runs `MigrationRunner.RunAsync` against a real EF Core/SQLite database and fixture files, asserting on the resulting rows across a first run, a second idempotent run, and a partial-completion retry — but that coverage is narrower than the rest of the backend's: `Program.cs`'s CLI entry point itself (argument parsing, the `Database.MigrateAsync()` call) has no test, so correctness there still leans more on manual verification at cutover time.
-- **The frontend has no automated test suite.** `adminconsole-web/package.json` defines no `test` script and there's no Vitest/Jest configuration in the repository — frontend changes are verified manually against the dev server rather than through an automated regression suite. Backend logic (126 xUnit tests) is covered far more thoroughly than the UI layer.
-- **WMI, `quser`, and AD credential validation (`PrincipalContext.ValidateCredentials`) are not covered by the automated test suite either** — they require a live Windows/AD environment to exercise meaningfully and are validated manually against real infrastructure instead. The `AuthController` logic around them (login/logout, rate limiting, the success/failure response contract) *is* covered, via `AuthControllerTests.cs` against a fake `IAdAuthenticationService`.
+- **The frontend has no automated test suite.** `adminconsole-web/package.json` defines no `test` script and there's no Vitest/Jest configuration in the repository — frontend changes are verified manually against the dev server rather than through an automated regression suite. Backend logic (114 xUnit tests) is covered far more thoroughly than the UI layer.
+- **WMI, `quser`, and Windows Integrated Authentication are not covered by the automated test suite either** — they require a live Windows/AD environment to exercise meaningfully and are validated manually against real infrastructure instead.
 - **No `/health` endpoint.** Nothing in `Program.cs` wires up ASP.NET Core's health-check middleware — there's no lightweight, unauthenticated endpoint an external monitor (or a load balancer, if one were ever introduced) could poll to check whether the service itself is up, short of hitting an authenticated API route.
 - **No LICENSE, CONTRIBUTING guide, or CI pipeline in the repository.** There's no `.github/workflows` or equivalent — `dotnet test`/`npm run lint` are run manually, not gated automatically on push or PR. This is consistent with a single-team, single-deployment internal tool rather than an oversight, but it means nothing currently blocks a change with a failing test or lint error from being merged.
 - **A handful of pieces are dead code, not yet cleaned up.** `ServerDashboardEntry` and `MaintenanceDurationChoice` (`AdminConsole.Domain/Models/`) are leftover, unreferenced types with no use anywhere outside their own file. `SlaReportService.GetFleetAvailabilityPercent` — fleet-wide availability via the union of every server's downtime intervals over a period — is fully implemented and documented but has no controller or job calling it; only `SlaReportServiceTests.cs` exercises it. None of the three are wired to any REST endpoint, background job, or UI surface. Harmless to leave as-is, but worth knowing before assuming every public type in the codebase has a live consumer.
@@ -1072,7 +1012,7 @@ AdminConsole_v3/
 ├── AdminConsole.Domain/           Domain models, MediatR events, repository interfaces
 ├── AdminConsole.Infrastructure/   Background services, EF Core, Telegram bot, WMI/remote management
 ├── AdminConsole.Migration/        One-time data-import utility + EF Core migration runner
-├── AdminConsole.Tests/            xUnit test suite (126 tests / 26 files)
+├── AdminConsole.Tests/            xUnit test suite (114 tests / 22 files)
 ├── adminconsole-web/              React + TypeScript + Vite frontend
 ├── Directory.Packages.props       Central Package Management — every NuGet version, pinned once
 ├── Directory.Build.props          Solution-wide MSBuild properties (runtime pack pinning)

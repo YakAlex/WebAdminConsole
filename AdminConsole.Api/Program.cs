@@ -15,12 +15,10 @@ using Hangfire;
 using Hangfire.Storage.SQLite;
 using MediatR;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Threading.RateLimiting;
 
 // Phase 7, T7.3: the Windows Service Control Manager starts the process with
 // Environment.CurrentDirectory = C:\Windows\System32 (not the exe's folder).
@@ -66,40 +64,10 @@ builder.Host.UseWindowsService();
 builder.Services.Configure<HostOptions>(options =>
     options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
 
-// ── Cookie authentication — replaces Windows Integrated Auth (Negotiate) ────
-// with a custom login form that still validates against AD
-// (IAdAuthenticationService/WindowsAdAuthenticationService), for a friendlier
-// login UX than the native browser credentials popup Negotiate produces.
-// CookieSecurePolicy.Always means the auth cookie is ONLY set/sent over
-// HTTPS — this REQUIRES the Kestrel Https endpoint (appsettings.json,
-// "Kestrel:Endpoints:Https") to be configured, or login will silently fail
-// (the browser drops a Secure cookie sent over plain HTTP).
+// ── T3.2: Windows Integrated Authentication (Negotiate), no IIS ─────────────
 builder.Services
-    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.Cookie.Name = "AdminConsole.Auth";
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.Cookie.SameSite = SameSiteMode.Strict;
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
-        options.SlidingExpiration = true;
-
-        // This is an SPA/JSON API, not a server-rendered site — the default
-        // CookieAuthenticationHandler redirects to LoginPath on 401/403,
-        // which would return index.html (200) instead of a real status
-        // code, breaking http.ts's status-code-based auth handling.
-        options.Events.OnRedirectToLogin = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return Task.CompletedTask;
-        };
-        options.Events.OnRedirectToAccessDenied = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return Task.CompletedTask;
-        };
-    });
+    .AddAuthentication(NegotiateDefaults.AuthenticationScheme)
+    .AddNegotiate();
 
 var viewerGroup = builder.Configuration["Authorization:ViewerGroup"]
     ?? throw new InvalidOperationException("Authorization:ViewerGroup is not configured.");
@@ -109,45 +77,8 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Viewer", policy => policy.RequireRole(viewerGroup));
 });
 
-// ── Login brute-force throttle ───────────────────────────────────────────────
-// AD itself typically enforces an account-lockout policy after repeated bad
-// passwords, but that protects the AD account, not this endpoint from being
-// hammered — a simple fixed-window throttle here is a cheap, standard first
-// line of defense, with no added package (built into the ASP.NET Core 8
-// shared framework).
-//
-// Partitioned per client IP (RemoteIpAddress), NOT a single shared/global
-// limiter: AddFixedWindowLimiter(name, ...) would create ONE limiter
-// instance shared by every caller hitting the "login" policy, so any two
-// admins mistyping a password in the same minute would lock out everyone
-// else, and an unauthenticated attacker could send 5 req/min forever and
-// permanently block all logins — a trivial DoS against the whole admin
-// console. Partitioning by IP keeps the throttle scoped to the offending
-// client.
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddPolicy("login", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 5,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-            }));
-    options.OnRejected = (context, _) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        // Matches the 1-minute fixed window above — gives the frontend's
-        // "Забагато спроб входу. Спробуйте пізніше." message something
-        // concrete to act on instead of an unqualified "try later".
-        context.HttpContext.Response.Headers.RetryAfter = "60";
-        return ValueTask.CompletedTask;
-    };
-});
-
-// ── AD access, used once at login by AuthController (Authorization:ViewerGroup group check is NOT re-run per request — see AuthController's doc comment) ──
-builder.Services.AddSingleton<IAdAuthenticationService, WindowsAdAuthenticationService>();
+// ── T3.4: mapping the "AdminConsole-Admins" AD group into claims (R4) ───────
+builder.Services.AddTransient<IClaimsTransformation, WindowsGroupClaimsTransformation>();
 
 // ── T3.3: Data Protection — encrypting keys at rest (DPAPI-NG) ──────────────
 var keyPath = builder.Configuration["DataProtection:KeyPath"]
@@ -376,32 +307,10 @@ else
     }
 }
 
-// With a native Negotiate popup, plain HTTP was tolerable — the
-// challenge/response handshake never puts the password on the wire. Now
-// that the login form POSTs a real AD password in the request body, anyone
-// reaching the app over the plain-HTTP Kestrel endpoint (appsettings.json,
-// "Kestrel:Endpoints:Http") would send that password in cleartext, and the
-// browser would then silently drop the Secure auth cookie the response
-// tries to set — producing the exact "login looks like it failed" symptom
-// with no diagnostic. UseHttpsRedirection sends plain-HTTP visitors to the
-// HTTPS endpoint before any of that can happen.
-app.UseHttpsRedirection();
-
-// UseHsts is skipped in Development on purpose — it would fight the
-// self-signed dev certificate workflow (README, "Local Development — HTTPS
-// certificate"): a browser that's been told via Strict-Transport-Security
-// to only ever use HTTPS for this host would refuse to fall back even when
-// the dev cert isn't trusted yet.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHsts();
-}
-
 app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseRateLimiter();
 
 app.MapControllers();
 app.MapHub<DashboardHub>("/hubs/dashboard");

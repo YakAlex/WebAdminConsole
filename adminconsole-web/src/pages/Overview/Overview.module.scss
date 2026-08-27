@@ -14,7 +14,7 @@
 .root {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-4);
   --card-padding: var(--space-8);
   --card-gap: var(--space-4);
   --font-size-kpi: 38px; // still within the documented 30-40px range (tokens.scss)
@@ -23,8 +23,8 @@
 // §7: Hero (~65-70%) + Attention Required (the rest).
 .heroRow {
   display: grid;
-  grid-template-columns: minmax(0, 2.15fr) minmax(280px, 1fr);
-  gap: var(--space-8);
+  grid-template-columns: minmax(0, 2.03fr) minmax(280px, 1fr);
+  gap: var(--space-4);
   align-items: stretch;
 }
 
@@ -32,7 +32,7 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--space-8);
+  gap: var(--space-4);
 }
 
 .ping {
